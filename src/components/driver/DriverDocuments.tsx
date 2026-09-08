@@ -21,7 +21,7 @@ export default function DriverDocuments({ onBack }: { onBack: () => void }) {
   let insColor = "text-[#00D26A]";
   let insBg = "bg-[#00D26A]/10";
   let insExpiryText = `Expires ${insuranceExpiryDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
-  let insAction = undefined;
+  let insAction: string | undefined = undefined;
 
   if (daysUntilExpiry <= 0) {
     insStatus = "missing";

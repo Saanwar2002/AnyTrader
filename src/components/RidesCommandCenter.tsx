@@ -1235,7 +1235,7 @@ export default function RidesCommandCenter() {
                             {displayedPrice === (config.minFare * selectedVehicle.multiplier) && (
                               <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-[9px] font-black rounded-lg border border-orange-500/30">MIN FARE APPLIED</span>
                             )}
-                            {(simSurgeLevel !== "none" || (simSurgeLevel === "custom" && parseFloat(simSurge) > 1.0)) && (
+                            {(simSurgeLevel !== "none" && (simSurgeLevel !== "custom" || parseFloat(simSurge) > 1.0)) && (
                               <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-[9px] font-black rounded-lg border border-red-500/30 uppercase">
                                 SURGE ACTIVE ({simulatedSurgeModel})
                               </span>

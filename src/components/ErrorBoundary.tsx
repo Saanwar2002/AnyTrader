@@ -27,8 +27,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
     if (Capacitor.isNativePlatform()) {
       import('@capacitor-firebase/crashlytics').then(({ FirebaseCrashlytics }) => {
         FirebaseCrashlytics.recordException({
-          message: error.message || 'React ErrorBoundary caught error',
-          stacktrace: errorInfo.componentStack || error.stack || ''
+          message: `${error.message || 'React ErrorBoundary caught error'} | ${errorInfo.componentStack || error.stack || ''}`
         }).catch(err => console.error("Failed to log to Crashlytics:", err));
       }).catch(err => console.error("Crashlytics plugin missing:", err));
     }

@@ -1142,11 +1142,9 @@ export default function AnyTraderAdmin() {
     let deletedCount = 0;
     try {
       // Filter out protected accounts just in case
-      const protectedEmails = ["saanwar2002@gmail.com"];
       const idsToDelete = selectedUserIds.filter(id => {
         const u = users.find(userObj => userObj.id === id);
         if (id === user?.uid) return false;
-        if (u?.email && protectedEmails.includes(u.email.toLowerCase())) return false;
         if (u?.role === "admin" || u?.role === "ecosystem_manager") return false; // Protect all staff from deletion
         return true;
       });
@@ -1193,7 +1191,7 @@ export default function AnyTraderAdmin() {
       let count = 0;
       for (const u of filteredGuestUsers) {
         // Double check it's not a protected account
-        if (u.id === user?.uid || (u.email && ["saanwar2002@gmail.com"].includes(u.email.toLowerCase())) || u.role === "admin" || u.role === "ecosystem_manager") continue;
+        if (u.id === user?.uid || u.role === "admin" || u.role === "ecosystem_manager") continue;
         
         await deleteDoc(doc(db, "users", u.id));
         count++;
@@ -1367,20 +1365,14 @@ export default function AnyTraderAdmin() {
 
   const handleDeleteUser = async (userId: string) => {
     const u = users.find(userObj => userObj.id === userId);
-    const protectedEmails = ["saanwar2002@gmail.com"];
     
     if (userId === user?.uid) {
       showToast("Action Denied", "You cannot delete your own account.", "error");
       return;
     }
     
-    if (u?.email && protectedEmails.includes(u.email.toLowerCase())) {
-      showToast("Action Denied", "This administrator account is protected.", "error");
-      return;
-    }
-
-    if ((u?.role === "admin" || u?.role === "ecosystem_manager") && u.email !== user?.email && !protectedEmails.includes(user?.email?.toLowerCase() || "")) {
-      showToast("Action Denied", "Only the super admin can delete other staff members.", "error");
+    if (u?.role === "admin" || u?.role === "ecosystem_manager") {
+      showToast("Action Denied", "Staff administrator accounts cannot be deleted directly.", "error");
       return;
     }
     
@@ -2051,8 +2043,8 @@ export default function AnyTraderAdmin() {
                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       {(() => {
                         const isProtected = u.id === user?.uid || 
-                                          (u.email && ["saanwar2002@gmail.com"].includes(u.email.toLowerCase())) ||
-                                          u.role === "admin";
+                                          u.role === "admin" ||
+                                          u.role === "ecosystem_manager";
                         
                         if (isProtected) return (
                           <div className="flex justify-center">

@@ -198,7 +198,7 @@ export default function BillingManager() {
   // -------------------------------------------------------------
   // CUSTOMER / PASSENGER BILLING UI (PAYMENT METHODS)
   // -------------------------------------------------------------
-  if (profile?.role === "homeowner" || profile?.role === "customer") {
+  if ((profile?.role as string) === "homeowner" || (profile?.role as string) === "customer") {
     return (
       <div className="min-h-screen bg-slate-50 pb-20">
         <div className="max-w-2xl mx-auto px-6 pt-8">

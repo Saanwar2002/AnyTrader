@@ -4,7 +4,7 @@ import {
   Search, ArrowRight, Settings, CheckCircle2, AlertTriangle, Clock,
   Wrench, ShieldCheck, Zap, TrendingUp, BarChart3, FileText, Download,
   Sliders, UserCheck, PieChart, Check, Send, Sparkles, MapPin, RefreshCw, X,
-  PoundSterling, CreditCard, Layers, Calculator, Info, Percent, SlidersHorizontal
+  PoundSterling, CreditCard, Layers, Calculator, Info, Percent, SlidersHorizontal, LayoutGrid
 } from "lucide-react";
 import { db, collection, query, where, onSnapshot } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";

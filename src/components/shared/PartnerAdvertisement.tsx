@@ -530,7 +530,7 @@ export default function PartnerAdvertisement({
               const pct = newBalance / clickedAd.totalBudget;
               const oldPct = clickedAd.prepaidBalance / clickedAd.totalBudget;
               
-              let noticeMsg = null;
+              let noticeMsg: string | null = null;
               if (oldPct > 0.9 && pct <= 0.9) {
                 noticeMsg = `Your ad campaign "${clickedAd.title}" has reached 90% of its budget capacity.`;
               } else if (oldPct > 0.1 && pct <= 0.1) {

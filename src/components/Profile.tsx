@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
 import { BiometricService } from "@/src/services/biometricService";
 import { Fingerprint, ScanFace } from "lucide-react";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth, logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
@@ -282,10 +283,15 @@ const BiometricSettings: React.FC<{ user: any }> = ({ user }) => {
 
     setLoading(true);
     try {
-      // First, prompt biometric authorization gesture
+      if (auth.currentUser && password.trim()) {
+        const cred = EmailAuthProvider.credential(email, password.trim());
+        await reauthenticateWithCredential(auth.currentUser, cred);
+      }
+
+      // Prompt biometric authorization gesture
       const verified = await BiometricService.authenticate("Confirm biometric signature to enable secure biometric login");
       if (verified) {
-        const enrolled = await BiometricService.enroll(email, password);
+        const enrolled = await BiometricService.enroll(email);
         if (enrolled) {
           setEnabled(true);
           setShowEnrollForm(false);
@@ -298,7 +304,11 @@ const BiometricSettings: React.FC<{ user: any }> = ({ user }) => {
         setError("Biometric validation cancelled or failed.");
       }
     } catch (err: any) {
-      setError(err?.message || "Verification failed.");
+      if (err?.code === "auth/wrong-password" || err?.code === "auth/invalid-credential") {
+        setError("Incorrect password entered. Please try again.");
+      } else {
+        setError(err?.message || "Verification failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -568,7 +578,7 @@ export default function Profile() {
   const [privacyConsent, setPrivacyConsent] = useState<Record<string, boolean>>({});
   const [verificationError, setVerificationError] = useState<string | null>(null);
   const [isAIPolishing, setIsAIPolishing] = useState(false);
-  const [editData, setEditData] = useState({
+  const [editData, setEditData] = useState<any>({
     name: profile?.name || "",
     postcode: profile?.postcode || "",
     city: profile?.city || "",
@@ -579,7 +589,9 @@ export default function Profile() {
     services: profile?.services || [],
     badges: profile?.badges || [],
     searchFeedBadges: profile?.searchFeedBadges || [],
-    miniProfileSettings: profile?.miniProfileSettings || { hourlyRate: 0, callOutFee: 0, extraInfo: "" }
+    miniProfileSettings: profile?.miniProfileSettings || { hourlyRate: 0, callOutFee: 0, extraInfo: "" },
+    isAvailableForInstantMatch: profile?.isAvailableForInstantMatch || false,
+    instantMatchPricing: profile?.instantMatchPricing || { callOutFee: 0, hourlyRate: 0, terms: "" }
   });
   const [notificationSettings, setNotificationSettings] = useState(profile?.notificationSettings || {
     quietHoursEnabled: false,
@@ -628,7 +640,7 @@ export default function Profile() {
 
   const activeTiers = React.useMemo(() => {
     if (!platformConfig) return [];
-    if (profile?.role === "homeowner") {
+    if ((profile?.role as string) === "homeowner" || (profile?.role as string) === "customer") {
       if (globalTiers?.providerModels?.homeowners?.tiers) {
         return Object.entries(globalTiers.providerModels.homeowners.tiers).map(([k, v]: [string, any]) => ({
           name: k,
@@ -678,7 +690,7 @@ export default function Profile() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (active.id !== over?.id && user) {
+    if (active.id !== over?.id && user && profile) {
       const oldIndex = (profile.portfolio || []).indexOf(active.id as string);
       const newIndex = (profile.portfolio || []).indexOf(over?.id as string);
       
@@ -924,7 +936,7 @@ export default function Profile() {
   }, [user?.uid, profile?.role]);
 
   useEffect(() => {
-    if (profile?.role === "homeowner" && user?.uid) {
+    if (((profile?.role as string) === "homeowner" || (profile?.role as string) === "customer") && user?.uid) {
       setLoadingJobs(true);
       const q = query(
         collection(db, "jobs"),
@@ -993,7 +1005,7 @@ export default function Profile() {
 
   const handlePortfolioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !profile) return;
 
     setIsUploadingPortfolio(true);
     setError(null);
@@ -1033,7 +1045,7 @@ export default function Profile() {
   };
 
   const removePortfolioImage = async (url: string) => {
-    if (!user) return;
+    if (!user || !profile) return;
     try {
       const currentPortfolio = (profile.portfolio && profile.portfolio.length > 0)
         ? profile.portfolio
@@ -1058,7 +1070,7 @@ export default function Profile() {
 
   const handleVerificationUpload = async (e: React.ChangeEvent<HTMLInputElement>, certType: string) => {
     const file = e.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !user || !profile) return;
 
     setIsUploading(true);
     setError(null);
@@ -1207,20 +1219,20 @@ export default function Profile() {
         searchFeedBadges: editData.searchFeedBadges || []
       };
 
-      if (editData.miniProfileSettings) {
-        finalData.miniProfilePricing = editData.miniProfileSettings;
-        if (editData.miniProfileSettings.hourlyRate !== undefined) finalData.hourlyRate = editData.miniProfileSettings.hourlyRate;
-        if (editData.miniProfileSettings.callOutFee !== undefined) finalData.callOutFee = editData.miniProfileSettings.callOutFee;
-        if (editData.miniProfileSettings.extraInfo !== undefined) finalData.extraInfo = editData.miniProfileSettings.extraInfo;
+      if ((editData as any).miniProfileSettings) {
+        finalData.miniProfilePricing = (editData as any).miniProfileSettings;
+        if ((editData as any).miniProfileSettings.hourlyRate !== undefined) finalData.hourlyRate = (editData as any).miniProfileSettings.hourlyRate;
+        if ((editData as any).miniProfileSettings.callOutFee !== undefined) finalData.callOutFee = (editData as any).miniProfileSettings.callOutFee;
+        if ((editData as any).miniProfileSettings.extraInfo !== undefined) finalData.extraInfo = (editData as any).miniProfileSettings.extraInfo;
       }
-      if (editData.instantMatchPricing) {
-        finalData.instantMatchSettings = editData.instantMatchPricing;
-        if (editData.instantMatchPricing.callOutFee !== undefined) finalData.emergencyCallOutFee = editData.instantMatchPricing.callOutFee;
-        if (editData.instantMatchPricing.hourlyRate !== undefined) finalData.emergencyHourlyRate = editData.instantMatchPricing.hourlyRate;
-        if (editData.instantMatchPricing.terms !== undefined) finalData.emergencyTerms = editData.instantMatchPricing.terms;
-        if (editData.instantMatchPricing.enabled !== undefined) {
-          finalData.isAvailableForEmergency = editData.instantMatchPricing.enabled;
-          finalData.isAvailableForInstantMatch = editData.instantMatchPricing.enabled;
+      if ((editData as any).instantMatchPricing) {
+        finalData.instantMatchSettings = (editData as any).instantMatchPricing;
+        if ((editData as any).instantMatchPricing.callOutFee !== undefined) finalData.emergencyCallOutFee = (editData as any).instantMatchPricing.callOutFee;
+        if ((editData as any).instantMatchPricing.hourlyRate !== undefined) finalData.emergencyHourlyRate = (editData as any).instantMatchPricing.hourlyRate;
+        if ((editData as any).instantMatchPricing.terms !== undefined) finalData.emergencyTerms = (editData as any).instantMatchPricing.terms;
+        if ((editData as any).instantMatchPricing.enabled !== undefined) {
+          finalData.isAvailableForEmergency = (editData as any).instantMatchPricing.enabled;
+          finalData.isAvailableForInstantMatch = (editData as any).instantMatchPricing.enabled;
         }
       }
       
@@ -1267,7 +1279,7 @@ export default function Profile() {
   };
 
   const handleRemoveTradeOrSkill = async (itemToRemove: string) => {
-    if (!user) return;
+    if (!user || !profile) return;
     try {
       const currentTrades = (Array.isArray(profile.trades) ? profile.trades : typeof profile.trades === "string" ? profile.trades.split(",") : [])
         .map((t: any) => (typeof t === "string" ? t.trim() : (t?.name || t?.title || "").trim()))
@@ -1312,7 +1324,7 @@ export default function Profile() {
   };
 
   const handleRemoveTag = async (tagToRemove: string) => {
-    if (!user) return;
+    if (!user || !profile) return;
     try {
       const cleanTagVal = tagToRemove.replace(/^#+/, "").trim().toLowerCase();
       const currentTags = (Array.isArray(profile.tags) ? profile.tags : typeof profile.tags === "string" ? profile.tags.split(",") : [])
@@ -1337,7 +1349,7 @@ export default function Profile() {
   };
 
   const handleAddEmergencyContact = async () => {
-    if (!user || !newEmergencyContact.name || !newEmergencyContact.phone) return;
+    if (!user || !profile || !newEmergencyContact.name || !newEmergencyContact.phone) return;
     setIsSaving(true);
     try {
       const updatedContacts = [...(profile.emergencyContacts || []), newEmergencyContact];
@@ -1355,7 +1367,7 @@ export default function Profile() {
   };
 
   const handleRemoveEmergencyContact = async (index: number) => {
-    if (!user) return;
+    if (!user || !profile) return;
     try {
       const updatedContacts = (profile.emergencyContacts || []).filter((_: any, i: number) => i !== index);
       await updateDoc(doc(db, "users", user.uid), {
@@ -1728,7 +1740,7 @@ export default function Profile() {
         const nextBillingDate = new Date();
         nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
 
-        const isHomeowner = profile.role === "homeowner";
+        const isHomeowner = (profile.role as string) === "homeowner" || (profile.role as string) === "customer";
         const tierField = isHomeowner ? "homeownerTierId" : "tierId";
         const statusField = isHomeowner ? "homeownerSubscriptionStatus" : "subscriptionStatus";
         const periodEndField = isHomeowner ? "homeownerCurrentPeriodEnd" : "currentPeriodEnd";
@@ -1768,7 +1780,7 @@ export default function Profile() {
   const handleCancelSubscription = async () => {
     if (!user || !confirm("Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing cycle.")) return;
     
-    const cancelField = profile.role === "homeowner" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
+    const cancelField = (profile.role as string) === "homeowner" || (profile.role as string) === "customer" ? "homeownerCancelAtPeriodEnd" : "cancelAtPeriodEnd";
 
     try {
       await updateDoc(doc(db, "users", user.uid), { 
@@ -1780,10 +1792,10 @@ export default function Profile() {
     }
   };
 
-  const currentRoleTierId = profile.role === "homeowner" ? (profile.homeownerTierId || "Standard Homeowner") : (profile.tierId || "Free Explorer");
-  const currentRoleSubscriptionStatus = profile.role === "homeowner" ? profile.homeownerSubscriptionStatus : profile.subscriptionStatus;
-  const currentRoleCancelAtPeriodEnd = profile.role === "homeowner" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
-  const currentRoleCurrentPeriodEnd = profile.role === "homeowner" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
+  const currentRoleTierId = (profile.role as string) === "homeowner" || (profile.role as string) === "customer" ? (profile.homeownerTierId || "Standard Homeowner") : (profile.tierId || "Free Explorer");
+  const currentRoleSubscriptionStatus = (profile.role as string) === "homeowner" || (profile.role as string) === "customer" ? profile.homeownerSubscriptionStatus : profile.subscriptionStatus;
+  const currentRoleCancelAtPeriodEnd = (profile.role as string) === "homeowner" || (profile.role as string) === "customer" ? profile.homeownerCancelAtPeriodEnd : profile.cancelAtPeriodEnd;
+  const currentRoleCurrentPeriodEnd = (profile.role as string) === "homeowner" || (profile.role as string) === "customer" ? profile.homeownerCurrentPeriodEnd : profile.currentPeriodEnd;
 
   if (activePortal === "anyroller" && profile.role !== "driver") {
     const passengerGroups = [
@@ -2090,7 +2102,7 @@ export default function Profile() {
 
       {/* Referral Program */}
       {/* Subscription Plan Card */}
-      {activePortal === 'rides' && profile.role === "homeowner" && (
+      {(activePortal as string) === 'rides' && ((profile.role as string) === "homeowner" || (profile.role as string) === "customer") && (
         <div className="bg-gradient-to-br from-amber-300 via-amber-400 to-yellow-500 rounded-[2rem] shadow-[0_8px_30px_rgb(251,191,36,0.25)] overflow-hidden p-5 mb-8 relative">
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/30 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-amber-600/20 rounded-full blur-2xl pointer-events-none" />
@@ -2158,7 +2170,7 @@ export default function Profile() {
         </div>
       )}
 
-      {(isBusinessProfile || (profile.role === "homeowner" && profile.subscriptionType === "business")) && platformConfig && (
+      {(isBusinessProfile || (((profile.role as string) === "homeowner" || (profile.role as string) === "customer") && profile.subscriptionType === "business")) && platformConfig && (
         <div className="bg-white rounded-[2rem] border border-black shadow-[0_8px_30px_rgb(0,0,0,0.08)] bg-gradient-to-b from-white to-slate-50/50 overflow-hidden p-5 mb-8">
           {platformConfig.paywallEnabled === false && (
             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-center gap-4">
@@ -2421,7 +2433,7 @@ export default function Profile() {
       )}
 
       {/* Homeowner Safety & Emergency Card */}
-      {profile.role === "homeowner" && (
+      {((profile.role as string) === "homeowner" || (profile.role as string) === "customer") && (
         <SafetyEmergencyCard
           profile={profile}
           isAddingEmergency={isAddingEmergency}
@@ -3344,9 +3356,9 @@ export default function Profile() {
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end sm:items-center sm:justify-center"
           >
             <motion.div 
-              initial={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
-              animate={{ y: 0, sm: { scale: 1, opacity: 1 } }}
-              exit={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="bg-white rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
             >
@@ -3438,9 +3450,9 @@ export default function Profile() {
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex flex-col justify-end sm:items-center sm:justify-center"
           >
             <motion.div 
-              initial={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
-              animate={{ y: 0, sm: { scale: 1, opacity: 1 } }}
-              exit={{ y: "100%", sm: { scale: 0.9, opacity: 0 } }}
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
               className="bg-white rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
             >
@@ -3460,23 +3472,23 @@ export default function Profile() {
                   <input
                     type="checkbox"
                     className="w-5 h-5 accent-blue-600"
-                    checked={editData.isAvailableForInstantMatch || false}
-                    onChange={(e) => setEditData({...editData, isAvailableForInstantMatch: e.target.checked})}
+                    checked={(editData as any).isAvailableForInstantMatch || false}
+                    onChange={(e) => setEditData({...editData, isAvailableForInstantMatch: e.target.checked} as any)}
                   />
                 </label>
                 
-                {editData.isAvailableForInstantMatch && (
+                {(editData as any).isAvailableForInstantMatch && (
                   <div className="space-y-4 bg-slate-50 p-5 rounded-2xl border border-black">
                     <div>
                       <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Call-Out Fee (£)</label>
                       <input 
                         type="number"
                         className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
-                        value={editData.instantMatchPricing?.callOutFee || ''}
+                        value={(editData as any).instantMatchPricing?.callOutFee || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
-                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), callOutFee: Number(e.target.value) } 
-                        })}
+                          instantMatchPricing: { ...((editData as any).instantMatchPricing || {}), callOutFee: Number(e.target.value) } 
+                        } as any)}
                         placeholder="e.g. 50"
                       />
                     </div>
@@ -3485,11 +3497,11 @@ export default function Profile() {
                       <input 
                         type="number"
                         className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm font-bold"
-                        value={editData.instantMatchPricing?.hourlyRate || ''}
+                        value={(editData as any).instantMatchPricing?.hourlyRate || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
-                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), hourlyRate: Number(e.target.value) } 
-                        })}
+                          instantMatchPricing: { ...((editData as any).instantMatchPricing || {}), hourlyRate: Number(e.target.value) } 
+                        } as any)}
                         placeholder="e.g. 80"
                       />
                     </div>
@@ -3497,11 +3509,11 @@ export default function Profile() {
                       <label className="text-xs font-bold text-slate-500 mb-1 block uppercase tracking-wide">Terms & Conditions</label>
                       <textarea 
                         className="w-full p-3 rounded-xl border border-black focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 outline-none transition-all text-sm resize-y"
-                        value={editData.instantMatchPricing?.terms || ''}
+                        value={(editData as any).instantMatchPricing?.terms || ''}
                         onChange={(e) => setEditData({ 
                           ...editData, 
-                          instantMatchPricing: { ...(editData.instantMatchPricing || {} as any), terms: e.target.value } 
-                        })}
+                          instantMatchPricing: { ...((editData as any).instantMatchPricing || {}), terms: e.target.value } 
+                        } as any)}
                         placeholder="e.g. Rate excludes materials. Client must be present to provide access."
                         rows={3}
                       />

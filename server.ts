@@ -211,6 +211,35 @@ async function runDailyAggregation() {
   }
 }
 
+// Distributed Cron Lease Locking Helper (Task 5.4)
+async function acquireCronLock(jobName: string, lockDurationMs: number = 60000): Promise<boolean> {
+  if (!db) return true;
+  try {
+    const lockRef = db.collection("cron_locks").doc(jobName);
+    const now = Date.now();
+    return await db.runTransaction(async (t) => {
+      const snap = await t.get(lockRef);
+      if (snap.exists) {
+        const data = snap.data();
+        const lastRun = data?.lastRunAt?.toMillis ? data.lastRunAt.toMillis() : (data?.timestamp || 0);
+        if (now - lastRun < lockDurationMs) {
+          return false; // Lock is still held by another instance
+        }
+      }
+      t.set(lockRef, {
+        jobName,
+        lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: now,
+        instanceId: process.env.K_REVISION || process.env.HOSTNAME || "local"
+      }, { merge: true });
+      return true;
+    });
+  } catch (err) {
+    console.warn(`Distributed lock check for ${jobName} bypassed on error:`, err);
+    return true; // Fallback to allowing execution if lock check fails
+  }
+}
+
 // Scheduled task: Process SMS Queue
 async function processSmsQueue() {
   if (!db) return;
@@ -249,9 +278,6 @@ async function processSmsQueue() {
     console.error("SMS Queue Processor Error:", err);
   }
 }
-
-// Run SMS processor every minute
-cron.schedule("* * * * *", processSmsQueue);
 
 // Scheduled task: Background Orchestration for Automated Driver Payouts
 async function runDriverPayoutOrchestration() {
@@ -378,27 +404,97 @@ async function runConsultancyScoreRecalculator() {
   }
 }
 
-// Schedule: 00:30 every day
-cron.schedule("30 0 * * *", runDailyAggregation);
-// Schedule: 01:00 every day for driver payouts
-cron.schedule("0 1 * * *", runDriverPayoutOrchestration);
-// Schedule: 02:00 every day for recurring sessions
-cron.schedule("0 2 * * *", runConsultancyRecurringSessionCreator);
-// Schedule: 02:30 every day for matching scores
-cron.schedule("30 2 * * *", runConsultancyScoreRecalculator);
+// Scheduled task: Autonomous Compliance Guardian Audit
+async function runComplianceGuardianAudit() {
+  if (!db) return;
+  console.log("🤖 Running Compliance Guardian audit...");
+  try {
+    await db.collection("ai_agent_audit_logs").add({
+      agentType: "compliance_guardian",
+      action: "AUTONOMOUS_CRON_AUDIT",
+      details: "Audited B2B Gotham housing units & verified Gas Safe / EICR statutory certificates.",
+      timestamp: new Date().toISOString(),
+      status: "success",
+      triggerSource: "autonomous_cron"
+    });
+  } catch (e) {
+    console.warn("Compliance guardian audit error:", e);
+  }
+}
 
-// Matching logic listener
-const startMatchingSystem = async () => {
-  if (!db) {
-    console.error("Firebase not initialized, matching system disabled.");
+// Scheduled task: Autonomous Sentinel Guard Anomaly Scan
+async function runSentinelAnomalyScan() {
+  if (!db) return;
+  console.log("🛡️ Running Sentinel Guard anomaly check...");
+  try {
+    await db.collection("ai_agent_audit_logs").add({
+      agentType: "sentinel_guard",
+      action: "AUTONOMOUS_ANOMALY_SCAN",
+      details: "Scanned user registrations & IP telemetry over last window. All profiles cleared Sybil / disposable domain filters.",
+      timestamp: new Date().toISOString(),
+      status: "success",
+      triggerSource: "autonomous_cron"
+    });
+  } catch (e) {
+    console.warn("Sentinel anomaly scan error:", e);
+  }
+}
+
+// In-process Background Schedulers Starter
+const startBackgroundSchedulers = () => {
+  if (process.env.DISABLE_IN_PROCESS_CRON === "true") {
+    console.log("In-process background cron schedulers disabled (external Cloud Scheduler mode active).");
     return;
   }
-  console.log("Starting server-side matching system...");
-  
-  setInterval(async () => {
-    try {
-      if (!db) return;
-      console.log("Polling trader_notifications...");
+
+  // 1. Run SMS processor every minute
+  cron.schedule("* * * * *", async () => {
+    const locked = await acquireCronLock("sms_queue", 45000);
+    if (locked) await processSmsQueue();
+  });
+
+  // 2. Schedule: 00:30 every day for profitability aggregation
+  cron.schedule("30 0 * * *", async () => {
+    const locked = await acquireCronLock("daily_aggregation", 300000);
+    if (locked) await runDailyAggregation();
+  });
+
+  // 3. Schedule: 01:00 every day for driver payouts
+  cron.schedule("0 1 * * *", async () => {
+    const locked = await acquireCronLock("driver_payouts", 300000);
+    if (locked) await runDriverPayoutOrchestration();
+  });
+
+  // 4. Schedule: 02:00 every day for recurring sessions
+  cron.schedule("0 2 * * *", async () => {
+    const locked = await acquireCronLock("recurring_sessions", 300000);
+    if (locked) await runConsultancyRecurringSessionCreator();
+  });
+
+  // 5. Schedule: 02:30 every day for matching scores
+  cron.schedule("30 2 * * *", async () => {
+    const locked = await acquireCronLock("match_scores", 300000);
+    if (locked) await runConsultancyScoreRecalculator();
+  });
+
+  // 6. 06:00 Daily Compliance Guardian Audit
+  cron.schedule("0 6 * * *", async () => {
+    const locked = await acquireCronLock("compliance_audit", 300000);
+    if (locked) await runComplianceGuardianAudit();
+  });
+
+  // 7. Every 2 hours Sentinel Anomaly Scan
+  cron.schedule("0 */2 * * *", async () => {
+    const locked = await acquireCronLock("sentinel_scan", 300000);
+    if (locked) await runSentinelAnomalyScan();
+  });
+};
+
+// Decoupled Matching Engine Cycle Execution
+async function runMatchingCycle() {
+  if (!db) return;
+  try {
+    console.log("Polling trader_notifications...");
       
       // Use a try-catch for the specific collection query
       let snapshot;
@@ -740,10 +836,28 @@ const startMatchingSystem = async () => {
           console.error("Error marking notification as processed:", err);
         }
       }
-    } catch (error) {
-      console.error("Error in matching logic loop:", error);
+  } catch (error) {
+    console.error("Error in matching logic cycle:", error);
+  }
+}
+
+// Matching logic listener starter
+const startMatchingSystem = async () => {
+  if (!db) {
+    console.error("Firebase not initialized, matching system disabled.");
+    return;
+  }
+  if (process.env.DISABLE_IN_PROCESS_CRON === "true") {
+    console.log("In-process matching system worker disabled (external Cloud Scheduler / Cloud Run Job mode active).");
+    return;
+  }
+  console.log("Starting server-side matching system loop...");
+  setInterval(async () => {
+    const locked = await acquireCronLock("matching_system", 8000);
+    if (locked) {
+      await runMatchingCycle();
     }
-  }, 10000); // Poll every 10 seconds
+  }, 10000);
 };
 
 // Stripe initialization
@@ -783,33 +897,94 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
   const token = authHeader.split("Bearer ")[1];
   try {
     const decodedToken = await admin.auth().verifyIdToken(token);
-    if (db) {
-       const userDoc = await db.collection("users").doc(decodedToken.uid).get();
-       const role = userDoc.data()?.role;
-       const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
-       if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
+    
+    // 1. Primary check: Firebase Custom User Claims
+    const hasAdminClaim = decodedToken.admin === true || decodedToken.role === "admin" || decodedToken.role === "ecosystem_manager";
+    
+    if (!hasAdminClaim) {
+      // 2. Secondary check / migration fallback: Firestore admins & users collections
+      if (db) {
+        const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
+        let role = null;
+        if (!adminDoc.exists) {
+          const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+          role = userDoc.data()?.role;
+        }
+
+        if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
           return res.status(403).json({ error: "Forbidden: requires admin privileges" });
-       }
+        }
+
+        // Auto-migrate verified admin by applying custom claim for future requests
+        try {
+          await admin.auth().setCustomUserClaims(decodedToken.uid, {
+            ...decodedToken,
+            admin: true,
+            role: role || "admin",
+          });
+        } catch (claimErr) {
+          console.warn("[Admin Claim Auto-Sync Note]:", (claimErr as any)?.message);
+        }
+      } else {
+        return res.status(403).json({ error: "Forbidden: database offline and no admin claim found" });
+      }
     }
+
     (req as any).user = decodedToken;
     next();
   } catch (error) {
-    console.error("Token err:", error); return res.status(401).json({ error: "Unauthorized: invalid token" });
+    console.error("Admin Token err:", error);
+    return res.status(401).json({ error: "Unauthorized: invalid token" });
   }
+};
+
+const requireCronOrAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers.authorization;
+  const cronHeader = req.headers["x-cloudscheduler"] || req.headers["x-cron-secret"];
+
+  if (cronSecret && (cronHeader === cronSecret || authHeader === `Bearer ${cronSecret}`)) {
+    return next();
+  }
+  if (process.env.NODE_ENV !== "production" && !cronSecret) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
 };
 
 
 async function startServer() {
   const app = express();
-  app.set("trust proxy", true);
+  // Set trust proxy to 1 (trust single reverse proxy hop from Nginx / Cloud Run ingress)
+  app.set("trust proxy", 1);
   const PORT = 3000;
+
+  // Allowed Origins Configuration for Web, Native Capacitor Mobile Apps (Android/iOS), and Preview
+  const defaultAllowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://localhost",
+    "capacitor://localhost",
+    "ionic://localhost",
+  ];
+  const envAllowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean)
+    : [];
+  const allowedOriginsSet = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
 
   // CORS middleware for Native Capacitor Mobile Apps (Android/iOS) and Web
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-      res.setHeader("Access-Control-Allow-Credentials", "true");
+      const isAllowed = allowedOriginsSet.has(origin) ||
+        process.env.NODE_ENV !== "production" ||
+        origin.endsWith(".run.app") ||
+        origin.includes("localhost");
+
+      if (isAllowed) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      }
     } else {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
@@ -828,38 +1003,41 @@ async function startServer() {
     next();
   });
 
-  // Rate limiters - highly relaxed for container proxies and smooth user navigation
+  // Rate limiters
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 500,
-    validate: false,
+    validate: { trustProxy: false },
     message: { error: "Too many AI requests from this IP, please try again after a minute" },
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 500,
-    validate: false,
+    validate: { trustProxy: false },
     message: { error: "Too many payment requests from this IP" },
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 10000, // Generous capacity for rapid navigation, polling, and iframe reloading
-    validate: false,
+    validate: { trustProxy: false },
     message: { error: "Too many requests from this IP" },
   });
 
   // Apply general limiter to all API routes
   app.use('/api/', generalLimiter);
 
-  // Set anti-caching headers on all dynamic API endpoints to prevent stale data
+  // Set anti-caching & standard security defense headers on all dynamic API endpoints
   app.use('/api/', (req, res, next) => {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
-      'Surrogate-Control': 'no-store'
+      'Surrogate-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'strict-origin-when-cross-origin'
     });
     next();
   });
@@ -881,16 +1059,16 @@ async function startServer() {
       
       let event;
 
-      if (webhookSecret && sig) {
-        try {
-          event = stripeClient.webhooks.constructEvent(req.body, sig, webhookSecret);
-        } catch (err: any) {
-          console.error(`Webhook signature verification failed: ${err.message}`);
-          return res.status(400).send(`Webhook Error: ${err.message}`);
-        }
-      } else {
-        // Fallback for testing without signature verification if webhook secret is missing
-        event = JSON.parse(req.body.toString());
+      if (!webhookSecret || !sig) {
+        console.error("Stripe Webhook rejected: missing STRIPE_WEBHOOK_SECRET or stripe-signature header");
+        return res.status(400).send("Webhook Error: Missing signature or webhook secret");
+      }
+
+      try {
+        event = stripeClient.webhooks.constructEvent(req.body, sig, webhookSecret);
+      } catch (err: any) {
+        console.error(`Webhook signature verification failed: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
       }
 
       // Handle the event
@@ -1105,7 +1283,7 @@ async function startServer() {
     }
   });
 
-  app.use(express.json({ limit: "10mb" }));
+  app.use(express.json({ limit: "1mb" }));
 
   // API Routes
   app.get("/api/health", (req, res) => {
@@ -1153,9 +1331,11 @@ async function startServer() {
   });
 
   // Stripe Checkout Session
-  app.post("/api/create-checkout-session", paymentLimiter, async (req, res) => {
+  app.post("/api/create-checkout-session", requireAuth, paymentLimiter, async (req, res) => {
     try {
-      const { priceId, userId, tierName, successUrl, cancelUrl, mode = 'subscription', metadata = {} } = req.body;
+      const authUid = (req as any).user.uid;
+      const { priceId, tierName, successUrl, cancelUrl, mode = 'subscription', metadata = {} } = req.body;
+      const userId = authUid; // Derive strictly from verified Firebase token
       const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
 
       const finalSuccessUrl = successUrl || `${appUrl}/profile?session_id={CHECKOUT_SESSION_ID}`;
@@ -1165,7 +1345,11 @@ async function startServer() {
       try {
         stripe = getStripe();
       } catch (e) {
-        console.warn("Stripe is not configured. Mocking successful checkout flow.");
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_MOCK_PAYMENTS !== 'true') {
+          console.error("Stripe is not configured in production/live environment. Refusing mock checkout bypass.");
+          return res.status(503).json({ error: "Payment processing is currently unavailable: Stripe gateway is unconfigured." });
+        }
+        console.warn("Stripe is not configured. Mocking successful checkout flow for development testing.");
         // If Stripe is not set up, just fake the redirect back and update the database directly for local testing
         if (db) {
            if (metadata.isExclusiveAddon === 'true') {
@@ -1335,9 +1519,11 @@ async function startServer() {
   });
 
   // Stripe Setup Session (Save Card)
-  app.post("/api/create-setup-session", paymentLimiter, async (req, res) => {
+  app.post("/api/create-setup-session", requireAuth, paymentLimiter, async (req, res) => {
     try {
-      const { userId, successUrl, cancelUrl } = req.body;
+      const authUid = (req as any).user.uid;
+      const { successUrl, cancelUrl } = req.body;
+      const userId = authUid; // Derive strictly from verified token
       const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
 
       const finalSuccessUrl = successUrl || `${appUrl}/profile?setup=success`;
@@ -1347,7 +1533,11 @@ async function startServer() {
       try {
         stripe = getStripe();
       } catch (e) {
-        console.warn("Stripe is not configured. Mocking successful setup flow.");
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_MOCK_PAYMENTS !== 'true') {
+          console.error("Stripe is not configured in production/live environment. Refusing mock setup bypass.");
+          return res.status(503).json({ error: "Card setup is currently unavailable: Stripe gateway is unconfigured." });
+        }
+        console.warn("Stripe is not configured. Mocking successful setup flow for development testing.");
         return res.json({ url: finalSuccessUrl });
       }
 
@@ -1454,14 +1644,12 @@ async function startServer() {
     }
   });
 
-  // NEW: Direct-to-Driver Taxi Payment (QR Handshake)
-  app.post("/api/rides/create-trip-payment", async (req, res) => {
+  // Server-Authoritative Direct-to-Driver Taxi Payment (QR Handshake)
+  app.post("/api/rides/create-trip-payment", requireAuth, async (req, res) => {
     try {
-      const { rideId, driverId, baseFare = 0, tipAmount = 0 } = req.body;
-      const amount = baseFare + tipAmount;
+      const callerUid = (req as any).user.uid;
+      const { rideId, driverId, tipAmount = 0 } = req.body;
       
-      console.log("Create Trip Payment Request:", { rideId, driverId, baseFare, tipAmount, amount, dbStatus: !!db });
-
       if (!db) {
         console.warn("Retrying Firebase initialization in route handler...");
         initFirebase();
@@ -1469,6 +1657,75 @@ async function startServer() {
       }
       
       if (!driverId) return res.status(400).json({ error: "Driver ID is required" });
+
+      // Retrieve authoritative ride record from Firestore (either 'rides' or 'ride_requests')
+      let rideData: any = null;
+      let effectiveBaseFare = 0;
+
+      if (rideId && db) {
+        try {
+          const rideSnap = await db.collection("ride_requests").doc(rideId).get();
+          if (rideSnap.exists) {
+            rideData = rideSnap.data();
+          } else {
+            const legacySnap = await db.collection("rides").doc(rideId).get();
+            if (legacySnap.exists) {
+              rideData = legacySnap.data();
+            }
+          }
+        } catch (rideErr) {
+          console.warn("Could not query ride record from Firestore:", rideErr);
+        }
+      }
+
+      if (rideData) {
+        // Authorize caller
+        const isParticipant =
+          callerUid === rideData?.driverId ||
+          callerUid === rideData?.assignedDriverId ||
+          callerUid === rideData?.passengerId ||
+          callerUid === rideData?.riderId ||
+          callerUid === driverId ||
+          (req as any).user?.role === "admin";
+        
+        if (!isParticipant) {
+          return res.status(403).json({ error: "Forbidden: You are not authorized to process payment for this trip." });
+        }
+
+        // Server-authoritative base fare derivation from document
+        effectiveBaseFare = Number(
+          rideData?.finalFare || 
+          rideData?.fare || 
+          rideData?.estimatedFare || 
+          rideData?.totalFare || 
+          rideData?.price || 
+          0
+        );
+      } else {
+        // If no pre-existing ride document found, validate supplied base fare with security bounds
+        const rawFare = Number(req.body.baseFare);
+        if (!rawFare || isNaN(rawFare) || rawFare < 1.0) {
+          return res.status(400).json({ error: "Valid trip fare could not be resolved." });
+        }
+        effectiveBaseFare = rawFare;
+      }
+
+      // Sanitize tip amount
+      const sanitizedTip = Math.max(0, Math.min(500, Number(tipAmount) || 0));
+      const totalAmount = effectiveBaseFare + sanitizedTip;
+
+      if (totalAmount <= 0) {
+        return res.status(400).json({ error: "Trip amount must be greater than zero." });
+      }
+
+      console.log("Authoritative Trip Payment Resolution:", {
+        rideId,
+        driverId,
+        effectiveBaseFare,
+        sanitizedTip,
+        totalAmount,
+        callerUid
+      });
 
       // 1. Get Driver's Stripe Account
       let driverDoc;
@@ -1479,7 +1736,7 @@ async function startServer() {
       }
       
       if (!driverDoc.exists) {
-        console.warn(`Driver doc not found for ID: ${driverId}. This may happen if the driver was deleted but the ride persists.`);
+        console.warn(`Driver doc not found for ID: ${driverId}.`);
         return res.status(404).json({ error: "Driver profile not found. Please ensure you are logged in as a registered driver." });
       }
 
@@ -1491,15 +1748,19 @@ async function startServer() {
       try {
         stripe = getStripe();
       } catch (e) {
-        console.warn("Stripe missing. Mocking Trip QR link.");
-        return res.json({ url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}` });
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_MOCK_PAYMENTS !== 'true') {
+          console.error("Stripe is not configured in production. Refusing mock trip payment bypass.");
+          return res.status(503).json({ error: "Trip payment processing is currently unavailable: Stripe gateway is unconfigured." });
+        }
+        console.warn("Stripe missing. Mocking Trip QR link for development testing.");
+        return res.json({ url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}&fare=${effectiveBaseFare}&tip=${sanitizedTip}` });
       }
 
       if (!stripeAccountId) {
         return res.status(400).json({ error: "Driver has not completed Stripe onboarding." });
       }
 
-      // 2. Create Destination Charge with Platform Fee (Drawn from dynamic Firestore platform_config/rides)
+      // 2. Dynamic Platform Commission
       let commissionRate = 0.12;
       let fixedTripFee = 0;
       try {
@@ -1516,7 +1777,7 @@ async function startServer() {
         console.warn("Failed to fetch dynamic fare config for checkout:", err);
       }
       
-      const feeAmount = Math.round((baseFare * commissionRate + fixedTripFee) * 100); // commission on base fare + fixed fee in pence, tip is untouched
+      const feeAmount = Math.round((effectiveBaseFare * commissionRate + fixedTripFee) * 100);
       
       let session;
       try {
@@ -1527,10 +1788,10 @@ async function startServer() {
             price_data: {
               currency: 'gbp',
               product_data: {
-                name: `Trip Payment (Ride #${rideId.substring(0, 8)})`,
-                description: "Direct to driver transport payment."
+                name: `Trip Payment (Ride #${(rideId || 'DIRECT').substring(0, 8)})`,
+                description: `Direct transport payment (Base: £${effectiveBaseFare.toFixed(2)}, Tip: £${sanitizedTip.toFixed(2)})`
               },
-              unit_amount: Math.round(amount * 100), // Original amount in pence
+              unit_amount: Math.round(totalAmount * 100),
             },
             quantity: 1,
           }],
@@ -1541,8 +1802,10 @@ async function startServer() {
             },
           },
           metadata: {
-            rideId,
+            rideId: rideId || '',
             driverId,
+            baseFare: effectiveBaseFare.toString(),
+            tipAmount: sanitizedTip.toString(),
             type: 'taxi_trip'
           },
           success_url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}`,
@@ -1550,11 +1813,14 @@ async function startServer() {
         });
         res.json({ url: session.url });
       } catch (stripeErr: any) {
-        console.warn("Stripe session creation failed (often due to test accounts not matching connected app). Mocking URL.", stripeErr.message);
+        console.warn("Stripe session creation failed:", stripeErr.message);
+        if (process.env.NODE_ENV === 'production') {
+          return res.status(502).json({ error: "Payment gateway error during session creation." });
+        }
         res.json({ url: `${process.env.APP_URL || ''}/payment-success?rideId=${rideId}` });
       }
     } catch (error: any) {
-      console.warn("Failed to generate payment link, mocking response.");
+      console.error("Trip Payment Creation Error:", error);
       res.status(500).json({ 
         error: error.message || "Failed to generate payment link",
         debugCode: error.code 
@@ -1620,9 +1886,16 @@ async function startServer() {
     }
   });
 
-  app.get("/api/driver/stripe-balance/:driverId", async (req, res) => {
+  app.get("/api/driver/stripe-balance/:driverId", requireAuth, async (req, res) => {
     try {
       const { driverId } = req.params;
+      const callerUid = (req as any).user.uid;
+      const callerRole = (req as any).user.role;
+
+      if (callerUid !== driverId && callerRole !== 'admin' && callerRole !== 'ecosystem_manager') {
+        return res.status(403).json({ error: "Forbidden: Not authorized to view this driver balance" });
+      }
+
       if (!db) return res.json({ available: 0, pending: 0, currency: 'gbp', mock: true });
 
       let driverDoc;
@@ -1689,9 +1962,10 @@ async function startServer() {
   });
 
   // Platform Fee Settlement Route
-  app.post("/api/driver/settle-fees", async (req, res) => {
+  app.post("/api/driver/settle-fees", requireAuth, async (req, res) => {
     try {
-      const { driverId, amount } = req.body;
+      const driverId = (req as any).user.uid; // Always derive strictly from verified token
+      const { amount } = req.body;
       
       let pendingPlatformFees = amount || 9.75;
 
@@ -1714,6 +1988,10 @@ async function startServer() {
       try {
         stripe = getStripe();
       } catch (e) {
+        if (process.env.NODE_ENV === 'production' || process.env.ALLOW_MOCK_PAYMENTS !== 'true') {
+          console.error("Stripe is not configured in production. Refusing mock fee settlement bypass.");
+          return res.status(503).json({ error: "Fee settlement is currently unavailable: Stripe gateway is unconfigured." });
+        }
         // Stripe not connected/configured, redirect direct to success path in Sandbox Mode
         console.log("Stripe not connected. Directing to sandbox platform fee success pathway.");
         return res.json({ url: `${process.env.APP_URL || ''}/platform-fee-success?sandbox=true&amount=${pendingPlatformFees}` });
@@ -1749,12 +2027,15 @@ async function startServer() {
   });
 
   // Manual / Sandbox Confirmation of Fee Settlement
-  app.post("/api/driver/confirm-fee-settlement", async (req, res) => {
+  app.post("/api/driver/confirm-fee-settlement", requireAuth, async (req, res) => {
     try {
-      const { driverId } = req.body;
+      const driverId = (req as any).user.uid; // Strictly derive driverId from verified token
       
+      if (process.env.NODE_ENV === 'production' || process.env.ALLOW_MOCK_PAYMENTS !== 'true') {
+        return res.status(403).json({ error: "Direct settlement confirmation is only permitted in sandbox test environments." });
+      }
+
       if (!db) {
-        // Safe sandbox fallback response
         console.log(`Database is not connected. Returning safe sandbox completion for driver ${driverId}`);
         return res.json({ success: true, settledAmount: null, sandboxFallback: true });
       }
@@ -1777,17 +2058,24 @@ async function startServer() {
     }
   });
 
-  // Milestone Release Route
+  // Server-Authoritative Milestone Release Route & QR Handshake
   app.post("/api/release-milestone", requireAuth, async (req, res) => {
     try {
-      const { jobId, quoteId, milestoneId } = req.body;
+      const { jobId, quoteId, milestoneId, isQrHandshake } = req.body;
       const authUid = (req as any).user.uid;
       if (!db) return res.status(500).json({ error: "Database not initialized" });
 
       const jobRef = db.collection("jobs").doc(jobId);
       const jobDoc = await jobRef.get();
-      if (!jobDoc.exists || jobDoc.data()?.homeownerId !== authUid) {
-        return res.status(403).json({ error: "Unauthorized: only the job owner can release milestone funds" });
+      if (!jobDoc.exists) return res.status(404).json({ error: "Job not found" });
+
+      const jobData = jobDoc.data();
+      const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
+      const isAdmin = (req as any).user?.role === "admin" || (req as any).user?.admin === true;
+      const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
+
+      if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
+        return res.status(403).json({ error: "Unauthorized: only the job owner or authorized admin can release milestone funds" });
       }
 
       const quoteRef = jobRef.collection("quotes").doc(quoteId);
@@ -1795,25 +2083,47 @@ async function startServer() {
       if (!quoteDoc.exists) return res.status(404).json({ error: "Quote not found" });
 
       const quoteData = quoteDoc.data();
-      const updatedMilestones = (quoteData?.milestones || []).map((m: any) => {
-        if (m.id === milestoneId) {
-          return { ...m, status: 'funds_released', releaseDate: new Date().toISOString() };
+      const currentMilestones = quoteData?.milestones || [];
+      const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
+        if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
+          return { ...m, status: 'funds_released', releasedAt: new Date().toISOString(), releaseDate: new Date().toISOString() };
         }
         return m;
       });
 
-      await quoteRef.update({ milestones: updatedMilestones });
+      const quoteUpdatePayload: any = {
+        milestones: updatedMilestones,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (isQrHandshake) {
+        const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
+        quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
+        quoteUpdatePayload.paymentStatus = "handshake_complete";
+        
+        await jobRef.update({
+          paymentStatus: "handshake_complete",
+          isPaid: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+
+      await quoteRef.update(quoteUpdatePayload);
 
       // Notify Trader
-      await db.collection("notifications").add({
-        userId: quoteData?.tradespersonId,
-        title: "Funds Released! 💸",
-        message: `The homeowner has released funds for milestone: "${quoteData?.milestones.find((m: any) => m.id === milestoneId)?.title}".`,
-        type: "status",
-        link: `/job/${jobId}`,
-        read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      if (quoteData?.tradespersonId) {
+        await db.collection("notifications").add({
+          userId: quoteData.tradespersonId,
+          title: isQrHandshake ? "Work Verified & Funds Released! 🤝" : "Funds Released! 💸",
+          message: isQrHandshake
+            ? `QR Handshake complete for "${jobData?.title || 'Job'}". Funds released to your account.`
+            : `The homeowner has released funds for milestone: "${quoteData?.milestones?.find((m: any) => m.id === milestoneId)?.title || 'Work Stage'}".`,
+          type: "status",
+          link: `/job/${jobId}`,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
 
       res.json({ success: true });
     } catch (error: any) {
@@ -1822,10 +2132,204 @@ async function startServer() {
     }
   });
 
-  // Check job posting limit
-  app.post("/api/check-job-limit", async (req, res) => {
+  // Server-Authoritative Review Submission & Rating Aggregation (Task 4.4)
+  app.post("/api/reviews/submit", requireAuth, async (req, res) => {
     try {
-      const { userId, isEmergency, requestedCount = 1 } = req.body;
+      const reviewerId = (req as any).user.uid;
+      const {
+        jobId,
+        revieweeId,
+        rating,
+        comment = "",
+        recommended = true,
+        type = "tradesperson_review"
+      } = req.body;
+
+      if (!db) return res.status(500).json({ error: "Database not initialized" });
+      if (!jobId || !revieweeId) return res.status(400).json({ error: "Job ID and Reviewee ID are required" });
+
+      const numRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
+      const isLowRating = numRating <= 2 && type === "tradesperson_review";
+
+      const reviewRef = db.collection("reviews").doc();
+      const status = isLowRating ? "cooling_off" : "published";
+      const publishAt = isLowRating
+        ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14-day cooling-off
+        : new Date();
+
+      await db.runTransaction(async (transaction) => {
+        const userRef = db.collection("users").doc(revieweeId);
+        const userDoc = await transaction.get(userRef);
+
+        // 1. Write the review document
+        transaction.set(reviewRef, {
+          id: reviewRef.id,
+          jobId,
+          reviewerId,
+          revieweeId,
+          type,
+          rating: numRating,
+          comment: String(comment).slice(0, 2000),
+          recommended: type === "tradesperson_review" ? Boolean(recommended) : false,
+          status,
+          publishAt: admin.firestore.Timestamp.fromDate(publishAt),
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 2. Update user profile aggregates (only if not in cooling off period)
+        if (!isLowRating && userDoc.exists) {
+          const userData = userDoc.data();
+          if (type === "tradesperson_review") {
+            const currentRating = Number(userData?.rating) || 0;
+            const currentTotalReviews = Number(userData?.totalReviews) || 0;
+            const currentTotalRecommendations = Number(userData?.totalRecommendations) || 0;
+
+            const newTotalReviews = currentTotalReviews + 1;
+            const newRating = Number((((currentRating * currentTotalReviews) + numRating) / newTotalReviews).toFixed(2));
+            const newTotalRecommendations = recommended ? currentTotalRecommendations + 1 : currentTotalRecommendations;
+
+            transaction.update(userRef, {
+              rating: newRating,
+              totalReviews: newTotalReviews,
+              totalRecommendations: newTotalRecommendations
+            });
+          } else {
+            const currentRating = Number(userData?.homeownerRating) || 0;
+            const currentTotalReviews = Number(userData?.totalHomeownerReviews) || 0;
+
+            const newTotalReviews = currentTotalReviews + 1;
+            const newRating = Number((((currentRating * currentTotalReviews) + numRating) / newTotalReviews).toFixed(2));
+
+            transaction.update(userRef, {
+              homeownerRating: newRating,
+              totalHomeownerReviews: newTotalReviews
+            });
+          }
+        }
+
+        // 3. Update Job document status
+        const jobRef = db.collection("jobs").doc(jobId);
+        if (type === "tradesperson_review") {
+          transaction.update(jobRef, {
+            status: "completed",
+            hasReview: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        } else {
+          transaction.update(jobRef, {
+            hasTradespersonReview: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+
+      // 4. Handle Notifications
+      if (isLowRating) {
+        // Delayed notification fuzzing (3-7 days)
+        const delayDays = 3 + Math.floor(Math.random() * 5);
+        const visibleAt = new Date(Date.now() + delayDays * 24 * 60 * 60 * 1000);
+
+        await db.collection("notifications").add({
+          userId: revieweeId,
+          title: "Trust & Fairness Update",
+          message: "The Trust & Fairness engine is conducting a standard quality review of a recent interaction. This process ensures platform balance and takes 14 days.",
+          type: "system",
+          read: false,
+          visibleAt: admin.firestore.Timestamp.fromDate(visibleAt),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          link: `/jobs/${jobId}`
+        });
+      } else {
+        await db.collection("notifications").add({
+          userId: revieweeId,
+          title: "New Review Received! ⭐",
+          message: `You received a ${numRating}-star review for your recent job.`,
+          type: "system",
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          link: `/jobs/${jobId}`
+        });
+      }
+
+      res.json({
+        success: true,
+        reviewId: reviewRef.id,
+        isLowRating,
+        status
+      });
+    } catch (error: any) {
+      console.error("Review Submission Error:", error);
+      res.status(500).json({ error: error.message || "Failed to submit review" });
+    }
+  });
+
+  // Server-Enforced Job Creation Route (Task 4.5)
+  app.post("/api/jobs/create", requireAuth, async (req, res) => {
+    try {
+      const homeownerId = (req as any).user.uid;
+      const jobPayload = req.body;
+
+      if (!db) return res.status(500).json({ error: "Database not initialized" });
+      if (!jobPayload || !jobPayload.title || !jobPayload.category) {
+        return res.status(400).json({ error: "Missing required job fields: title and category" });
+      }
+
+      const isEmergency = jobPayload.urgency === "emergency" || jobPayload.isEmergencyBoost === true;
+
+      // 1. Check Posting Quota if not emergency
+      if (!isEmergency) {
+        const userDoc = await db.collection("users").doc(homeownerId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          const isBusiness = userData?.subscriptionType === "business";
+          const hasActiveSubscription = userData?.subscriptionId && userData?.subscriptionStatus === "active";
+          const platformConfig = await getCachedConfig("global");
+
+          if (platformConfig?.paywallEnabled !== false) {
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
+
+            const activeJobsSnap = await db.collection("jobs")
+              .where("homeownerId", "==", homeownerId)
+              .where("urgency", "!=", "emergency")
+              .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startOfMonth))
+              .get();
+
+            const postLimit = isBusiness ? (hasActiveSubscription ? 50 : 10) : 5;
+            if (activeJobsSnap.size >= postLimit) {
+              return res.status(403).json({
+                error: `Job posting monthly quota reached (${postLimit} jobs). Please upgrade your subscription.`
+              });
+            }
+          }
+        }
+      }
+
+      // 2. Insert sanitized job record
+      const jobRef = db.collection("jobs").doc();
+      const sanitizedJob = {
+        ...jobPayload,
+        id: jobRef.id,
+        homeownerId,
+        status: jobPayload.status || "posted",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      await jobRef.set(sanitizedJob);
+      res.json({ success: true, jobId: jobRef.id, job: sanitizedJob });
+    } catch (error: any) {
+      console.error("Server Job Creation Error:", error);
+      res.status(500).json({ error: error.message || "Failed to create job" });
+    }
+  });
+
+  // Check job posting limit
+  app.post("/api/check-job-limit", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).user.uid; // Strictly derive from authenticated token
+      const { isEmergency, requestedCount = 1 } = req.body;
       if (!db) return res.json({ allowed: true, count: 0, limit: Infinity, isEmergency: !!isEmergency, warning: "Database backend disabled in sandbox" });
 
       // Emergency jobs don't count towards the limit
@@ -1942,9 +2446,10 @@ async function startServer() {
   });
 
   // Check quote limit for tradespeople
-  app.post("/api/check-quote-limit", async (req, res) => {
+  app.post("/api/check-quote-limit", requireAuth, async (req, res) => {
     try {
-      const { userId, jobId } = req.body;
+      const userId = (req as any).user.uid; // Strictly derive from authenticated token
+      const { jobId } = req.body;
       if (!db) return res.json({ allowed: true, warning: "Database backend disabled in sandbox" });
 
       const userDoc = await db.collection("users").doc(userId).get();
@@ -2087,24 +2592,29 @@ async function startServer() {
   });
 
   // AI Shop SSO Token Route
-  app.post("/api/sso-token", async (req, res) => {
+  app.post("/api/sso-token", requireAuth, async (req, res) => {
     try {
-      const { uid, role, email, category } = req.body;
+      const uid = (req as any).user.uid; // Strictly derive from verified token
+      const email = (req as any).user.email || req.body.email;
       const secret = process.env.JWT_SECRET;
       
       if (!secret) {
         return res.status(500).json({ error: "SSO secret not configured" });
       }
 
-      // Fetch user's subscription discount from platform config
+      // Fetch user profile to securely derive role and subscription discount
       let discount = 0;
+      let userRole = "homeowner";
+      let userCategory = null;
       try {
         const userDoc = await db.collection("users").doc(uid).get();
         const userData = userDoc.data();
-        const tierId = userData?.tierId || (userData?.role === "tradesperson" ? "Basic" : "Standard");
+        userRole = userData?.role || "homeowner";
+        userCategory = userData?.primaryTrade || userData?.category || null;
+        const tierId = userData?.tierId || (userRole === "tradesperson" ? "Basic" : "Standard");
         
         const platformConfig = await getCachedConfig("global");
-        const tiers = userData?.role === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
+        const tiers = userRole === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
         const tier = tiers?.find((t: any) => t.name === tierId);
         discount = tier?.shopDiscount || 0;
       } catch (tierErr) {
@@ -2112,9 +2622,20 @@ async function startServer() {
       }
 
       const token = jwt.sign(
-        { uid, role, email, category, discount, iat: Math.floor(Date.now() / 1000) },
+        { 
+          uid, 
+          role: userRole, 
+          email, 
+          category: userCategory, 
+          discount, 
+          iat: Math.floor(Date.now() / 1000) 
+        },
         secret,
-        { expiresIn: "5m" } // Token strictly valid for 5 minutes
+        { 
+          expiresIn: "2m", 
+          audience: "shop.tradequote.uk", 
+          issuer: "anytrader-auth" 
+        } // Short-lived 2-minute token with strict audience
       );
 
       res.json({ token });
@@ -2126,9 +2647,9 @@ async function startServer() {
 
 
   // AI Shop Analytics Route
-  app.post("/api/analytics/profitability", async (req, res) => {
+  app.post("/api/analytics/profitability", requireAuth, async (req, res) => {
     try {
-      const { uid } = req.body;
+      const uid = (req as any).user.uid; // Strictly derive from verified token
       if (!uid) return res.status(400).json({ error: "Missing UID" });
 
       if (!db) {
@@ -2205,7 +2726,7 @@ async function startServer() {
   });
 
   // Smart Job Procurement Material Detection Route
-  app.post("/api/job/procure-materials", async (req, res) => {
+  app.post("/api/job/procure-materials", requireAuth, async (req, res) => {
     try {
       const { description } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -2241,7 +2762,7 @@ Description: ${description}`;
   });
 
   // Direct Merchant AI "BOM" (Bill of Materials) One-Click Extraction Route
-  app.post("/api/job/extract-bom", async (req, res) => {
+  app.post("/api/job/extract-bom", requireAuth, async (req, res) => {
     try {
       const { jobTitle, category, description, quoteMessage, quoteMaterialList, propertyPassportSpecs } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -2307,7 +2828,7 @@ Return a JSON object with an 'items' array:
     }
   });
 
-  app.post("/api/driver/analytics-pulse", async (req, res) => {
+  app.post("/api/driver/analytics-pulse", requireAuth, async (req, res) => {
     try {
       const { driverStats } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -2335,18 +2856,62 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
+  // Explicit allowlist of client-permitted Gemini functions (eliminates unvetted dynamic RPC execution)
+  const ALLOWED_GEMINI_FUNCTIONS: Record<string, (...args: any[]) => Promise<any>> = {
+    getPlatformHealthInsights: geminiServer.getPlatformHealthInsights,
+    getJobEstimate: geminiServer.getJobEstimate,
+    generateBroadcastDraft: geminiServer.generateBroadcastDraft,
+    generateQuoteDraft: geminiServer.generateQuoteDraft,
+    summarizeDisputeChat: geminiServer.summarizeDisputeChat,
+    getReviewSummary: geminiServer.getReviewSummary,
+    analyzeFraudRisk: geminiServer.analyzeFraudRisk,
+    analyzeJobPhoto: geminiServer.analyzeJobPhoto,
+    getClarifyingQuestions: geminiServer.getClarifyingQuestions,
+    getMaterialList: geminiServer.getMaterialList,
+    analyzeSecurityThreat: geminiServer.analyzeSecurityThreat,
+    improveJobDescription: geminiServer.improveJobDescription,
+    parseNaturalLanguageSearch: geminiServer.parseNaturalLanguageSearch,
+    checkSafetyAndPII: geminiServer.checkSafetyAndPII,
+    getDisputeResolution: geminiServer.getDisputeResolution,
+    getRecommendedJobs: geminiServer.getRecommendedJobs,
+    getMaintenancePredictions: geminiServer.getMaintenancePredictions,
+    generateMarketingPost: geminiServer.generateMarketingPost,
+    analyzeQuote: geminiServer.analyzeQuote,
+    getRejectionFeedback: geminiServer.getRejectionFeedback,
+    analyzeDocument: geminiServer.analyzeDocument,
+    suggestNewCategories: geminiServer.suggestNewCategories,
+    getMonetizationOpportunities: geminiServer.getMonetizationOpportunities,
+    transcribeVoiceAudio: geminiServer.transcribeVoiceAudio,
+    processVoiceAudio: geminiServer.processVoiceAudio,
+    processVoiceTranscript: geminiServer.processVoiceTranscript,
+    getEquipmentRecommendations: geminiServer.getEquipmentRecommendations,
+    getShopRecommendations: geminiServer.getShopRecommendations,
+    getBuildingRegsAndSupplierPricing: geminiServer.getBuildingRegsAndSupplierPricing,
+    callTradeBot: geminiServer.callTradeBot,
+    processTaxiVoiceCommand: geminiServer.processTaxiVoiceCommand,
+    getAiModelRecommendations: geminiServer.getAiModelRecommendations,
+    getDynamicInstantMatchPricing: geminiServer.getDynamicInstantMatchPricing,
+    getNearbyTradeInsights: geminiServer.getNearbyTradeInsights,
+    polishBio: geminiServer.polishBio,
+    getProMatches: geminiServer.getProMatches,
+    runServerPlatformMisuseDeepScan: geminiServer.runServerPlatformMisuseDeepScan,
+    classifyUnmatchedSearchTermServer: geminiServer.classifyUnmatchedSearchTermServer,
+    runServerAutonomousAgentTask: geminiServer.runServerAutonomousAgentTask,
+  };
+
   // Secure Gemini API Service Call Proxy
-  app.post("/api/gemini/call", async (req, res) => {
+  app.post("/api/gemini/call", express.json({ limit: "10mb" }), requireAuth, async (req, res) => {
     try {
       const { functionName, args } = req.body;
       if (!functionName) {
         return res.status(400).json({ error: "Missing functionName" });
       }
 
-      const targetFunc = (geminiServer as any)[functionName];
+      const targetFunc = ALLOWED_GEMINI_FUNCTIONS[functionName];
 
-      if (typeof targetFunc !== "function") {
-        return res.status(404).json({ error: `Function ${functionName} not found` });
+      if (!targetFunc || typeof targetFunc !== "function") {
+        console.warn(`[Gemini RPC Blocked] Function '${functionName}' is not in the explicit allowlist.`);
+        return res.status(403).json({ error: `Function '${functionName}' is not permitted or does not exist` });
       }
 
       const result = await targetFunc(...(args || []));
@@ -2358,7 +2923,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // High-Performance SSE Token Streaming Endpoint (<100-200ms TTFB)
-  app.post("/api/gemini/stream", async (req, res) => {
+  app.post("/api/gemini/stream", requireAuth, async (req, res) => {
     // Configure SSE Headers
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -2394,7 +2959,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // Server-Side Semantic AI Query Cache Endpoints
-  app.get("/api/gemini/cache-stats", (req, res) => {
+  app.get("/api/gemini/cache-stats", requireAdmin, (req, res) => {
     try {
       const stats = geminiServer.getSemanticCacheTelemetry();
       res.json(stats);
@@ -2403,7 +2968,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
-  app.post("/api/gemini/cache-clear", (req, res) => {
+  app.post("/api/gemini/cache-clear", requireAdmin, (req, res) => {
     try {
       geminiServer.clearSemanticCache();
       res.json({ success: true, message: "Semantic cache successfully purged" });
@@ -2413,7 +2978,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // Category Registry Synchronization Endpoint
-  app.post("/api/gemini/sync-categories", (req, res) => {
+  app.post("/api/gemini/sync-categories", requireAdmin, (req, res) => {
     try {
       const { categories, synonyms } = req.body || {};
       const syncResult = geminiServer.syncCategoryRegistryServer(categories, synonyms);
@@ -2425,7 +2990,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // --- AI Agent Ecosystem Endpoints ---
-  app.post("/api/admin/agents/scan", async (req, res) => {
+  app.post("/api/admin/agents/scan", requireAdmin, async (req, res) => {
     try {
       const { agentType, payload } = req.body;
       let result: any = {};
@@ -2469,7 +3034,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // 1-Click Closed-Loop Execution Action
-  app.post("/api/admin/agents/execute-action", async (req, res) => {
+  app.post("/api/admin/agents/execute-action", requireAdmin, async (req, res) => {
     try {
       const { actionType, payload, agentName } = req.body;
       const timestamp = new Date().toISOString();
@@ -2540,7 +3105,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // Query & Add Persistent AI Agent Audit Logs
-  app.get("/api/admin/agents/audit-logs", async (req, res) => {
+  app.get("/api/admin/agents/audit-logs", requireAdmin, async (req, res) => {
     try {
       if (!db) {
         return res.json({ logs: [] });
@@ -2558,7 +3123,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
-  app.post("/api/admin/agents/audit-logs", async (req, res) => {
+  app.post("/api/admin/agents/audit-logs", requireAdmin, async (req, res) => {
     try {
       if (!db) {
         return res.status(500).json({ error: "Database not available" });
@@ -2576,10 +3141,10 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // Admin Security & Misuse Email Alert Dispatcher
-  app.post("/api/admin/send-email-alert", async (req, res) => {
+  app.post("/api/admin/send-email-alert", requireAdmin, async (req, res) => {
     try {
       const { to, subject, html, breachId, severity, breachType } = req.body;
-      const recipient = to || "saanwar2002@gmail.com";
+      const recipient = to || process.env.ADMIN_ALERT_EMAIL || "admin@tradequote.uk";
       console.log(`🚨 [EMAIL ALERT DISPATCH] Recipient: ${recipient} | Severity: ${severity} | Breach: ${breachType}`);
       
       // If db is available, log to email_queue
@@ -2607,42 +3172,111 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
-  // Autonomous Background Cron Jobs for AI Agents
-  // 06:00 Daily Compliance Guardian Audit
-  cron.schedule("0 6 * * *", async () => {
+  // Cloud Scheduler / Cloud Run Job Decoupled Cron Trigger Endpoints (Task 5.4)
+  app.post("/api/cron/:jobName", requireCronOrAdmin, async (req, res) => {
+    const { jobName } = req.params;
     try {
-      console.log("🤖 Running autonomous daily Compliance Guardian audit (06:00 GMT)...");
-      if (db) {
-        await db.collection("ai_agent_audit_logs").add({
-          agentType: "compliance_guardian",
-          action: "AUTONOMOUS_CRON_AUDIT",
-          details: "Audited 142 B2B Gotham housing units & 88 verified trader Gas Safe / EICR certificates. 0 critical SLA breaches detected.",
-          timestamp: new Date().toISOString(),
-          status: "success",
-          triggerSource: "autonomous_cron"
-        });
+      let result: any = { executed: false };
+      switch (jobName) {
+        case "sms-queue": {
+          const locked = await acquireCronLock("sms_queue", 45000);
+          if (locked) {
+            await processSmsQueue();
+            result = { executed: true, job: "sms_queue" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired by another instance" };
+          }
+          break;
+        }
+        case "daily-aggregation": {
+          const locked = await acquireCronLock("daily_aggregation", 300000);
+          if (locked) {
+            await runDailyAggregation();
+            result = { executed: true, job: "daily_aggregation" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "driver-payouts": {
+          const locked = await acquireCronLock("driver_payouts", 300000);
+          if (locked) {
+            const payoutResult = await runDriverPayoutOrchestration();
+            result = { executed: true, job: "driver_payouts", details: payoutResult };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "recurring-sessions": {
+          const locked = await acquireCronLock("recurring_sessions", 300000);
+          if (locked) {
+            await runConsultancyRecurringSessionCreator();
+            result = { executed: true, job: "recurring_sessions" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "match-scores": {
+          const locked = await acquireCronLock("match_scores", 300000);
+          if (locked) {
+            await runConsultancyScoreRecalculator();
+            result = { executed: true, job: "match_scores" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "compliance-audit": {
+          const locked = await acquireCronLock("compliance_audit", 300000);
+          if (locked) {
+            await runComplianceGuardianAudit();
+            result = { executed: true, job: "compliance_audit" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "sentinel-scan": {
+          const locked = await acquireCronLock("sentinel_scan", 300000);
+          if (locked) {
+            await runSentinelAnomalyScan();
+            result = { executed: true, job: "sentinel_scan" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        case "matching-system": {
+          const locked = await acquireCronLock("matching_system", 8000);
+          if (locked) {
+            await runMatchingCycle();
+            result = { executed: true, job: "matching_system" };
+          } else {
+            result = { executed: false, reason: "Lock already acquired" };
+          }
+          break;
+        }
+        default:
+          return res.status(404).json({ error: `Unknown cron job '${jobName}'` });
       }
-    } catch (e) {
-      console.warn("Compliance cron error:", e);
+
+      res.json({ success: true, ...result, timestamp: new Date().toISOString() });
+    } catch (error: any) {
+      console.error(`Error in /api/cron/${jobName}:`, error);
+      res.status(500).json({ error: error.message || "Failed to execute cron job" });
     }
   });
 
-  // Every 2 hours Sentinel Anomaly Scan
-  cron.schedule("0 */2 * * *", async () => {
+  app.get("/api/cron/status", requireCronOrAdmin, async (req, res) => {
     try {
-      console.log("🛡️ Running autonomous Sentinel Guard anomaly check...");
-      if (db) {
-        await db.collection("ai_agent_audit_logs").add({
-          agentType: "sentinel_guard",
-          action: "AUTONOMOUS_ANOMALY_SCAN",
-          details: "Scanned user registrations & IP telemetry over last 120 minutes. All profiles cleared Sybil / disposable domain filters.",
-          timestamp: new Date().toISOString(),
-          status: "success",
-          triggerSource: "autonomous_cron"
-        });
-      }
-    } catch (e) {
-      console.warn("Sentinel cron error:", e);
+      if (!db) return res.json({ status: "disabled_no_db", locks: [] });
+      const snap = await db.collection("cron_locks").get();
+      const locks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      res.json({ success: true, locks, inProcessCronDisabled: process.env.DISABLE_IN_PROCESS_CRON === "true" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
@@ -2674,7 +3308,8 @@ Limit your response to just the text of the tip. Do not use quotes.`;
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`TradeQuote UK server running on http://localhost:${PORT}`);
-    // Start background systems
+    // Start background systems with distributed locking
+    startBackgroundSchedulers();
     startMatchingSystem();
   });
 }

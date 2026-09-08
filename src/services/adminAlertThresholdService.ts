@@ -28,7 +28,7 @@ export const DEFAULT_THRESHOLD_RULES: ThresholdRuleConfig = {
   enableToastAlerts: true,
   enableAudioChime: true,
   enableEmailAlerts: true,
-  adminAlertEmail: "saanwar2002@gmail.com",
+  adminAlertEmail: "admin@tradequote.uk",
   minSeverityForEmail: "HIGH_AND_CRITICAL",
 };
 
@@ -145,7 +145,7 @@ export function playAlertChime(severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" 
  */
 export async function sendAdminEmailAlert(
   breach: ActiveBreachAlert,
-  recipientEmail: string = "saanwar2002@gmail.com"
+  recipientEmail: string = "admin@tradequote.uk"
 ): Promise<{ success: boolean; message: string }> {
   try {
     const emailSubject = `🚨 [SECURITY BREACH ${breach.severity}] ${breach.title} - TradeQuote Admin`;
@@ -569,7 +569,7 @@ function dispatchBreachNotification(
 export function triggerTestBreachAlert(
   type: "multiple_profile_creations" | "rapid_api_usage" | "deals_misuse",
   onBreach: (breach: ActiveBreachAlert) => void,
-  targetEmail: string = "saanwar2002@gmail.com"
+  targetEmail: string = "admin@tradequote.uk"
 ): ActiveBreachAlert {
   let breach: ActiveBreachAlert;
 

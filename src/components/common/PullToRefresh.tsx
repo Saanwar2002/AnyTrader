@@ -185,7 +185,7 @@ export function PullToRefresh({
         }}
         transition={
           isPulling
-            ? { type: "just" }
+            ? { duration: 0 }
             : { type: "spring", stiffness: 400, damping: 30 }
         }
         className="w-full h-full min-h-full"

@@ -208,7 +208,7 @@ export default function DriverEarnings({ onClose }: { onClose?: () => void }) {
         return;
      }
 
-     const csvRows = [];
+     const csvRows: string[] = [];
      // Header
      csvRows.push(["Date", "Time", "Customer", "Pickup", "Dropoff", "Distance (mi)", "Earned (£)", "Gross (£)"].join(','));
      

@@ -169,7 +169,7 @@ export default function EcosystemAdmin() {
         activeCampaigns: campaigns.length
       };
 
-      const insights = await getMonetizationOpportunities(stats);
+      const insights = await getMonetizationOpportunities("ecosystem_admin", stats);
       setAiInsights(insights);
       toast.success("AI Insights refreshed");
     } catch (error) {
@@ -591,7 +591,9 @@ export default function EcosystemAdmin() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {aiInsights.length > 0 ? aiInsights.map((insight, idx) => (
+              {aiInsights.length > 0 ? aiInsights.map((insightItem, idx) => {
+                const insight = insightItem as any;
+                return (
                 <div key={idx} className="bg-white p-6 rounded-[32px] border border-black shadow-sm space-y-4 group">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -635,7 +637,8 @@ export default function EcosystemAdmin() {
                     {insight.action}
                   </button>
                 </div>
-              )) : (
+                );
+              }) : (
                 <div className="col-span-full p-12 text-center bg-slate-50 rounded-[32px] border border-dashed border-black">
                   <Sparkles className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-slate-500">Click "Refresh Insights" to let Gemini analyze your platform data.</p>

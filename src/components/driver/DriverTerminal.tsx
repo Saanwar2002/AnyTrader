@@ -900,11 +900,11 @@ export default function DriverTerminal() {
           // Analytical calculation to place the driver's live location marker and route optimally on screen
           const leg = directions.routes[0]?.legs?.[currentLegIndex || 0] || directions.routes[0]?.legs?.[0];
           if (leg && leg.end_location) {
-            const destLoc = leg.end_location;
-            const destLat = typeof destLoc.lat === "function" ? destLoc.lat() : destLoc.lat;
-            const destLng = typeof destLoc.lng === "function" ? destLoc.lng() : destLoc.lng;
-            const driverLat = driverLocationRef.current[0];
-            const driverLng = driverLocationRef.current[1];
+            const destLoc = leg.end_location as any;
+            const destLat: number = typeof destLoc.lat === "function" ? destLoc.lat() : Number(destLoc.lat);
+            const destLng: number = typeof destLoc.lng === "function" ? destLoc.lng() : Number(destLoc.lng);
+            const driverLat = Number(driverLocationRef.current[0]);
+            const driverLng = Number(driverLocationRef.current[1]);
             
             // Calculate lat/lng bounds differences with minimum threshold protection to prevent division by zero
             const latDiff = Math.max(0.001, Math.abs(destLat - driverLat));
@@ -1661,9 +1661,9 @@ export default function DriverTerminal() {
       let overviewHeading = 0;
       const leg = directions?.routes?.[0]?.legs?.[currentLegIndex || 0] || directions?.routes?.[0]?.legs?.[0];
       if (leg && leg.end_location) {
-        const destLoc = leg.end_location;
-        const destLat = typeof destLoc.lat === "function" ? destLoc.lat() : destLoc.lat;
-        const driverLat = driverLocationRef.current[0];
+        const destLoc = leg.end_location as any;
+        const destLat: number = typeof destLoc.lat === "function" ? destLoc.lat() : Number(destLoc.lat);
+        const driverLat = Number(driverLocationRef.current[0]);
         const isDestNorth = destLat > driverLat;
         overviewHeading = isDestNorth ? 0 : 180;
       }
@@ -1681,7 +1681,7 @@ export default function DriverTerminal() {
       activeRide?.pickupLat &&
       activeRide?.pickupLng
     ) {
-      let targetBearing = null;
+      let targetBearing: number | null = null;
       const legSteps = directions?.routes?.[0]?.legs?.[0]?.steps;
       if (legSteps && legSteps.length > 0) {
         const curStepIdx = mapCenter ? getCurrentStepIndex(mapCenter, legSteps) : 0;
@@ -1718,7 +1718,7 @@ export default function DriverTerminal() {
           );
         }
       }
-      setMapHeading(targetBearing);
+      setMapHeading(targetBearing ?? 0);
       setMapTilt(0); 
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
@@ -1748,7 +1748,7 @@ export default function DriverTerminal() {
         }
       }
 
-      let targetBearing = null;
+      let targetBearing: number | null = null;
       const legSteps = directions?.routes?.[0]?.legs?.[0]?.steps;
       if (legSteps && legSteps.length > 0) {
         const curStepIdx = mapCenter ? getCurrentStepIndex(mapCenter, legSteps) : 0;
@@ -1790,7 +1790,7 @@ export default function DriverTerminal() {
         }
       }
 
-      setMapHeading(targetBearing);
+      setMapHeading(targetBearing ?? 0);
       setMapTilt(0);
       if (directions) {
         const remainingDistance = directions.routes?.[0]?.legs?.[0]?.distance?.value || 1000;
@@ -6664,7 +6664,7 @@ export default function DriverTerminal() {
                         const baseSubtotal = Math.max(fareConfig.minFare, fareConfig.baseFare + distFare + timeFare);
                         
                         const defaultMultipliers: Record<string, number> = { standard: 1.0, executive: 1.5, luxury: 2.2, '6seater': 1.4, '8seater': 2.0, wav: 2.5 };
-                        const catMultiplier = activeRide?.carCategory ? (fareConfig.vehicleMultipliers?.[activeRide.carCategory] || defaultMultipliers[activeRide.carCategory] || 1.0) : 1.0;
+                        const catMultiplier = activeRide?.carCategory ? ((fareConfig as any).vehicleMultipliers?.[activeRide.carCategory] || defaultMultipliers[activeRide.carCategory] || 1.0) : 1.0;
                         const vehicleSubtotal = Math.max(baseSubtotal * catMultiplier, fareConfig.minFare * catMultiplier);
                         const vehicleExtra = vehicleSubtotal - baseSubtotal;
 

@@ -18,7 +18,7 @@ export interface BiometricStatus {
 
 export interface BiometricCredentials {
   email: string;
-  pass: string;
+  enrolledAt: number;
 }
 
 const ENABLE_KEY = "anytrader_biometrics_enabled";
@@ -153,17 +153,21 @@ export const BiometricService = {
   },
 
   /**
-   * Enrolls/Saves the biometric sign-in credentials.
+   * Enrolls the biometric sign-in token securely without storing passwords.
    */
-  async enroll(email: string, pass: string): Promise<boolean> {
+  async enroll(email: string): Promise<boolean> {
     try {
       localStorage.setItem(ENABLE_KEY, "true");
       
-      // Simple obfuscation / cipher so credentials are not in plain cleartext
-      const payload: BiometricCredentials = { email, pass };
-      const serialized = JSON.stringify(payload);
-      const encoded = btoa(unescape(encodeURIComponent(serialized)));
-      localStorage.setItem(CRED_KEY, encoded);
+      // Clear any legacy btoa encoded credentials
+      localStorage.removeItem(CRED_KEY);
+
+      // Store only verified email reference and enrollment timestamp
+      const payload: BiometricCredentials = { 
+        email: email.trim().toLowerCase(), 
+        enrolledAt: Date.now() 
+      };
+      localStorage.setItem(CRED_KEY, JSON.stringify(payload));
       
       return true;
     } catch (err) {
@@ -181,19 +185,24 @@ export const BiometricService = {
   },
 
   /**
-   * Decrypts and retrieves stored biometric credentials if biometric flag is set.
+   * Retrieves stored biometric enrollment metadata if biometric flag is active.
+   * Never contains plaintext passwords or reversible secrets.
    */
   getCredentials(): BiometricCredentials | null {
     if (!this.isEnabled()) return null;
     
-    const encoded = localStorage.getItem(CRED_KEY);
-    if (!encoded) return null;
+    const stored = localStorage.getItem(CRED_KEY);
+    if (!stored) return null;
 
     try {
-      const decoded = decodeURIComponent(escape(atob(encoded)));
-      return JSON.parse(decoded) as BiometricCredentials;
+      // If legacy base64 encoded string, purge it immediately
+      if (!stored.startsWith("{")) {
+        localStorage.removeItem(CRED_KEY);
+        return null;
+      }
+      return JSON.parse(stored) as BiometricCredentials;
     } catch (err) {
-      console.error("[BiometricService] Decrypt credentials failed:", err);
+      console.error("[BiometricService] Read credentials failed:", err);
       return null;
     }
   }

@@ -40,6 +40,7 @@ export default function Onboarding() {
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingInvite, setCheckingInvite] = useState(true);
+  const [hasAdminClaim, setHasAdminClaim] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [platformConfig, setPlatformConfig] = useState<any>(null);
 
@@ -99,14 +100,26 @@ export default function Onboarding() {
 
   useEffect(() => {
     const checkInvitation = async () => {
-      if (!user?.email) {
+      if (!user) {
         setCheckingInvite(false);
         return;
       }
 
-      // Check for hardcoded admin email or test admin flag
-      if (user.email?.toLowerCase() === "saanwar2002@gmail.com" || sessionStorage.getItem("is_test_admin") === "true") {
-        setRole("admin");
+      // Check for admin authority via Firebase custom claims
+      try {
+        const tokenResult = await user.getIdTokenResult();
+        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.role === "admin";
+        if (isAdmin) {
+          setHasAdminClaim(true);
+          setRole("admin");
+          setCheckingInvite(false);
+          return;
+        }
+      } catch (claimErr) {
+        console.warn("Could not check admin custom claims:", claimErr);
+      }
+
+      if (!user.email) {
         setCheckingInvite(false);
         return;
       }
@@ -121,6 +134,7 @@ export default function Onboarding() {
         
         if (!snapshot.empty) {
           const invite = snapshot.docs[0].data();
+          setHasAdminClaim(true);
           setRole("admin");
           setPermissions(invite.permissions || []);
           setInvitationId(snapshot.docs[0].id);
@@ -148,14 +162,18 @@ export default function Onboarding() {
     }
 
     const cleanPhone = phone ? phone.replace(/\s/g, "") : "";
-    const isAuthorizedAdmin = user?.email?.toLowerCase() === "saanwar2002@gmail.com";
-
+    
+    let isAuthorizedAdmin = false;
     // Prevent unauthorized role elevation to admin
-    if (role === 'admin' && !isAuthorizedAdmin) {
-      setError("Unauthorized role selected. Please choose Homeowner, Tradesperson / Business, or Driver.");
-      setRole("homeowner");
-      setLoading(false);
-      return;
+    if (role === 'admin') {
+      const tokenResult = await user.getIdTokenResult().catch(() => null);
+      isAuthorizedAdmin = tokenResult?.claims.admin === true || tokenResult?.claims.role === "admin" || !!invitationId;
+      if (!isAuthorizedAdmin) {
+        setError("Unauthorized role selected. Please choose Homeowner, Tradesperson / Business, or Driver.");
+        setRole("homeowner");
+        setLoading(false);
+        return;
+      }
     }
 
     if (role !== 'admin') {
@@ -226,7 +244,9 @@ export default function Onboarding() {
     const isBusiness = role === "business";
 
     // Temporarily disabled for development testing
-    if (false && isBusiness && !confirmationResult && !user.phoneNumber && !bypassPhoneAuth) {
+    if (!user) return;
+
+    if (false && isBusiness && !confirmationResult && !user?.phoneNumber && !bypassPhoneAuth) {
       try {
         if (!(window as any).recaptchaVerifier) {
           (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
@@ -252,7 +272,7 @@ export default function Onboarding() {
         
         const appVerifier = (window as any).recaptchaVerifier;
         
-        const confirmation = await linkWithPhoneNumber(user, fullPhone, appVerifier);
+        const confirmation = await linkWithPhoneNumber(user!, fullPhone, appVerifier);
         setConfirmationResult(confirmation);
         setStep(4);
         setPhoneError("");
@@ -290,8 +310,8 @@ export default function Onboarding() {
       const finalPermissions = finalRole === "admin" ? ["manage_users", "manage_jobs", "manage_disputes", "view_logs", "manage_team"] : permissions;
 
       // Check for referral
-      let referrerUid = null;
-      let appliedAffiliateCode = null;
+      let referrerUid: string | null = null;
+      let appliedAffiliateCode: string | null = null;
       const refCode = searchParams.get("ref");
       
       const checkReferral = async (codeToTest: string) => {
@@ -644,7 +664,7 @@ export default function Onboarding() {
                     </div>
                   </button>
 
-                  {user?.email?.toLowerCase() === "saanwar2002@gmail.com" && (
+                  {hasAdminClaim && (
                     <button
                       type="button"
                       onClick={() => {

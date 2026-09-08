@@ -373,7 +373,7 @@ const libraries: any[] = ['places', 'geometry'];
       const quotesData = snapshot.docs.map(doc => ({ id: doc.id, ref: doc.ref, ...doc.data() }));
       
       const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
-      const validQuotes = [];
+      const validQuotes: any[] = [];
       let deletedCount = 0;
 
       for (const quote of quotesData as any[]) {
@@ -959,7 +959,7 @@ const libraries: any[] = ['places', 'geometry'];
         if (tier === "Gold Elite" || tier === "Platinum Enterprise") {
           Promise.resolve().then(async () => {
             try {
-              const recommendations = await getEquipmentRecommendations(job.title, job.description, job.category);
+              const recommendations = await getEquipmentRecommendations(`${job.title} - ${job.description}`, [job.category]);
               if (recommendations.length > 0) {
                 const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
                 await sendNotification(
@@ -1176,7 +1176,7 @@ const libraries: any[] = ['places', 'geometry'];
       }));
       
       // Determine who initiated and notify the other party
-      const isHomeownerCall = user.uid === job.homeownerId;
+      const isHomeownerCall = user?.uid === job.homeownerId;
       const acceptedQuote = quotes.find(q => q.status === "accepted");
       const otherUserId = isHomeownerCall ? (acceptedQuote?.tradespersonId) : job.homeownerId;
       
@@ -1580,34 +1580,33 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleSimulateScan = async (quote: any) => {
-    if (!qrCodeData) return;
+    if (!qrCodeData || !user || !id) return;
     setIsProcessingQr(true);
     try {
-      const { updateDoc, doc, serverTimestamp } = await import("firebase/firestore");
-      
-      const quoteRef = doc(db, "jobs", id!, "quotes", quote.id);
-      const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      await updateDoc(quoteRef, {
-        "milestones.0.status": "funds_released",
-        "milestones.0.releasedAt": serverTimestamp(),
-        guaranteeExpiresAt: guaranteeExpiry.toISOString(),
-        paymentStatus: "handshake_complete"
+      const token = await user.getIdToken();
+      const response = await fetch("/api/release-milestone", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          jobId: id,
+          quoteId: quote.id,
+          milestoneId: quote.milestones?.[0]?.id || "deposit",
+          isQrHandshake: true
+        })
       });
 
-      // Notify homeowner about the 24-hour limit
-      await sendNotification(
-        job.homeownerId,
-        "Work Verified via QR",
-        `Handshake complete for ${job.title}. Your 24-hour platform guarantee is now active.`,
-        "status",
-        `/job/${id}`
-      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to finalize QR handshake");
+      }
 
       setShowQrModal(false);
       setQrCodeData(null);
       // Refresh local job state
-      setJob((prev: any) => ({ ...prev, updatedAt: new Date() }));
+      setJob((prev: any) => ({ ...prev, paymentStatus: "handshake_complete", isPaid: true, updatedAt: new Date() }));
     } catch (err) {
       console.error("QR Handshake failed:", err);
     } finally {
@@ -1914,6 +1913,8 @@ const libraries: any[] = ['places', 'geometry'];
         boostTier, isBoosted, isInstantMatch,
         ...baseJob
       } = job;
+
+      if (!user) return;
 
       const jobRef = await addDoc(collection(db, "jobs"), {
         ...baseJob,
@@ -3972,7 +3973,7 @@ const libraries: any[] = ['places', 'geometry'];
               
               // Check if tradesperson is currently within their material editing window (10 mins)
               let isInFinalizationWindow = false;
-              let windowExpiresAt = null;
+              let windowExpiresAt: Date | null = null;
               if (quote.createdAt) {
                 const createdAt = quote.createdAt?.toDate ? quote.createdAt.toDate() : new Date(quote.createdAt);
                 windowExpiresAt = new Date(createdAt.getTime() + 10 * 60000); // 10 mins

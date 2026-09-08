@@ -20,7 +20,7 @@ export function ReviewReminder() {
     const checkPendingReviews = async () => {
       const fourteenDaysAgo = new Date(now - 14 * 24 * 60 * 60 * 1000);
 
-      if (profile.role === "homeowner") {
+      if (profile.role === "customer" || (profile.role as string) === "homeowner") {
         // Check jobs where homeowner hasn't reviewed
         const q = query(
           collection(db, "jobs"),

@@ -8,8 +8,6 @@ import { BrowserRouter, Routes, Route, useNavigate, Navigate, Link } from "react
 import { CategoryProvider } from "./lib/CategoryProvider";
 import Layout from "./components/Layout";
 import { useAuth } from "./components/AuthProvider";
-import Login from "./components/Login";
-import Onboarding from "./components/Onboarding";
 import { Toaster } from "sonner";
 import { ReviewReminder } from "./components/ReviewReminder";
 import { PlusCircle, Briefcase, MessageSquare, User as UserIcon, Bell, ChevronRight, PoundSterling, Search, Lock, Loader2 } from "lucide-react";
@@ -22,28 +20,7 @@ import { AppUpdateModal } from "./components/common/AppUpdateModal";
 import { ShareViewModal } from "./components/ShareViewModal";
 import { ShareType } from "./utils/shareUtils";
 import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
-import { Camera } from '@capacitor/camera';
 import { initCapacitorKeyboard } from './lib/capacitor';
-
-import Dashboard from "./components/Dashboard";
-import TradesDashboard from "./components/TradesDashboard";
-import BusinessDashboard from "./components/BusinessDashboard";
-import Profile from "./components/Profile";
-import FindTrades from "./components/FindTrades";
-import PostJobWizard from "./components/PostJobWizard";
-import EmergencyJobWizard from "./components/EmergencyJobWizard";
-import MyJobs from "./components/MyJobs";
-import TradeJobs from "./components/TradeJobs";
-import MyQuotes from "./components/MyQuotes";
-import Conversations from "./components/Conversations";
-import Notifications from "./components/Notifications";
-import JobFeed from "./components/JobFeed";
-import JobDetails from "./components/JobDetails";
-import TraderCalendar from "./components/TraderCalendar";
-import Chat from "./components/Chat";
-import DriverTerminal from "./components/driver/DriverTerminal";
-import PassengerBooking from "./components/passenger/PassengerBooking";
 
 // Lazy loading helper with auto-retry for resilient chunk fetching
 function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () => Promise<{ default: T } | any>) {
@@ -53,7 +30,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
     } catch (error) {
       console.warn("Failed to load component dynamically, retrying once...", error);
       try {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 500));
         return await componentImport();
       } catch (retryError) {
         console.error("Second dynamic import attempt failed:", retryError);
@@ -62,12 +39,35 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
         if (!lastReload || Date.now() - parseInt(lastReload, 10) > 10000) {
           sessionStorage.setItem(key, Date.now().toString());
           window.location.reload();
+          return new Promise<{ default: T }>(() => {});
         }
         throw retryError;
       }
     }
   });
 }
+
+// Lazy loaded primary & auth components
+const Login = lazyWithRetry(() => import("./components/Login"));
+const Onboarding = lazyWithRetry(() => import("./components/Onboarding"));
+const Dashboard = lazyWithRetry(() => import("./components/Dashboard"));
+const TradesDashboard = lazyWithRetry(() => import("./components/TradesDashboard"));
+const BusinessDashboard = lazyWithRetry(() => import("./components/BusinessDashboard"));
+const Profile = lazyWithRetry(() => import("./components/Profile"));
+const FindTrades = lazyWithRetry(() => import("./components/FindTrades"));
+const PostJobWizard = lazyWithRetry(() => import("./components/PostJobWizard"));
+const EmergencyJobWizard = lazyWithRetry(() => import("./components/EmergencyJobWizard"));
+const MyJobs = lazyWithRetry(() => import("./components/MyJobs"));
+const TradeJobs = lazyWithRetry(() => import("./components/TradeJobs"));
+const MyQuotes = lazyWithRetry(() => import("./components/MyQuotes"));
+const Conversations = lazyWithRetry(() => import("./components/Conversations"));
+const Notifications = lazyWithRetry(() => import("./components/Notifications"));
+const JobFeed = lazyWithRetry(() => import("./components/JobFeed"));
+const JobDetails = lazyWithRetry(() => import("./components/JobDetails"));
+const TraderCalendar = lazyWithRetry(() => import("./components/TraderCalendar"));
+const Chat = lazyWithRetry(() => import("./components/Chat"));
+const DriverTerminal = lazyWithRetry(() => import("./components/driver/DriverTerminal"));
+const PassengerBooking = lazyWithRetry(() => import("./components/passenger/PassengerBooking"));
 
 // Lazy loaded secondary components
 const PassengerRideHistory = lazyWithRetry(() => import("./components/passenger/PassengerRideHistory"));
@@ -250,39 +250,11 @@ export default function App() {
     return () => unsub();
   }, [isAuthReady, user]);
 
-  // Native Capacitor plugin initializations (Keyboard, Geolocation, Camera, Microphones)
+  // Native Capacitor plugin initializations (Contextual permissions are requested per-feature)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       // Initialize Capacitor Keyboard resize and scroll behavior
       initCapacitorKeyboard();
-
-      const requestNativePermissions = async () => {
-        try {
-          // Request Location permission
-          await Geolocation.requestPermissions();
-        } catch (e) {
-          console.error("Error requesting geolocation permission at startup:", e);
-        }
-
-        try {
-          // Request Camera permission
-          await Camera.requestPermissions();
-        } catch (e) {
-          console.error("Error requesting camera permission at startup:", e);
-        }
-
-        try {
-          // Request Microphone permission via standard Web API inside WebView
-          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop());
-          }
-        } catch (e) {
-          console.error("Error requesting microphone permission at startup:", e);
-        }
-      };
-      // Delay it slightly so it doesn't interrupt immediate rendering
-      setTimeout(requestNativePermissions, 1500);
     }
   }, []);
 

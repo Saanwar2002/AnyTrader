@@ -2,10 +2,11 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 const AnyTraderAdmin = lazy(() => import("./AnyTraderAdmin"));
 const AnyRollerAdmin = lazy(() => import("./AnyRollerAdmin"));
 import { useAuth } from "./AuthProvider";
+import { cn } from "../lib/utils";
 import { Building2, Car, Shield, LogOut, Users, Activity, PoundSterling, Briefcase, Lock, KeyRound, AlertCircle, ArrowLeft, CheckCircle2, Settings, X, Save, Mail, Bell, Plus, Trash2, Globe, Clock, ShieldCheck, Send, Smartphone } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { auth, db, handleFirestoreError, OperationType } from "@/src/firebase";
-import { signOut } from "firebase/auth";
+import { signOut, EmailAuthProvider, GoogleAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup } from "firebase/auth";
 import { collection, doc, onSnapshot, setDoc, getDoc, query, orderBy, limit } from "firebase/firestore";
 import {
   MasterAdminAuthConfig,
@@ -28,20 +29,22 @@ export default function MasterAdminLayout() {
     }
   });
 
-  // Strict admin authorization check
-  const isAuthorizedAdmin = isAuthorizedAdminEmail(user?.email, adminConfig);
+  // Strict admin authorization and custom claim check
+  const [hasAdminClaim, setHasAdminClaim] = useState<boolean>(false);
+  const [authFresh, setAuthFresh] = useState<boolean>(false);
+  const [authTime, setAuthTime] = useState<number>(0);
+  const [isCheckingClaims, setIsCheckingClaims] = useState<boolean>(true);
 
-  // Session PIN unlock state
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem("admin_session_unlocked") === "true";
-  });
-  const [pin, setPin] = useState<string>("");
-  const [pinError, setPinError] = useState<string | null>(null);
+  // Session unlock state based strictly on recent Firebase Auth verification (< 10 minutes)
+  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [reauthPassword, setReauthPassword] = useState<string>("");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isReauthing, setIsReauthing] = useState(false);
   const [shake, setShake] = useState(false);
 
   // Admin Settings & Security Modal State
   const [showSecurityModal, setShowSecurityModal] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<"emails" | "pin" | "alerts" | "audits" | "launch">("launch");
+  const [activeModalTab, setActiveModalTab] = useState<"emails" | "security_policy" | "alerts" | "audits" | "launch">("launch");
 
   // Platform Config (Launch Controls) State
   const [platformConfig, setPlatformConfig] = useState<any>({
@@ -54,20 +57,13 @@ export default function MasterAdminLayout() {
   const [isSavingPlatformConfig, setIsSavingPlatformConfig] = useState(false);
 
   // Email management states
-  const [primaryEmail, setPrimaryEmail] = useState<string>(adminConfig.primaryAdminEmail || "saanwar2002@gmail.com");
+  const [primaryEmail, setPrimaryEmail] = useState<string>(adminConfig.primaryAdminEmail || "");
   const [additionalEmails, setAdditionalEmails] = useState<string[]>(adminConfig.additionalAdminEmails || []);
   const [newAdditionalEmail, setNewAdditionalEmail] = useState("");
   const [enableLoginEmailAlert, setEnableLoginEmailAlert] = useState<boolean>(adminConfig.enableLoginEmailAlert ?? true);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [configSaveSuccess, setConfigSaveSuccess] = useState<string | null>(null);
   const [configSaveError, setConfigSaveError] = useState<string | null>(null);
-
-  // PIN management states
-  const [newPin, setNewPin] = useState("");
-  const [confirmNewPin, setConfirmNewPin] = useState("");
-  const [changePinError, setChangePinError] = useState<string | null>(null);
-  const [changePinSuccess, setChangePinSuccess] = useState(false);
-  const [isSavingPin, setIsSavingPin] = useState(false);
 
   // Test Alert state
   const [isSendingTestAlert, setIsSendingTestAlert] = useState(false);
@@ -90,6 +86,40 @@ export default function MasterAdminLayout() {
 
   const [loadingMetrics, setLoadingMetrics] = useState(false);
 
+  // Check admin claims and session freshness (< 10 minutes)
+  useEffect(() => {
+    if (!user) {
+      setHasAdminClaim(false);
+      setIsUnlocked(false);
+      setIsCheckingClaims(false);
+      return;
+    }
+    const checkClaimsAndFreshness = async () => {
+      try {
+        const tokenResult = await user.getIdTokenResult();
+        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.role === "admin" || tokenResult.claims.role === "ecosystem_manager";
+        setHasAdminClaim(isAdmin);
+
+        const authTimeSec = Number(tokenResult.claims.auth_time || 0);
+        setAuthTime(authTimeSec);
+        const nowSec = Math.floor(Date.now() / 1000);
+        // Fresh if authenticated in the last 10 minutes (600s)
+        const isFresh = authTimeSec > 0 && (nowSec - authTimeSec) < 600;
+        setAuthFresh(isFresh);
+        if (isFresh && (isAdmin || isAuthorizedAdminEmail(user.email, adminConfig))) {
+          setIsUnlocked(true);
+        }
+      } catch (err) {
+        console.warn("Failed to verify admin claims & session freshness:", err);
+      } finally {
+        setIsCheckingClaims(false);
+      }
+    };
+    checkClaimsAndFreshness();
+  }, [user, adminConfig]);
+
+  const isAuthorizedAdmin = (hasAdminClaim || profile?.role === "admin" || profile?.role === "ecosystem_manager" || isAuthorizedAdminEmail(user?.email, adminConfig));
+
   // Load configured Admin Auth from Firestore or local fallback
   useEffect(() => {
     if (!user) return;
@@ -98,13 +128,13 @@ export default function MasterAdminLayout() {
       if (docSnap.exists()) {
         const data = docSnap.data() as Partial<MasterAdminAuthConfig>;
         const merged: MasterAdminAuthConfig = {
-          primaryAdminEmail: data.primaryAdminEmail || "saanwar2002@gmail.com",
+          primaryAdminEmail: data.primaryAdminEmail || "",
           additionalAdminEmails: Array.isArray(data.additionalAdminEmails) ? data.additionalAdminEmails : [],
-          masterPin: data.masterPin || "362515",
+          masterPin: "",
           enableLoginEmailAlert: data.enableLoginEmailAlert ?? true,
           alertEmailRecipients: Array.isArray(data.alertEmailRecipients) && data.alertEmailRecipients.length > 0
             ? data.alertEmailRecipients
-            : [data.primaryAdminEmail || "saanwar2002@gmail.com"],
+            : (data.primaryAdminEmail ? [data.primaryAdminEmail] : []),
           lastUpdated: data.lastUpdated,
           updatedBy: data.updatedBy
         };
@@ -113,10 +143,6 @@ export default function MasterAdminLayout() {
         setAdditionalEmails(merged.additionalAdminEmails);
         setEnableLoginEmailAlert(merged.enableLoginEmailAlert);
         localStorage.setItem("master_admin_auth_config", JSON.stringify(merged));
-        localStorage.setItem("master_admin_custom_pin", merged.masterPin);
-      } else {
-        const localPin = localStorage.getItem("master_admin_custom_pin") || "362515";
-        setAdminConfig(prev => ({ ...prev, masterPin: localPin }));
       }
     }, (err) => {
       console.debug("Admin config listener fallback note:", err);
@@ -213,7 +239,6 @@ export default function MasterAdminLayout() {
   }, [activePortal, isAuthorizedAdmin, isUnlocked]);
 
   const handleLogout = () => {
-    sessionStorage.removeItem("admin_session_unlocked");
     sessionStorage.removeItem("admin_login_alert_sent");
     signOut(auth).then(() => {
       window.location.href = "/";
@@ -221,10 +246,9 @@ export default function MasterAdminLayout() {
   };
 
   const handleLockConsole = () => {
-    sessionStorage.removeItem("admin_session_unlocked");
     sessionStorage.removeItem("admin_login_alert_sent");
     setIsUnlocked(false);
-    setPin("");
+    setAuthFresh(false);
   };
 
   const triggerLoginAlertIfNeeded = (emailToAlert: string) => {
@@ -242,22 +266,60 @@ export default function MasterAdminLayout() {
     }
   };
 
-  const handlePinSubmit = (e?: React.FormEvent) => {
+  const handleReauthPassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const activeTargetPin = adminConfig.masterPin || localStorage.getItem("master_admin_custom_pin") || "362515";
-    
-    if (pin === activeTargetPin) {
-      sessionStorage.setItem("admin_session_unlocked", "true");
+    if (!user || !user.email) return;
+    if (!reauthPassword.trim()) {
+      setAuthError("Please enter your account password to verify your session.");
+      return;
+    }
+
+    setIsReauthing(true);
+    setAuthError(null);
+    try {
+      const cred = EmailAuthProvider.credential(user.email, reauthPassword.trim());
+      await reauthenticateWithCredential(user, cred);
+      const tokenResult = await user.getIdTokenResult(true);
+      const authTimeSec = Number(tokenResult.claims.auth_time || Math.floor(Date.now() / 1000));
+      setAuthTime(authTimeSec);
+      setAuthFresh(true);
       setIsUnlocked(true);
-      setPinError(null);
-      if (user?.email) {
-        triggerLoginAlertIfNeeded(user.email);
+      setReauthPassword("");
+      triggerLoginAlertIfNeeded(user.email);
+    } catch (err: any) {
+      if (err?.code === "auth/wrong-password" || err?.code === "auth/invalid-credential") {
+        setAuthError("Incorrect password. Re-authentication denied.");
+      } else {
+        setAuthError(err?.message?.replace(/^Firebase:\s*/, "") || "Re-authentication failed.");
       }
-    } else {
-      setPinError("Invalid Master Admin PIN. Access Denied.");
       setShake(true);
       setTimeout(() => setShake(false), 500);
-      setPin("");
+    } finally {
+      setIsReauthing(false);
+    }
+  };
+
+  const handleReauthGoogle = async () => {
+    if (!user) return;
+    setIsReauthing(true);
+    setAuthError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await reauthenticateWithPopup(user, provider);
+      const tokenResult = await user.getIdTokenResult(true);
+      const authTimeSec = Number(tokenResult.claims.auth_time || Math.floor(Date.now() / 1000));
+      setAuthTime(authTimeSec);
+      setAuthFresh(true);
+      setIsUnlocked(true);
+      if (user.email) {
+        triggerLoginAlertIfNeeded(user.email);
+      }
+    } catch (err: any) {
+      setAuthError(err?.message?.replace(/^Firebase:\s*/, "") || "Google re-authentication failed.");
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
+    } finally {
+      setIsReauthing(false);
     }
   };
 
@@ -326,55 +388,10 @@ export default function MasterAdminLayout() {
     setAdditionalEmails(additionalEmails.filter(e => e !== emailToRemove));
   };
 
-  const handleUpdateMasterPin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setChangePinError(null);
-    setChangePinSuccess(false);
-
-    if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
-      setChangePinError("PIN must be exactly 6 numeric digits.");
-      return;
-    }
-
-    if (newPin !== confirmNewPin) {
-      setChangePinError("New PIN and confirmation PIN do not match.");
-      return;
-    }
-
-    setIsSavingPin(true);
-    try {
-      localStorage.setItem("master_admin_custom_pin", newPin);
-      const updated = {
-        ...adminConfig,
-        masterPin: newPin,
-        lastUpdated: new Date().toISOString(),
-        updatedBy: user?.email || adminConfig.primaryAdminEmail
-      };
-      setAdminConfig(updated);
-
-      await setDoc(doc(db, "system_settings", "master_admin_auth"), {
-        masterPin: newPin,
-        lastUpdated: new Date().toISOString(),
-        updatedBy: user?.email || adminConfig.primaryAdminEmail
-      }, { merge: true });
-
-      setChangePinSuccess(true);
-      setTimeout(() => {
-        setNewPin("");
-        setConfirmNewPin("");
-        setChangePinSuccess(false);
-      }, 2000);
-    } catch (err: any) {
-      console.error("Failed to update PIN in cloud:", err);
-      setChangePinSuccess(true);
-      setTimeout(() => {
-        setNewPin("");
-        setConfirmNewPin("");
-        setChangePinSuccess(false);
-      }, 2000);
-    } finally {
-      setIsSavingPin(false);
-    }
+  const handleRevokeSession = () => {
+    setIsUnlocked(false);
+    setAuthFresh(false);
+    setShowSecurityModal(false);
   };
 
   const handleSendTestLoginAlert = async () => {
@@ -439,14 +456,14 @@ export default function MasterAdminLayout() {
     );
   }
 
-  // 2. Master Admin PIN / 2FA Gate
+  // 2. Master Admin Re-Authentication Gate (< 10 minutes session requirement)
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-center font-sans">
         <motion.div 
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
-          className={`max-w-sm w-full bg-white rounded-3xl p-8 border border-black shadow-2xl space-y-6 relative ${
+          className={`max-w-md w-full bg-white rounded-3xl p-8 border border-black shadow-2xl space-y-6 relative ${
             shake ? "animate-shake" : ""
           }`}
         >
@@ -456,58 +473,55 @@ export default function MasterAdminLayout() {
 
           <div className="space-y-1.5">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Security Gate</span>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Master Admin PIN</h2>
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Admin Re-Authentication</h2>
             <p className="text-slate-500 text-xs font-medium">
-              Enter your 6-digit Master PIN to unlock the control center.
+              Master admin operations require fresh session authentication (&lt; 10 minutes). Please verify your identity to proceed.
             </p>
           </div>
 
-          {pinError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+          {authError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2 text-left">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{pinError}</span>
+              <span>{authError}</span>
             </div>
           )}
 
-          <form onSubmit={handlePinSubmit} className="space-y-4">
-            <div className="flex justify-center gap-2.5">
+          <form onSubmit={handleReauthPassword} className="space-y-4 text-left">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Account Password</label>
               <input
                 type="password"
-                inputMode="numeric"
-                maxLength={6}
-                value={pin}
+                value={reauthPassword}
                 autoFocus
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                  setPin(val);
-                  setPinError(null);
-                  if (val.length === 6) {
-                    const activeTargetPin = adminConfig.masterPin || localStorage.getItem("master_admin_custom_pin") || "362515";
-                    if (val === activeTargetPin) {
-                      sessionStorage.setItem("admin_session_unlocked", "true");
-                      setIsUnlocked(true);
-                      if (user?.email) {
-                        triggerLoginAlertIfNeeded(user.email);
-                      }
-                    } else {
-                      setPinError("Invalid Master Admin PIN. Access Denied.");
-                      setShake(true);
-                      setTimeout(() => setShake(false), 500);
-                      setPin("");
-                    }
-                  }
+                  setReauthPassword(e.target.value);
+                  setAuthError(null);
                 }}
-                placeholder="••••••"
-                className="w-full text-center tracking-[1em] text-2xl font-black py-3.5 bg-slate-50 border border-black rounded-2xl focus:outline-none focus:ring-2 focus:ring-black transition-all"
+                placeholder="Enter your account password"
+                className="w-full px-4 py-3 bg-slate-50 border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-black transition-all"
               />
             </div>
 
             <button
               type="submit"
-              disabled={pin.length < 4}
-              className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-black transition-colors border border-black disabled:opacity-50 cursor-pointer"
+              disabled={isReauthing || !reauthPassword.trim()}
+              className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-black transition-colors border border-black disabled:opacity-50 cursor-pointer text-sm"
             >
-              <KeyRound className="w-4 h-4" /> Unlock Console
+              <KeyRound className="w-4 h-4" /> {isReauthing ? "Verifying..." : "Verify & Unlock Console"}
+            </button>
+
+            <div className="relative my-4 text-center">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
+              <span className="relative bg-white px-2 text-[10px] uppercase font-bold text-slate-400">or</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleReauthGoogle}
+              disabled={isReauthing}
+              className="w-full flex items-center justify-center gap-2 bg-white text-slate-800 font-bold py-3 px-4 rounded-xl hover:bg-slate-50 transition-colors border border-slate-300 disabled:opacity-50 cursor-pointer text-xs"
+            >
+              <ShieldCheck className="w-4 h-4 text-blue-600" /> Re-Authenticate with Google
             </button>
           </form>
 
@@ -758,7 +772,7 @@ export default function MasterAdminLayout() {
                   </div>
                   <div>
                     <h3 className="text-xl font-black text-slate-900 leading-tight">Master Admin Security & Settings</h3>
-                    <p className="text-xs text-slate-500">Manage administrator emails, 6-digit Master PIN, and login alert notifications</p>
+                    <p className="text-xs text-slate-500">Manage administrator emails, cryptographic re-authentication policies, and login alert notifications</p>
                   </div>
                 </div>
                 <button
@@ -783,15 +797,15 @@ export default function MasterAdminLayout() {
                   <span>Admin Emails</span>
                 </button>
                 <button
-                  onClick={() => setActiveModalTab("pin")}
+                  onClick={() => setActiveModalTab("security_policy")}
                   className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    activeModalTab === "pin"
+                    activeModalTab === "security_policy"
                       ? "bg-white text-slate-900 shadow-sm"
                       : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Master PIN</span>
+                  <Lock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Session Security</span>
                 </button>
                 <button
                   onClick={() => setActiveModalTab("alerts")}
@@ -868,7 +882,7 @@ export default function MasterAdminLayout() {
                           required
                           value={primaryEmail}
                           onChange={(e) => setPrimaryEmail(e.target.value)}
-                          placeholder="e.g. saanwar2002@gmail.com"
+                          placeholder="e.g. admin@tradequote.uk"
                           className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-black rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-black"
                         />
                       </div>
@@ -963,74 +977,57 @@ export default function MasterAdminLayout() {
                   </form>
                 )}
 
-                {/* TAB 2: MASTER PIN */}
-                {activeModalTab === "pin" && (
-                  <form onSubmit={handleUpdateMasterPin} className="space-y-5">
+                {/* TAB 2: SESSION SECURITY & RE-AUTH POLICIES */}
+                {activeModalTab === "security_policy" && (
+                  <div className="space-y-5">
                     <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-2xl space-y-1">
-                      <p className="text-xs font-black text-amber-900">Master 6-Digit PIN Code</p>
+                      <p className="text-xs font-black text-amber-900">Cryptographic Session Re-Authentication</p>
                       <p className="text-xs text-amber-700 leading-relaxed">
-                        This 6-digit numeric security code is required to unlock the console after entering administrator credentials.
+                        Static numeric PINs have been permanently decommissioned. Sensitive administrative actions enforce cryptographic Firebase Auth ID token verification and require fresh re-authentication every 10 minutes.
                       </p>
                     </div>
 
-                    {changePinError && (
-                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        <span>{changePinError}</span>
+                    <div className="space-y-3">
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-700">Re-Authentication Policy:</span>
+                          <span className="font-bold text-slate-900">10 Minutes (600s) Max Inactivity</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-700">Firebase Custom Claim:</span>
+                          <span className="font-mono text-emerald-700 font-bold">{hasAdminClaim ? "admin: true (Verified)" : "Pending / Role Fallback"}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-700">Token Auth Time:</span>
+                          <span className="font-mono text-slate-600">{authTime > 0 ? new Date(authTime * 1000).toLocaleTimeString() : "Recent"}</span>
+                        </div>
                       </div>
-                    )}
 
-                    {changePinSuccess && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs font-bold flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>Master Admin PIN updated and synced successfully!</span>
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-slate-900">Lock Session Immediately</p>
+                          <p className="text-[11px] text-slate-500">Forces immediate re-authentication before any further admin actions can be executed.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRevokeSession}
+                          className="px-3.5 py-2 bg-red-600 text-white font-bold rounded-xl text-xs hover:bg-red-700 transition-colors cursor-pointer"
+                        >
+                          Lock Session
+                        </button>
                       </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">New 6-Digit PIN</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={newPin}
-                        placeholder="Enter new 6-digit PIN"
-                        onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        className="w-full px-4 py-3 bg-slate-50 border border-black rounded-xl text-center text-xl font-black tracking-widest focus:outline-none focus:ring-2 focus:ring-black"
-                      />
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">Confirm New PIN</label>
-                      <input
-                        type="password"
-                        inputMode="numeric"
-                        maxLength={6}
-                        value={confirmNewPin}
-                        placeholder="Confirm new 6-digit PIN"
-                        onChange={(e) => setConfirmNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        className="w-full px-4 py-3 bg-slate-50 border border-black rounded-xl text-center text-xl font-black tracking-widest focus:outline-none focus:ring-2 focus:ring-black"
-                      />
-                    </div>
-
-                    <div className="pt-3 border-t border-slate-100 flex justify-end gap-3">
+                    <div className="pt-3 border-t border-slate-100 flex justify-end">
                       <button
                         type="button"
                         onClick={() => setShowSecurityModal(false)}
-                        className="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition-colors"
+                        className="px-4 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-black transition-colors"
                       >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSavingPin || newPin.length !== 6 || confirmNewPin.length !== 6}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs hover:bg-black transition-colors border border-black disabled:opacity-50 cursor-pointer"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        {isSavingPin ? "Updating PIN..." : "Update Master PIN"}
+                        Done
                       </button>
                     </div>
-                  </form>
+                  </div>
                 )}
 
                 {/* TAB 3: LOGIN ALERTS */}
@@ -1094,7 +1091,7 @@ export default function MasterAdminLayout() {
                         <li>Exact timestamp (UTC and local device timezone)</li>
                         <li>Client IP address and geographic location lookup</li>
                         <li>Browser user-agent, operating system, and platform signature</li>
-                        <li>2FA Master PIN verification confirmation</li>
+                        <li>Cryptographic Firebase Auth token verification status</li>
                       </ul>
                     </div>
                   </div>
@@ -1141,7 +1138,7 @@ export default function MasterAdminLayout() {
                                 <span className="font-mono font-bold text-blue-600">{audit.ipAddress || "Protected IP"}</span>
                               </div>
                               <div>
-                                <span className="text-slate-400">PIN Status: </span>
+                                <span className="text-slate-400">Session Auth: </span>
                                 <span className="font-bold text-emerald-600">
                                   {audit.pinVerified ? "✓ Verified" : "Pending"}
                                 </span>

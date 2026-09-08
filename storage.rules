@@ -1,19 +1,72 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /chats/{conversationId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*|audio/.*');
+    function isSignedIn() {
+      return request.auth != null;
     }
-    match /disputes/{jobId}/{file} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && request.resource.size < 20 * 1024 * 1024;
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        (request.auth.token.role != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'ecosystem_manager'))
+      );
+    }
+    function isValidImage() {
+      return request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    function isValidMedia() {
+      return request.resource.size <= 25 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
+    }
+
+    // Public avatars, portfolio showcase items, and badges
+    match /users/{uid}/public/{fileName} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
+    }
+
+    // Private KYC, passport verification, insurance certificates & driver licenses
+    match /users/{uid}/private/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
+    }
+
+    // Job media and photos (before/after, specs, attachments)
+    match /jobs/{jobId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && isValidMedia();
+    }
+
+    // Chat attachments (images, voice notes)
+    match /chats/{conversationId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidMedia();
+    }
+
+    // Disputes and resolution evidence
+    match /disputes/{jobId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidMedia();
+    }
+
+    // Property Passport documents, EPC certificates, CP12/EICR compliance
+    match /properties/{propertyId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidMedia();
+    }
+
+    // Vehicle and driver compliance documents
+    match /vehicles/{vehicleId}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidMedia();
+    }
+
+    // Default Deny on all other paths
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

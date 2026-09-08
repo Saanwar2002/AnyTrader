@@ -1,6 +1,6 @@
 import { db } from "@/src/firebase";
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, collection, getDocs, query, where, limit, orderBy } from "firebase/firestore";
-import { GoogleGenAI } from "@google/genai";
+import { runServerAutonomousAgentTask } from "@/src/services/gemini";
 
 export interface AiAgentSettings {
   sentinelGuardEnabled: boolean;
@@ -336,39 +336,23 @@ export async function runSentinelGuardScan(users: any[], logs: any[], settings: 
     }
   });
 
-  // 3. AI Evaluation via Gemini for deeper pattern recognition if API Key exists
+  // 3. AI Evaluation via Gemini for deeper pattern recognition
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && users.length > 0) {
-      const ai = new GoogleGenAI({ apiKey });
+    if (users.length > 0) {
       const sampleUsers = users.slice(0, 15).map(u => ({ id: u.id, name: u.name, role: u.role, created: u.createdAt, tier: u.tier }));
-      const prompt = `Act as an Autonomous Security & Fraud Sentinel AI for AnyTrader (UK Trade Platform). 
-Evaluate these recent user registrations for suspicious patterns, duplicate profile creation, or fake review risks:
-${JSON.stringify(sampleUsers, null, 2)}
-
-Return a JSON array of threats found, or empty array [] if clean. Each item must have: type, severity, userId, details.`;
-
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      if (res.text) {
-        const aiThreats = JSON.parse(res.text);
-        if (Array.isArray(aiThreats)) {
-          aiThreats.forEach((t: any, idx: number) => {
-            detectedThreats.push({
-              id: `THREAT_AI_${idx}_${Date.now()}`,
-              type: t.type || "suspicious_ip",
-              severity: t.severity || "medium",
-              userId: t.userId || "unknown",
-              details: t.details || "Gemini AI Sentinel flagged an unusual pattern in account telemetry.",
-              status: "detected",
-              detectedAt: now,
-            });
+      const aiThreats = await runServerAutonomousAgentTask("sentinel_evaluate_users", { sampleUsers });
+      if (Array.isArray(aiThreats)) {
+        aiThreats.forEach((t: any, idx: number) => {
+          detectedThreats.push({
+            id: `THREAT_AI_${idx}_${Date.now()}`,
+            type: t.type || "suspicious_ip",
+            severity: t.severity || "medium",
+            userId: t.userId || "unknown",
+            details: t.details || "Gemini AI Sentinel flagged an unusual pattern in account telemetry.",
+            status: "detected",
+            detectedAt: now,
           });
-        }
+        });
       }
     }
   } catch (err) {
@@ -387,10 +371,38 @@ export async function generateSocialCampaigns(
   settings: AiAgentSettings
 ): Promise<SocialMediaCampaign[]> {
   const campaigns: SocialMediaCampaign[] = [];
-  const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    // Fallback template campaigns if offline
+  try {
+    const topJobCategories = jobs.slice(0, 10).map(j => ({ category: j.category, postcode: j.postcode, budget: j.budget || j.estimatedCost }));
+    const sampleReviews = reviews.slice(0, 5).map(r => ({ rating: r.rating, text: r.comment, trade: r.category }));
+
+    const generated = await runServerAutonomousAgentTask("growth_generate_campaigns", {
+      topJobCategories,
+      sampleReviews,
+      targetRegions: settings.targetRegions || ["Greater Manchester", "London"]
+    });
+
+    if (Array.isArray(generated)) {
+      generated.forEach((g: any, i: number) => {
+        campaigns.push({
+          id: `CAMP_${g.platform?.replace(/\s+/g, '_')}_${Date.now()}_${i}`,
+          platform: g.platform || "Facebook",
+          headline: g.headline || "AnyTrader - UK's #1 Trade Network",
+          bodyText: g.bodyText || "Find verified tradespeople with AI price transparency.",
+          callToAction: g.callToAction || "Get Free Quotes",
+          targetAudience: g.targetAudience || "Homeowners",
+          hashtags: g.hashtags || ["#AnyTrader", "#UKTrades"],
+          suggestedImagePrompt: g.suggestedImagePrompt || "Professional UK tradesperson working on site.",
+          status: "queued",
+          createdAt: new Date().toISOString()
+        });
+      });
+    }
+  } catch (err) {
+    console.warn("AI Social Campaign Engine running with fallback templates:", err);
+  }
+
+  if (campaigns.length === 0) {
     return [
       {
         id: `CAMP_FB_${Date.now()}`,
@@ -417,60 +429,6 @@ export async function generateSocialCampaigns(
         createdAt: new Date().toISOString()
       }
     ];
-  }
-
-  try {
-    const ai = new GoogleGenAI({ apiKey });
-    const topJobCategories = jobs.slice(0, 10).map(j => ({ category: j.category, postcode: j.postcode, budget: j.budget || j.estimatedCost }));
-    const sampleReviews = reviews.slice(0, 5).map(r => ({ rating: r.rating, text: r.comment, trade: r.category }));
-
-    const prompt = `Act as the Autonomous Growth & AI Social Campaign Engine for AnyTrader (The UK's Premier Tradesperson & B2B Property Operating System).
-Analyze these current platform insights:
-Active High-Demand Categories: ${JSON.stringify(topJobCategories)}
-Top Customer Reviews: ${JSON.stringify(sampleReviews)}
-Target UK Regions: ${JSON.stringify(settings.targetRegions || ["Greater Manchester", "London"])}
-
-Generate 3 high-converting social media marketing campaigns optimized for:
-1. Facebook / Meta Ads (Targeting UK Homeowners needing urgent repairs)
-2. LinkedIn (Targeting B2B Housing Associations, Landlords & Estate Managers for AnyTrader Gotham SaaS)
-3. Twitter / X (Targeting UK Tradespeople seeking zero-commission leads)
-
-Return a JSON array of campaign objects with fields:
-- platform: "Facebook" | "Instagram" | "Twitter / X" | "LinkedIn"
-- headline: string
-- bodyText: string
-- callToAction: string
-- targetAudience: "Homeowners" | "Tradespeople" | "Landlords & B2B" | "Social Housing"
-- hashtags: array of strings
-- suggestedImagePrompt: string (detailed prompt for generating a promotional graphic)`;
-
-    const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-
-    if (res.text) {
-      const generated = JSON.parse(res.text);
-      if (Array.isArray(generated)) {
-        generated.forEach((g: any, i: number) => {
-          campaigns.push({
-            id: `CAMP_${g.platform?.replace(/\s+/g, '_')}_${Date.now()}_${i}`,
-            platform: g.platform || "Facebook",
-            headline: g.headline || "AnyTrader - UK's #1 Trade Network",
-            bodyText: g.bodyText || "Find verified tradespeople with AI price transparency.",
-            callToAction: g.callToAction || "Get Free Quotes",
-            targetAudience: g.targetAudience || "Homeowners",
-            hashtags: g.hashtags || ["#AnyTrader", "#UKTrades"],
-            suggestedImagePrompt: g.suggestedImagePrompt || "Professional UK tradesperson working on site.",
-            status: "queued",
-            createdAt: new Date().toISOString()
-          });
-        });
-      }
-    }
-  } catch (err) {
-    console.error("Error generating social campaigns via Gemini:", err);
   }
 
   return campaigns;
@@ -615,36 +573,19 @@ export async function runFinancialIntelligenceAnalysis(
   ];
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey) {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Act as the Chief Financial Officer & Treasury AI Agent for AnyTrader (UK Trade Platform).
-Current Financial Metrics (${timeframe}):
-- Total Revenue: £${periodRevenue.toFixed(2)}
-- Total Outgoings: £${periodOutgoings.toFixed(2)}
-- Net Profit: £${periodNetProfit.toFixed(2)} (${profitMarginPct}% profit margin)
-- Active Traders: ${traders.length} (Gold: ${goldCount}, Platinum: ${platinumCount})
-- B2B Housing Doors: ${totalGothamDoors}
-
-Generate 3 actionable, highly specific financial optimization suggestions to increase net profit margins or lower server/API expenses without reducing platform performance.
-Return a JSON array of objects with fields:
-- category: string
-- impact: "high" | "medium" | "low"
-- suggestion: string
-- potentialMonthlySavings: string`;
-
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      if (res.text) {
-        const parsed = JSON.parse(res.text);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          aiRecommendations = parsed;
-        }
-      }
+    const parsed = await runServerAutonomousAgentTask("cfo_financial_suggestions", {
+      timeframe,
+      periodRevenue,
+      periodOutgoings,
+      periodNetProfit,
+      profitMarginPct,
+      tradersCount: traders.length,
+      goldCount,
+      platinumCount,
+      totalGothamDoors
+    });
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      aiRecommendations = parsed;
     }
   } catch (err) {
     console.warn("Used default financial AI recommendations:", err);
@@ -726,40 +667,17 @@ export async function runDisputeMediatorScan(
     }
   }
 
-  // Gemini AI enhancement if API key present
+  // Gemini AI enhancement via secure server proxy
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && cases.length > 0) {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Act as the Chief AI Dispute Mediator & Guarantee Arbitrator for AnyTrader (UK Trade Operating System).
-Evaluate this dispute case:
-${JSON.stringify(cases[0])}
-
-Apply standard UK building codes (BS 5385 / IET Wiring / Gas Safe) and fair consumer contract laws.
-Refine the proposedSettlement object with:
-- traderPayout (number in GBP)
-- customerRefund (number in GBP)
-- actionRequired (clear 1-sentence instruction)
-- rationale (reference specific UK trade standards)
-
-Return a JSON object with fields: traderPayout, customerRefund, actionRequired, rationale`;
-
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      if (res.text) {
-        const parsed = JSON.parse(res.text);
-        if (parsed.actionRequired && cases.length > 0) {
-          cases[0].proposedSettlement = {
-            traderPayout: Number(parsed.traderPayout) || cases[0].proposedSettlement.traderPayout,
-            customerRefund: Number(parsed.customerRefund) || cases[0].proposedSettlement.customerRefund,
-            actionRequired: parsed.actionRequired,
-            rationale: parsed.rationale || cases[0].proposedSettlement.rationale
-          };
-        }
+    if (cases.length > 0) {
+      const parsed = await runServerAutonomousAgentTask("dispute_mediator_refine", { disputeCase: cases[0] });
+      if (parsed && parsed.actionRequired && cases.length > 0) {
+        cases[0].proposedSettlement = {
+          traderPayout: Number(parsed.traderPayout) || cases[0].proposedSettlement.traderPayout,
+          customerRefund: Number(parsed.customerRefund) || cases[0].proposedSettlement.customerRefund,
+          actionRequired: parsed.actionRequired,
+          rationale: parsed.rationale || cases[0].proposedSettlement.rationale
+        };
       }
     }
   } catch (err) {
@@ -850,30 +768,12 @@ export async function runComplianceGuardianScan(
     });
   }
 
-  // Gemini AI enhancement if API key present
+  // Gemini AI enhancement via secure server proxy
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && alerts.length > 0) {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Act as the Chief Compliance & Legal Guardian AI for AnyTrader & Gotham Housing OS.
-Evaluate these UK trade and housing statutory compliance alerts:
-${JSON.stringify(alerts.slice(0, 3))}
-
-Review against Awaab's Law (Social Housing Regulation Act 2023) and UK Gas Safety Regulations 1998.
-Refine the recommendedAction field for the top alert with precise statutory step.
-Return a JSON object with fields: refinedAction, complianceRiskScore ("low"|"medium"|"high")`;
-
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      if (res.text) {
-        const parsed = JSON.parse(res.text);
-        if (parsed.refinedAction && alerts.length > 0) {
-          alerts[0].recommendedAction = parsed.refinedAction;
-        }
+    if (alerts.length > 0) {
+      const parsed = await runServerAutonomousAgentTask("compliance_guardian_refine", { alerts: alerts.slice(0, 3) });
+      if (parsed && parsed.refinedAction && alerts.length > 0) {
+        alerts[0].recommendedAction = parsed.refinedAction;
       }
     }
   } catch (err) {
@@ -945,29 +845,12 @@ export async function runCustomerConciergeScan(
     });
   }
 
-  // Gemini AI enhancement if API key present
+  // Gemini AI enhancement via secure server proxy
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (apiKey && specs.length > 0) {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Act as the Chief AI Customer Concierge & Pre-Qualification Agent for AnyTrader.
-Enhance this prequalified job specification:
-${JSON.stringify(specs[0])}
-
-Generate a concise 1-sentence conciergeSummary highlighting key diagnostic takeaways for tradespeople quoting on this job.
-Return a JSON object with field: conciergeSummary`;
-
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-
-      if (res.text) {
-        const parsed = JSON.parse(res.text);
-        if (parsed.conciergeSummary && specs.length > 0) {
-          specs[0].conciergeSummary = parsed.conciergeSummary;
-        }
+    if (specs.length > 0) {
+      const parsed = await runServerAutonomousAgentTask("lead_concierge_summarize", { spec: specs[0] });
+      if (parsed && parsed.conciergeSummary && specs.length > 0) {
+        specs[0].conciergeSummary = parsed.conciergeSummary;
       }
     }
   } catch (err) {
@@ -1138,68 +1021,8 @@ AnyTrader UK`,
   };
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return fallbackPack;
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const prompt = `Act as Chief AI Trader Outreach & Growth Specialist for AnyTrader UK.
-Generate an irresistible, ultra-professional outreach campaign pack for this prospect sourced from ${lead.source}:
-
-    STRICT PLATFORM SCOPE GUARDRAILS (MANDATORY & NON-NEGOTIABLE):
-    1. NEVER promise guaranteed job numbers or fixed income amounts (e.g. DO NOT say "We guarantee 10 jobs a week" or "Earn £5,000/month guaranteed").
-    2. NEVER offer 0% platform fees forever or custom fee waivers outside official rates (15% PAYG default, reduced to 10% Pro, 5% Premium, 3% Platinum).
-    3. NEVER promise exclusive regional monopolies or territory rights (e.g. DO NOT say "You'll be the exclusive plumber in Leeds").
-    4. NEVER claim AnyTrader allows skipping statutory verification (e.g. Gas Safe, EICR, PLI insurance, or Stripe identity checks).
-    5. NEVER promise free physical tools, equipment giveaways, or cash sign-up bonuses.
-    6. NEVER claim AnyTrader acts as an employer, insurer, or guarantor of homeowner payments outside Stripe Escrow.
-    7. ALWAYS stick strictly to AnyTrader's actual scope: £0 monthly listing, £0 upfront lead fees, pre-inspected Property Passport job specs, and 1-tap WhatsApp privacy bridge.
-
-Lead Details:
-- Business Name: ${lead.businessName}
-- Contact Person: ${lead.contactName || "Owner/Manager"}
-- Trade Category: ${lead.tradeCategory}
-- Location: ${lead.cityLocation}
-- Rating/Source Notes: ${lead.rating || "Top directory listing"} ${lead.notes || ""}
-- Onboarding URL: ${onboardingUrl}
-
-IMPORTANT PRICING CONTEXT FOR PITCH:
-- DO emphasize: "0 Upfront Lead Fees", "£0 Monthly Listing Fee", "£0 to Receive Specs & Quote", and "Pay only a success fee (15% PAYG default, down to 10%, 5%, or 3% on Pro tiers) when you complete a job and get paid via Stripe".
-- Contrast this with traditional lead directories (e.g. Checkatrade / Rated People) that charge £500+ annual fees or £25-£50 per unverified lead win or lose.
-
-Your response must be structured JSON matching this EXACT schema:
-{
-  "emailSubject": "Compelling subject line mentioning company name or location",
-  "emailBody": "Professional 3-paragraph email pitch highlighting 0 upfront lead fees, success-based trade fee on completed jobs, pre-inspected Property Passport job specs, and 1-tap registration link",
-  "whatsappMessage": "Short 2-3 sentence friendly WhatsApp text with call to action & link",
-  "callScript": {
-    "opening": "Friendly 1-sentence opening for phone outreach",
-    "valuePitch": "60-second value pitch focusing on 0 upfront lead fees and direct homeowner bookings (performance fee only when work completes and you get paid)",
-    "objectionHandlers": [
-      { "objection": "Common concern e.g. already using Checkatrade/Yell", "response": "Winning rebuttal highlighting zero upfront risk" },
-      { "objection": "Cost/Fees question", "response": "Clear explanation of £0 monthly fee + success-based performance fee model" }
-    ],
-    "closingCallToAction": "Soft closing permission to send WhatsApp link"
-  },
-  "valueHighlights": ["4 bullet point value drivers tailored to this specific trade and city"],
-  "onboardingStrategyBlueprint": {
-    "primaryTargetAngle": "Core psychological strategy to persuade this specific trader based on trade & location",
-    "estimatedConversionProbability": "Likelihood score e.g. 88%",
-    "recommendedSequence": ["4 step multi-touch timeline"],
-    "psychologicalTriggers": ["3 key psychological value drivers"],
-    "competitorDifferentiator": "Direct contrast against their likely existing directories"
-  }
-}`;
-
-    const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-
-    if (res.text) {
-      const parsed = JSON.parse(res.text);
+    const parsed = await runServerAutonomousAgentTask("trader_outreach_pack", { lead, onboardingUrl });
+    if (parsed) {
       const rawPack = {
         emailSubject: parsed.emailSubject || fallbackPack.emailSubject,
         emailBody: parsed.emailBody || fallbackPack.emailBody,
@@ -1221,7 +1044,7 @@ Your response must be structured JSON matching this EXACT schema:
       };
     }
   } catch (err) {
-    console.warn("Failed to generate AI outreach pack with Gemini, returning fallback:", err);
+    console.warn("Failed to generate AI outreach pack with server proxy, returning fallback:", err);
   }
 
   const fallbackCheck = sanitizeAndValidatePlatformScope(fallbackPack);
@@ -1236,7 +1059,7 @@ Your response must be structured JSON matching this EXACT schema:
 
 /**
  * Parses raw copied text from Yellow Pages / Yell.com / Google Maps / Directory pages
- * into structured TraderProspectLead objects using Gemini 2.5 Flash.
+ * into structured TraderProspectLead objects using Gemini 2.5 Flash via server.
  */
 export async function parseUnstructuredTraderText(rawText: string, defaultSource: TraderProspectLead["source"] = "Yellow Pages"): Promise<Partial<TraderProspectLead>[]> {
   if (!rawText || !rawText.trim()) return [];
@@ -1244,70 +1067,39 @@ export async function parseUnstructuredTraderText(rawText: string, defaultSource
   const now = new Date().toISOString();
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      // Basic regex parser fallback
-      const phoneRegex = /(?:0|\+44)[0-9\s-]{9,13}/g;
-      const phones = rawText.match(phoneRegex) || [];
-      return [{
-        businessName: rawText.split("\n")[0]?.substring(0, 40) || "Imported Trader",
-        tradeCategory: "General Trade",
-        cityLocation: "UK",
-        phone: phones[0] || "07700 900000",
+    const parsed = await runServerAutonomousAgentTask("parse_raw_leads", { rawText });
+    if (parsed && Array.isArray(parsed.leads)) {
+      return parsed.leads.map((item: any, idx: number) => ({
+        id: `LEAD_${Date.now()}_${idx}`,
+        businessName: item.businessName || "Directory Prospect",
+        contactName: item.contactName || "",
+        tradeCategory: item.tradeCategory || "General Trade",
+        cityLocation: item.cityLocation || "UK",
+        phone: item.phone || "07700 900000",
+        email: item.email || "",
         source: defaultSource,
-        status: "new",
+        rating: item.rating || "",
+        notes: item.notes || "",
+        status: "new" as const,
         createdAt: now,
         updatedAt: now
-      }];
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const prompt = `Act as an AI Lead Data Parser for AnyTrader.
-Analyze the following raw text copied from Yellow Pages / Yell.com / Google Maps directory listings and extract all individual trader/business listings into structured objects.
-
-Raw Input Text:
-"""
-${rawText.substring(0, 6000)}
-"""
-
-Return a JSON object containing an array "leads" with objects containing:
-- businessName: string (e.g. "Apex Plumbing & Heating Ltd")
-- contactName: string or null
-- tradeCategory: string (e.g. "Plumbing & Heating", "Electrical", "Roofing", "Carpentry", "Cleaning")
-- cityLocation: string (e.g. "Manchester", "Birmingham", "London SE1")
-- phone: string (UK phone or mobile)
-- email: string or null
-- rating: string or null (e.g. "4.8★ (30 reviews)")
-- notes: string or null`;
-
-    const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-
-    if (res.text) {
-      const parsed = JSON.parse(res.text);
-      if (Array.isArray(parsed.leads)) {
-        return parsed.leads.map((item: any, idx: number) => ({
-          id: `LEAD_${Date.now()}_${idx}`,
-          businessName: item.businessName || "Directory Prospect",
-          contactName: item.contactName || "",
-          tradeCategory: item.tradeCategory || "General Trade",
-          cityLocation: item.cityLocation || "UK",
-          phone: item.phone || "07700 900000",
-          email: item.email || "",
-          source: defaultSource,
-          rating: item.rating || "",
-          notes: item.notes || "",
-          status: "new" as const,
-          createdAt: now,
-          updatedAt: now
-        }));
-      }
+      }));
     }
   } catch (err) {
-    console.warn("Failed to parse unstructured directory text with Gemini:", err);
+    console.warn("Failed to parse unstructured directory text via server:", err);
+    // Basic regex parser fallback
+    const phoneRegex = /(?:0|\+44)[0-9\s-]{9,13}/g;
+    const phones = rawText.match(phoneRegex) || [];
+    return [{
+      businessName: rawText.split("\n")[0]?.substring(0, 40) || "Imported Trader",
+      tradeCategory: "General Trade",
+      cityLocation: "UK",
+      phone: phones[0] || "07700 900000",
+      source: defaultSource,
+      status: "new",
+      createdAt: now,
+      updatedAt: now
+    }];
   }
 
   return [];
@@ -1315,7 +1107,7 @@ Return a JSON object containing an array "leads" with objects containing:
 
 /**
  * Generates a tailored, GDPR-compliant Homeowner & Public Onboarding Outreach Campaign
- * for a specific city or postcode district using Gemini 2.5 Flash.
+ * for a specific city or postcode district using Gemini 2.5 Flash via server.
  */
 export async function generateHomeownerOutreachPack(
   targetCityOrPostcode: string = "Manchester / M1",
@@ -1359,61 +1151,8 @@ export async function generateHomeownerOutreachPack(
   };
 
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return fallbackCampaign;
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const prompt = `Act as Chief Consumer Growth & Community Outreach Strategist for AnyTrader UK.
-Generate a high-converting, PECR & GDPR compliant Public & Homeowner Onboarding Campaign for ${targetCityOrPostcode} focusing on ${focusCategory}.
-
-CRITICAL ECOSYSTEM COVERAGE REQUIREMENT:
-- AnyTrader is a full 360° local services platform covering 76+ major categories.
-- Ensure the campaign copy highlights a FAIR & BALANCED MIX of non-building local services alongside traditional trades:
-  1. 🛠️ Home Repairs & Trades (Plumbing, Electrical, Gas, Roofing)
-  2. 🐶 Pet Sitting & Dog Walking
-  3. 📚 Private Academic Tutoring (Maths, Science, Languages)
-  4. 👶 Babysitting & Childcare
-  5. 🚗 Mobile Car Detailing & Valeting
-  6. 📦 On-Demand Delivery & Bulky Appliance Transport
-  7. 🧹 Specialist Domestic & Deep Cleaning
-- Highlight AnyTrader's core consumer value proposition: £0 cost to post requests, instant AI pre-quote price transparency, verified video pro intros, free Property Digital Twin passports, and Stripe Escrow protected payments.
-- Do NOT make false promises (no guaranteed cashback above £20 vouchers, no fake insurance guarantees outside standard provider PLI).
-
-Return a JSON object matching this structure:
-{
-  "nextdoorCommunityPost": {
-    "title": "Compelling Nextdoor/Facebook community post title for ${targetCityOrPostcode} highlighting the fair mix of trades, pet care, tutoring, babysitting, and car detailing",
-    "body": "Friendly neighborly post explaining how AnyTrader connects local residents with vetted pros for home repairs, pet sitting, private tutoring, babysitting, car detailing, and deliveries",
-    "callToAction": "Clear link and action"
-  },
-  "propertyPassportInvite": {
-    "headline": "Invitation headline to claim free Property & Family Digital Twin",
-    "emailOrLetterBody": "Tailored message explaining CP12/EICR storage, boiler spec logging, pet care notes, and 1-tap trade/service dispatch",
-    "valuePoints": ["3 concise bullet points featuring trades, pet care, tutoring, babysitting, or detailing"]
-  },
-  "voucherReferralCampaign": {
-    "headline": "Referral reward headline for £20 off any service",
-    "shareableWhatsAppText": "Friendly WhatsApp message a resident can send to neighbors with a £20 referral link valid across trades, pet care, tutoring, babysitting, or car detailing",
-    "voucherAmount": "£20"
-  },
-  "localPrintFlyerCopy": {
-    "frontHeadline": "Punchy headline for local door-to-door print flyer in ${targetCityOrPostcode} showcasing the full service mix (Trades, Pet Care, Tutoring, Babysitting, Car Detailing)",
-    "backDetails": ["3 clear bullet points highlighting key category verticals"],
-    "footerDisclaimer": "Reassuring disclaimer about £0 fee for residents"
-  },
-  "gdprComplianceNotice": "Short PECR/GDPR compliance confirmation note"
-}`;
-
-    const res = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-
-    if (res.text) {
-      const parsed = JSON.parse(res.text);
+    const parsed = await runServerAutonomousAgentTask("community_campaign_pack", { targetCityOrPostcode, focusCategory });
+    if (parsed) {
       return {
         targetCityOrPostcode,
         focusCategory,
@@ -1426,7 +1165,7 @@ Return a JSON object matching this structure:
       };
     }
   } catch (err) {
-    console.warn("Failed to generate Homeowner outreach pack with Gemini:", err);
+    console.warn("Failed to generate Homeowner outreach pack with server proxy:", err);
   }
 
   return fallbackCampaign;

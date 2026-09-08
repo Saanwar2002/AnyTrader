@@ -11,11 +11,11 @@ export interface MasterAdminAuthConfig {
 }
 
 export const DEFAULT_MASTER_ADMIN_CONFIG: MasterAdminAuthConfig = {
-  primaryAdminEmail: "saanwar2002@gmail.com",
+  primaryAdminEmail: "",
   additionalAdminEmails: [],
-  masterPin: "362515",
+  masterPin: "",
   enableLoginEmailAlert: true,
-  alertEmailRecipients: ["saanwar2002@gmail.com"],
+  alertEmailRecipients: [],
 };
 
 export interface AdminLoginAudit {
@@ -41,8 +41,8 @@ export function isAuthorizedAdminEmail(
   if (!email) return false;
   const cleanEmail = email.trim().toLowerCase();
 
-  const primary = (config?.primaryAdminEmail || "saanwar2002@gmail.com").trim().toLowerCase();
-  if (cleanEmail === primary || cleanEmail === "saanwar2002@gmail.com") return true;
+  const primary = (config?.primaryAdminEmail || "").trim().toLowerCase();
+  if (primary && cleanEmail === primary) return true;
 
   const additionals = (config?.additionalAdminEmails || []).map(e => e.trim().toLowerCase());
   return additionals.includes(cleanEmail);
@@ -66,21 +66,13 @@ export async function dispatchAdminLoginAlert(params: {
     const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "Unknown Client";
     const platform = typeof navigator !== "undefined" ? navigator.platform : "Web";
 
-    // Attempt to get client public IP (non-blocking)
-    let clientIp = "Protected Client IP";
-    try {
-      const ipRes = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(2000) });
-      if (ipRes.ok) {
-        const ipData = await ipRes.json();
-        if (ipData.ip) clientIp = ipData.ip;
-      }
-    } catch {
-      // Ignore IP lookup failure
-    }
+    const clientIp = "Server-Verified Connection";
 
     const recipients = params.config?.alertEmailRecipients?.length
       ? params.config.alertEmailRecipients
-      : [params.config?.primaryAdminEmail || "saanwar2002@gmail.com"];
+      : (params.config?.primaryAdminEmail ? [params.config.primaryAdminEmail] : []);
+
+    const adminConsoleUrl = typeof window !== "undefined" ? `${window.location.origin}/admin` : "/admin";
 
     const emailSubject = `🛡️ [SECURITY ALERT] Master Admin Console Login Detected (${adminEmail})`;
     const emailHtml = `
@@ -125,7 +117,7 @@ export async function dispatchAdminLoginAlert(params: {
                 <td style="padding: 6px 0; color: #0f172a;">${timeZone}</td>
               </tr>
               <tr>
-                <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Client IP:</td>
+                <td style="padding: 6px 0; color: #64748b; font-weight: 600;">Network:</td>
                 <td style="padding: 6px 0; font-weight: 700; color: #2563eb;">${clientIp}</td>
               </tr>
               <tr>
@@ -144,7 +136,7 @@ export async function dispatchAdminLoginAlert(params: {
           </div>
 
           <div style="text-align: center;">
-            <a href="https://ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app/admin" 
+            <a href="${adminConsoleUrl}" 
                style="background: #0f172a; color: #ffffff; padding: 13px 26px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 13px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
               Open Master Admin Console →
             </a>

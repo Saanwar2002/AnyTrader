@@ -673,7 +673,7 @@ export default function ZonesGeofences() {
                         {(() => {
                           const driverLat = selectedDriverDetail.liveLat || selectedDriverDetail.homeLat;
                           const driverLng = selectedDriverDetail.liveLng || selectedDriverDetail.homeLng;
-                          const metrics = getClusterMetrics(driverLat, driverLng);
+                          const metrics = getClusterMetrics(driverLat ?? null, driverLng ?? null);
                           return (
                             <div className="col-span-2 mt-1 pt-3 border-t border-dashed border-gray-200">
                               <p className="text-[10px] font-black text-black uppercase tracking-widest mb-2 flex items-center justify-between">

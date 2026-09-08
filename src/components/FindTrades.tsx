@@ -99,6 +99,11 @@ interface Tradesperson {
     hourlyRate: number;
     extraInfo: string;
   };
+  miniProfilePricing?: {
+    callOutFee: number;
+    hourlyRate: number;
+    extraInfo: string;
+  };
   postcode?: string;
   lat?: number;
   lng?: number;
@@ -114,6 +119,18 @@ interface Tradesperson {
   isAvailableForEmergency?: boolean;
   memberId?: string;
   isFoundingMember?: boolean;
+  callOutFee?: number;
+  hourlyRate?: number;
+  extraInfo?: string;
+  isAcceptingRequests?: boolean;
+  categories?: string[];
+  primaryTrade?: string;
+  category?: string;
+  businessCategory?: string;
+  subcategories?: string[];
+  skills?: string[];
+  acceptanceRate?: number;
+  adData?: any;
 }
 
 const COMPARE_THEMES = [
@@ -2687,7 +2704,7 @@ export default function FindTrades() {
             .filter(Boolean)
             .slice(0, 4); // Tier 1 Rule Constraint: Max 4 badges
 
-          let typicalPriceHtml = null;
+          let typicalPriceHtml: React.ReactNode = null;
           if ((tp.totalJobsDone || 0) >= 5 && (tp.completedJobsRevenue || 0) > 0) {
             const avg = (tp.completedJobsRevenue || 0) / (tp.totalJobsDone || 1);
             const lowerBound = Math.round(avg * 0.85 / 10) * 10; // Round to nearest 10
@@ -2891,7 +2908,7 @@ export default function FindTrades() {
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black bg-slate-100 text-slate-950 border border-slate-400"
                             >
                               <Award className="w-2.5 h-2.5 text-blue-700" />
-                              <span>{badge.label}</span>
+                              <span>{(badge as any).label || badge.name}</span>
                             </span>
                           );
                         })}

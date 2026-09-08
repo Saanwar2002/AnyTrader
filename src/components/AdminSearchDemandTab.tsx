@@ -17,6 +17,7 @@ import {
 } from "../services/searchOptimizationService";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { SynonymMeta } from "../lib/fuzzyMatch";
+import { cn } from "@/src/lib/utils";
 
 export default function AdminSearchDemandTab() {
   const [telemetryList, setTelemetryList] = useState<UnmatchedSearchItem[]>([]);

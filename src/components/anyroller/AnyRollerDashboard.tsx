@@ -16,7 +16,7 @@ import {
 
 // Mock Data Source for Real-time simulation
 const generateMockChartData = () => {
-  const data = [];
+  const data: any[] = [];
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   for (let i = 0; i < 7; i++) {
     data.push({
@@ -169,7 +169,7 @@ const AnyRollerDashboard = () => {
                 <Tooltip 
                   contentStyle={{ borderRadius: '8px', border: '1px solid black', boxShadow: '4px 4px 0px rgba(0,0,0,1)', padding: '12px' }}
                   itemStyle={{ fontWeight: 600 }}
-                  formatter={(value: any, name: string) => [name === 'revenue' ? `£${value}` : value, name === 'revenue' ? 'Revenue' : 'Rides']}
+                  formatter={(value: any, name: any) => [name === 'revenue' ? `£${value}` : value, name === 'revenue' ? 'Revenue' : 'Rides'] as [string | number, string]}
                 />
                 <Area yAxisId="left" type="monotone" dataKey="revenue" stroke="#2563EB" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                 <Area yAxisId="right" type="monotone" dataKey="rides" stroke="#10B981" strokeWidth={3} fill="none" />

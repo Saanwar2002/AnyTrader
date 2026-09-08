@@ -1,5 +1,70 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📱 Phase 5: Mobile App Store & Infrastructure Readiness (Completed September 8, 2026)
+*   **Context & Directives**:
+    - Complete mobile app store compliance, native Capacitor configuration cleanup, repository hygiene, and background task decoupling for multi-instance Cloud Run scaling.
+*   **Implementation & Resolution**:
+    1.  **Contextual Mobile Permissions (Fix Startup Permission Blast, `src/App.tsx`)**:
+        - Purged the eager 1.5-second timer blast requesting Geolocation, Camera, and Microphone simultaneously on app startup.
+        - Permissions are now requested contextually strictly upon user action (e.g., location on map centering / taxi booking; camera on photo upload).
+    2.  **Sanitized Capacitor Native Configuration (`capacitor.config.json`, `src/main.tsx`)**:
+        - Replaced development Cloud Run URLs with production app identifier `com.anytrader.uk` and disabled cleartext traffic (`cleartext: false`).
+        - Cleaned navigation allowlist for secure native runtime isolation.
+    3.  **Repository Hygiene & Native Build Artifacts (`.gitignore`)**:
+        - Added `dist/`, `android/app/src/main/assets/public/`, `ios/App/App/public/`, and temporary build caches to `.gitignore`.
+    4.  **Distributed Lock & Background Task Decoupling (`server.ts`, `.env.example`)**:
+        - Implemented atomic Firestore transaction-based distributed locking (`acquireCronLock`) across all background tasks and matching loops.
+        - Created secure trigger endpoints under `/api/cron/:jobName` and `/api/cron/status` gated with `requireCronOrAdmin` middleware for Cloud Scheduler and Cloud Run Jobs.
+        - Supported `DISABLE_IN_PROCESS_CRON` environment flag to allow zero-overlap migration to external schedulers.
+    5.  **Purged Third-Party IP Polling (`src/services/adminAuthSecurityService.ts`)**:
+        - Removed client-side calls to `api.ipify.org`. Security event logging and session management derive IP server-side directly from `req.ip` behind reverse proxy (`trust proxy: 1`).
+
+## 💳 Phase 4: Financial & Business Logic Integrity Remediation (Completed September 8, 2026)
+*   **Context & Directives**:
+    - Complete server-authoritative lockdown of financial transactions, driver fee settlements, escrow milestones, rating aggregations, and job posting quotas.
+    - Prevent client-side parameter tampering, spoofed fares, direct database writes to platform fees or rating scores, and quota bypasses.
+*   **Implementation & Resolution**:
+    1.  **Server-Authoritative Direct-to-Driver Taxi Payments (`/api/rides/create-trip-payment` in `server.ts`)**:
+        - Trip base fares are derived strictly from authoritative Firestore records (`ride_requests` or `rides`), or sanitized with strict server-side boundary validation.
+        - Verified that callers are authorized participants (driver, rider/passenger, or platform admin).
+        - Platform commission and fixed transaction fees are computed dynamically on the server from `platform_config/rides`.
+    2.  **Driver Fee Settlement Lockdown (`/api/driver/confirm-fee-settlement`, `PlatformFeeSuccess.tsx`)**:
+        - Removed insecure client-side `updateDoc` attempts on `pendingPlatformFees`.
+        - Fee settlements are validated server-side through authenticated API routes with Bearer token identity derivation and Stripe webhook callbacks.
+    3.  **Escrow & Milestone Release Hardening (`/api/release-milestone`, `JobDetails.tsx`)**:
+        - Migrated QR handshake and milestone fund releases to `/api/release-milestone`.
+        - Verified that only job owners, accepted traders (on QR handshake), or platform admins can trigger releases.
+        - Automatically manages 24-hour guarantee activation and server-side notifications.
+    4.  **Server-Side Rating & Review Aggregation (`/api/reviews/submit`, `src/firebase.ts`)**:
+        - Replaced direct client transaction writes with authenticated endpoint `/api/reviews/submit`.
+        - Enforces 14-day cooling-off periods for low ratings (<= 2 stars) on tradespeople and fuzzes notification delivery (3-7 day randomized delay).
+        - Automatically computes cumulative average ratings, total reviews, and recommendation counts inside an atomic server transaction.
+    5.  **Server-Enforced Job Creation & Quota Verification (`/api/jobs/create`, `/api/check-job-limit`, `PostJobWizard.tsx`)**:
+        - Validates monthly posting quotas based on user tier and active subscription status (with emergency job bypass).
+        - Inserts sanitized job documents with server-side timestamps.
+
+## 🔒 Server-Side AI Proxying & Autonomous Agent Task Routing (`geminiServer.ts`, `server.ts`, `aiAgentEcosystemService.ts`, `aiProfileOptimizationService.ts`) (Completed September 8, 2026)
+*   **Context & Directives**:
+    - Complete containment of all Gemini API keys (`GEMINI_API_KEY`) and `@google/genai` calls within backend server routes (`server.ts` / `geminiServer.ts`).
+    - Eliminate any browser-side calls attempting to read `process.env.GEMINI_API_KEY` or instantiate `GoogleGenAI` in client-side service modules.
+*   **Implementation**:
+    1.  **Autonomous Agent Task Server Proxy (`src/services/geminiServer.ts` & `server.ts`)**:
+        - Implemented `runServerAutonomousAgentTask(taskType, payload)` handling background agent tasks:
+          - `sentinel_evaluate_users`: Autonomous security & fraud evaluation.
+          - `growth_generate_campaigns`: Multi-platform social marketing campaign generator.
+          - `cfo_financial_suggestions`: Treasury & CFO margin optimization suggestions.
+          - `dispute_mediator_refine`: UK building standard & consumer law mediation generator.
+          - `compliance_guardian_refine`: Awaab's Law and statutory regulations analyzer.
+          - `lead_concierge_summarize`: Pre-qualification diagnostic summary generator.
+          - `trader_outreach_pack`: Anti-hyped, compliant trader onboarding outreach generator.
+          - `parse_raw_leads`: Structured directory prospect lead parser.
+          - `community_campaign_pack`: 360° local service community & flyer generator.
+    2.  **Client-Side Service Migration (`src/services/aiAgentEcosystemService.ts` & `src/services/aiProfileOptimizationService.ts`)**:
+        - Replaced all direct `GoogleGenAI` instantiations with `runServerAutonomousAgentTask` and `polishBio` calls to the `/api/gemini/call` backend proxy.
+    3.  **Strict Security & Clean Compilation**:
+        - `process.env.GEMINI_API_KEY` is strictly confined to server-side code.
+        - Application verified and compiles cleanly with 0 build errors.
+
 ## 🎯 Job Feed "Best Match" Toggle OFF Refinement: Relaxed Relevance Mode (`JobFeed.tsx`) (Completed September 7, 2026)
 *   **Context & Directives**:
     - Previously, when a tradesperson turned OFF the "Best Match" toggle (`showMatchedOnly === false`), the system fell back to showing all platform jobs across all 96 categories in the database.

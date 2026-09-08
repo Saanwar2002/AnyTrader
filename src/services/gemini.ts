@@ -756,4 +756,12 @@ export async function syncCategoryRegistryWithServer(categories?: any[], synonym
   }
 }
 
+/**
+ * Executes an autonomous AI Agent ecosystem task securely on the server
+ */
+export async function runServerAutonomousAgentTask(taskType: string, payload: any): Promise<any> {
+  return callServerGemini("runServerAutonomousAgentTask", [taskType, payload]);
+}
+
+
 

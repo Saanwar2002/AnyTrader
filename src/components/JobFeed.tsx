@@ -292,7 +292,7 @@ export default function JobFeed() {
         if (stored !== "false") {
           setShowMatchedOnly(true);
         }
-      } else if (profile.role === "homeowner" || profile.role === "customer") {
+      } else if ((profile.role as string) === "homeowner" || (profile.role as string) === "customer") {
         if (stored === null) {
           setShowMatchedOnly(false);
         }
@@ -2464,6 +2464,8 @@ export default function JobFeed() {
         job={quickQuoteJob}
         isOpen={!!quickQuoteJob}
         onClose={() => setQuickQuoteJob(null)}
+        user={user}
+        profile={profile}
         onQuoteSubmitted={(submittedQuote) => {
           if (quickQuoteJob?.id) {
             setMyQuotes(prev => ({

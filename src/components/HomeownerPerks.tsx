@@ -146,9 +146,9 @@ export default function HomeownerPerks({ limit }: { limit?: number }) {
                    <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400 bg-slate-200/50 px-1.5 py-0.5 rounded flex items-center leading-none">
                      Add
                    </span>
-                   {perk.badge && (
+                   {(perk as any).badge && (
                      <span className="text-[9px] font-semibold text-slate-500 truncate leading-none">
-                       • {perk.badge}
+                       • {(perk as any).badge}
                      </span>
                    )}
                  </div>

@@ -4,7 +4,8 @@ import {
   AlertTriangle, ShieldAlert, ShieldCheck, X, Zap, ArrowRight, 
   ExternalLink, Bell, Volume2, VolumeX, Mail, CheckCircle2, UserX, Trash2
 } from "lucide-react";
-import { ActiveBreachAlert, executeAnomalyMitigation } from "../services/adminAnalyticsService";
+import { ActiveBreachAlert } from "../services/adminAlertThresholdService";
+import { executeAnomalyMitigation } from "../services/adminAnalyticsService";
 import { cn } from "@/src/lib/utils";
 
 interface AdminAlertToastContainerProps {

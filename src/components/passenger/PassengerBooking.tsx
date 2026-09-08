@@ -915,8 +915,8 @@ export default function PassengerBooking() {
                 const bounds = new window.google.maps.LatLngBounds();
                 path.forEach((p: any) => bounds.extend(p));
                 map.fitBounds(bounds, { 
-                  padding: { top: 60, right: 50, bottom: 60, left: 50 } 
-                });
+                  top: 60, right: 50, bottom: 60, left: 50 
+                } as any);
                 
                 // Zoom out 1-2 ticks after bounds are set to give more breathing room
                 setTimeout(() => {
@@ -2867,7 +2867,7 @@ export default function PassengerBooking() {
         const { latitude, longitude } = pos.coords;
         setPassengerPos({ lat: latitude, lng: longitude });
         
-        if (currentRideId && step !== "details" && step !== "review" && step !== "payment" && step !== "receipt") {
+        if (currentRideId && (step as any) !== "details" && (step as any) !== "review" && (step as any) !== "payment" && (step as any) !== "receipt") {
           const now = Date.now();
           const timeSinceLastSync = now - lastLocationSyncRef.current;
           const distToLastSync = lastSyncCoordsRef.current 
@@ -3627,7 +3627,7 @@ export default function PassengerBooking() {
                           onClick={async (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (isClearingBalance) return;
+                            if (isClearingBalance || !user) return;
                             setIsClearingBalance(true);
                             await new Promise(r => setTimeout(r, 1500));
                             try {
@@ -4353,7 +4353,7 @@ export default function PassengerBooking() {
                            )}
                            <button 
                              onClick={handleConfirmBooking} 
-                             disabled={!pickup || !dropoff || (isHighDemandOrSlow && !waitWarningAcknowledged && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status)))} 
+                             disabled={Boolean(!pickup || !dropoff || (isHighDemandOrSlow && !waitWarningAcknowledged && !(assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status))))} 
                              className="w-full py-3 bg-[#0F172A] text-white rounded-[12px] font-bold text-[15px] hover:bg-black active:scale-95 disabled:opacity-50 transition-all focus:outline-none"
                            >
                              {assignedDriverInfo && ["accepted", "arrived", "in_progress"].includes(assignedDriverInfo.status) ? "Confirm Update" : `Confirm ${CAR_CATEGORIES.find(c => c.id === selectedCategory)?.name}`}
@@ -5693,8 +5693,8 @@ export default function PassengerBooking() {
                       onClick={async () => {
                         try {
                           const { App: CapacitorApp } = await import('@capacitor/app');
-                          if (CapacitorApp && CapacitorApp.openAppSettings) {
-                             await CapacitorApp.openAppSettings();
+                          if (CapacitorApp && (CapacitorApp as any).openAppSettings) {
+                             await (CapacitorApp as any).openAppSettings();
                           }
                         } catch (e) {
                            console.error("Failed to open app settings", e);

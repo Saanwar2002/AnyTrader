@@ -6,16 +6,12 @@
   "server": {
     "androidScheme": "https",
     "hostname": "localhost",
-    "cleartext": true,
     "allowNavigation": [
       "anytrader.app",
       "*.anytrader.app",
-      "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
-      "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
       "identitytoolkit.googleapis.com",
       "securetoken.googleapis.com",
-      "*.firebaseio.com",
-      "*.googleapis.com"
+      "*.firebaseio.com"
     ]
   },
   "plugins": {
@@ -32,9 +28,7 @@
       "appUrlOpen": {
         "domains": [
           "anytrader.app",
-          "*.anytrader.app",
-          "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
-          "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app"
+          "*.anytrader.app"
         ]
       }
     }
@@ -44,9 +38,7 @@
     "hostname": "anytrader.app",
     "domains": [
       "anytrader.app",
-      "*.anytrader.app",
-      "ais-dev-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app",
-      "ais-pre-vumupz44ljjitc6rsqobbz-437256678397.europe-west2.run.app"
+      "*.anytrader.app"
     ],
     "routes": [
       { "path": "/job/:id", "component": "JobDetails" },

@@ -134,7 +134,7 @@ export default function TraderOutreachAgent() {
 
   // Admin Test Dispatch Modal State
   const [isAdminTestModalOpen, setIsAdminTestModalOpen] = useState(false);
-  const [adminTestEmail, setAdminTestEmail] = useState("saanwar2002@gmail.com");
+  const [adminTestEmail, setAdminTestEmail] = useState("");
   const [adminTestPhone, setAdminTestPhone] = useState("");
   const [adminTestType, setAdminTestType] = useState<"trader" | "homeowner" | "both">("both");
   const [testDispatchSuccessNotice, setTestDispatchSuccessNotice] = useState<string | null>(null);
@@ -1892,7 +1892,7 @@ West Midlands Electrical Solutions - Birmingham
                       type="email"
                       value={adminTestEmail}
                       onChange={e => setAdminTestEmail(e.target.value)}
-                      placeholder="saanwar2002@gmail.com"
+                      placeholder="admin@tradequote.uk"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>

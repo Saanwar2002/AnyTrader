@@ -63,6 +63,7 @@ export function MaterialsTracker({
           totalCost: m.totalCost,
           retailCost: m.unitCost * 1.2,
           unit: "unit",
+          stockStatus: "in_stock_today" as const,
           suggestedSupplier: m.supplier || job.bomMerchant || "Screwfix Trade"
         })),
         itemCount: materials.length,
@@ -196,8 +197,6 @@ export function MaterialsTracker({
       setIsGenerating(false);
     }
   };
-
-  const totalMaterialsCost = materials.reduce((sum, m) => sum + (m.totalCost || m.quantity * m.unitCost), 0);
 
   return (
     <div className="p-5 bg-white rounded-3xl border border-black shadow-sm space-y-4">

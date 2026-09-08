@@ -174,7 +174,7 @@ export function ConsultancyProposals({ clientId }: { clientId?: string }) {
                             await addDoc(collection(db, "projects"), {
                               title: prop.title,
                               clientId: prop.clientId,
-                              managerId: user.uid,
+                              managerId: user?.uid,
                               status: "active",
                               createdAt: serverTimestamp(),
                               totalTasks: 0,

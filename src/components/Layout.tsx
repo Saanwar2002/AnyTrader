@@ -556,7 +556,7 @@ export default function Layout() {
           <header className={cn("bg-slate-50/95 backdrop-blur-md relative z-50", !isAnonymous && !showMaintenanceBanner && "pt-[env(safe-area-inset-top,0px)]")}>
           <div className="max-w-7xl mx-auto px-1.5 sm:px-4 h-16 flex items-center justify-between gap-1 sm:gap-2">
             <div className="flex items-center gap-1.5 sm:gap-4 shrink-0">
-              {activePortal === "anyroller" && (
+              {(activePortal as string) === "anyroller" && (
                 <button 
                   onClick={() => {
                     triggerHaptic();
@@ -674,7 +674,7 @@ export default function Layout() {
               })()}
 
               {/* Desktop Navigation */}
-              {activePortal !== 'anyroller' && (
+              {(activePortal as string) !== 'anyroller' && (
                 <nav className="hidden md:flex items-center gap-1 ml-2">
                   {navItems.map((item) => {
                     const Icon = item.icon;
@@ -841,7 +841,7 @@ export default function Layout() {
             )}
 
               {/* Quick Actions (Plus & Schedule) */}
-              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && activePortal !== "anyroller" && (
+              {(profile?.role === "tradesperson" || profile?.subscriptionType === "business" || profile?.role === "admin" || profile?.role === "ecosystem_manager") && (activePortal as string) !== "anyroller" && (
                 <>
                   <div className="relative" ref={quickActionsRef}>
                      <button 

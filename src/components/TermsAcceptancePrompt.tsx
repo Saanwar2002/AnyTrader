@@ -60,13 +60,12 @@ export const TermsAcceptancePrompt: React.FC = () => {
     try {
       const timestamp = new Date().toISOString();
       const userAgentStr = typeof navigator !== "undefined" ? navigator.userAgent : "Web";
-      const isAdminEmail = user.email?.toLowerCase() === "saanwar2002@gmail.com";
 
       const updateData: any = {
         uid: user.uid,
         email: user.email || "",
         name: profile?.name || user.displayName || "User",
-        role: profile?.role || (isAdminEmail ? "admin" : "homeowner"),
+        role: profile?.role || "homeowner",
         termsAcceptedAt: timestamp,
         termsAcceptedVersion: CURRENT_TERMS_VERSION,
         termsAcceptedIp: userAgentStr,

@@ -19,7 +19,6 @@ export default defineConfig(({mode}) => {
           clientsClaim: true,
           skipWaiting: true,
           navigateFallbackDenylist: [/^\/api/],
-          cacheId: 'anytrader-v1.0.4',
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -303,26 +303,23 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map((provider: any) => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
+  const isDev = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  
+  // High-level sanitized error message
+  const sanitizedMessage = rawMessage.includes("permission-denied")
+    ? "Access denied. You do not have sufficient permissions to perform this operation."
+    : rawMessage.includes("not-found")
+    ? "Requested resource was not found."
+    : "A database operation could not be completed.";
+
+  if (isDev) {
+    console.warn(`[Firestore Debug (${operationType})]:`, rawMessage);
+  } else {
+    console.error(`[Firestore Error]: ${sanitizedMessage}`);
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  throw new Error(sanitizedMessage);
 }
 
 
@@ -355,111 +352,35 @@ export const submitReview = async (
   type: "tradesperson_review" | "homeowner_review" = "tradesperson_review"
 ) => {
   try {
-    const isLowRating = rating <= 2 && type === "tradesperson_review";
-    
-    await runTransaction(db, async (transaction: any) => {
-      // 1. ALL READS FIRST
-      const userRef = doc(db, "users", revieweeId);
-      let userSnap = null;
-      if (!isLowRating) {
-        userSnap = await transaction.get(userRef);
-      }
+    const currentUser = auth.currentUser;
+    const token = currentUser ? await currentUser.getIdToken() : null;
 
-      // 2. ALL WRITES AFTER READS
-      const reviewRef = doc(collection(db, "reviews"));
-      const status = isLowRating ? "cooling_off" : "published";
-      const publishAt = isLowRating ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) : new Date();
-
-      transaction.set(reviewRef, {
-        id: reviewRef.id,
+    const response = await fetch("/api/reviews/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
         jobId,
         reviewerId,
         revieweeId,
-        type,
         rating,
         comment,
-        recommended: type === "tradesperson_review" ? recommended : false,
-        status,
-        publishAt,
-        createdAt: serverTimestamp()
-      });
-
-      // Update the reviewee's profile (only if not in cooling off)
-      if (!isLowRating && userSnap && userSnap.exists()) {
-        const userData = userSnap.data();
-        
-        if (type === "tradesperson_review") {
-          const currentRating = userData.rating || 0;
-          const currentTotalReviews = userData.totalReviews || 0;
-          const currentTotalRecommendations = userData.totalRecommendations || 0;
-          
-          const newTotalReviews = currentTotalReviews + 1;
-          const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
-          const newTotalRecommendations = recommended ? currentTotalRecommendations + 1 : currentTotalRecommendations;
-          
-          transaction.update(userRef, {
-            rating: newRating,
-            totalReviews: newTotalReviews,
-            totalRecommendations: newTotalRecommendations
-          });
-        } else {
-          // Homeowner review
-          const currentRating = userData.homeownerRating || 0;
-          const currentTotalReviews = userData.totalHomeownerReviews || 0;
-          
-          const newTotalReviews = currentTotalReviews + 1;
-          const newRating = ((currentRating * currentTotalReviews) + rating) / newTotalReviews;
-          
-          transaction.update(userRef, {
-            homeownerRating: newRating,
-            totalHomeownerReviews: newTotalReviews
-          });
-        }
-      }
-
-      // 3. Update the job document
-      const jobRef = doc(db, "jobs", jobId);
-      if (type === "tradesperson_review") {
-        transaction.update(jobRef, {
-          status: "completed",
-          hasReview: true
-        });
-      } else {
-        transaction.update(jobRef, {
-          hasTradespersonReview: true
-        });
-      }
+        recommended,
+        type
+      })
     });
-    
-    // Send notification to reviewee
-    if (isLowRating) {
-      // FUZZING: Delay the notification by 3-7 days so it's not linked to the last job
-      const delayDays = 3 + Math.floor(Math.random() * 5); // 3 to 7 days
-      const visibleAt = new Date(Date.now() + delayDays * 24 * 60 * 60 * 1000);
-      
-      const notifRef = doc(collection(db, "notifications"));
-      await setDoc(notifRef, {
-        userId: revieweeId,
-        title: "Trust & Fairness Update",
-        message: "The Trust & Fairness engine is conducting a standard quality review of a recent interaction. This process ensures platform balance and takes 14 days.",
-        type: "system",
-        read: false,
-        visibleAt: visibleAt, // UI will filter by this
-        createdAt: serverTimestamp(),
-        link: `/jobs/${jobId}`
-      });
-    } else {
-      await sendNotification(
-        revieweeId,
-        "New Review Received!",
-        `You received a ${rating}-star review.`,
-        "status",
-        type === "tradesperson_review" ? `/profile/${revieweeId}` : "/profile"
-      );
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson.error || "Failed to submit review via server");
     }
-    
+
+    return await response.json();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, "reviews");
+    throw error;
   }
 };
 

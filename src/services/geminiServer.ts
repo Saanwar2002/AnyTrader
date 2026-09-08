@@ -3014,4 +3014,226 @@ Return ONLY valid JSON:
   return defaultFallback;
 }
 
+// Secure server-side Autonomous Agent Task Execution Proxy
+export async function runServerAutonomousAgentTask(taskType: string, payload: any): Promise<any> {
+  try {
+    switch (taskType) {
+      case "sentinel_evaluate_users": {
+        const sampleUsers = payload?.sampleUsers || [];
+        const prompt = `Act as an Autonomous Security & Fraud Sentinel AI for AnyTrader (UK Trade Platform). 
+Evaluate these recent user registrations for suspicious patterns, duplicate profile creation, or fake review risks:
+${JSON.stringify(sampleUsers, null, 2)}
+
+Return a JSON array of threats found, or empty array [] if clean. Each item must have: type, severity, userId, details.`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : [];
+      }
+
+      case "growth_generate_campaigns": {
+        const { topJobCategories, sampleReviews, targetRegions } = payload || {};
+        const prompt = `Act as the Autonomous Growth & AI Social Campaign Engine for AnyTrader (The UK's Premier Tradesperson & B2B Property Operating System).
+Analyze these current platform insights:
+Active High-Demand Categories: ${JSON.stringify(topJobCategories || [])}
+Top Customer Reviews: ${JSON.stringify(sampleReviews || [])}
+Target UK Regions: ${JSON.stringify(targetRegions || ["Greater Manchester", "London"])}
+
+Generate 3 high-converting social media marketing campaigns optimized for:
+1. Facebook / Meta Ads (Targeting UK Homeowners needing urgent repairs)
+2. LinkedIn (Targeting B2B Housing Associations, Landlords & Estate Managers for AnyTrader Gotham SaaS)
+3. Twitter / X (Targeting UK Tradespeople seeking zero-commission leads)
+
+Return a JSON array of campaign objects with fields:
+- platform: "Facebook" | "Instagram" | "Twitter / X" | "LinkedIn"
+- headline: string
+- bodyText: string
+- callToAction: string
+- targetAudience: "Homeowners" | "Tradespeople" | "Landlords & B2B" | "Social Housing"
+- hashtags: array of strings
+- suggestedImagePrompt: string (detailed prompt for generating a promotional graphic)`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "cfo_financial_suggestions": {
+        const {
+          timeframe,
+          periodRevenue,
+          periodOutgoings,
+          periodNetProfit,
+          profitMarginPct,
+          tradersCount,
+          goldCount,
+          platinumCount,
+          totalGothamDoors
+        } = payload || {};
+        const prompt = `Act as the Chief Financial Officer & Treasury AI Agent for AnyTrader (UK Trade Platform).
+Current Financial Metrics (${timeframe || "Monthly"}):
+- Total Revenue: £${Number(periodRevenue || 0).toFixed(2)}
+- Total Outgoings: £${Number(periodOutgoings || 0).toFixed(2)}
+- Net Profit: £${Number(periodNetProfit || 0).toFixed(2)} (${profitMarginPct || 0}% profit margin)
+- Active Traders: ${tradersCount || 0} (Gold: ${goldCount || 0}, Platinum: ${platinumCount || 0})
+- B2B Housing Doors: ${totalGothamDoors || 0}
+
+Generate 3 actionable, highly specific financial optimization suggestions to increase net profit margins or lower server/API expenses without reducing platform performance.
+Return a JSON array of objects with fields:
+- category: string
+- impact: "high" | "medium" | "low"
+- suggestion: string
+- potentialMonthlySavings: string`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "dispute_mediator_refine": {
+        const disputeCase = payload?.disputeCase;
+        const prompt = `Act as the Chief AI Dispute Mediator & Guarantee Arbitrator for AnyTrader (UK Trade Operating System).
+Evaluate this dispute case:
+${JSON.stringify(disputeCase)}
+
+Apply standard UK building codes (BS 5385 / IET Wiring / Gas Safe) and fair consumer contract laws.
+Refine the proposedSettlement object with:
+- traderPayout (number in GBP)
+- customerRefund (number in GBP)
+- actionRequired (clear 1-sentence instruction)
+- rationale (reference specific UK trade standards)
+
+Return a JSON object with fields: traderPayout, customerRefund, actionRequired, rationale`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "compliance_guardian_refine": {
+        const alerts = payload?.alerts || [];
+        const prompt = `Act as the Chief Compliance & Legal Guardian AI for AnyTrader & Gotham Housing OS.
+Evaluate these UK trade and housing statutory compliance alerts:
+${JSON.stringify(alerts.slice(0, 3))}
+
+Review against Awaab's Law (Social Housing Regulation Act 2023) and UK Gas Safety Regulations 1998.
+Refine the recommendedAction field for the top alert with precise statutory step.
+Return a JSON object with fields: refinedAction, complianceRiskScore ("low"|"medium"|"high")`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "lead_concierge_summarize": {
+        const spec = payload?.spec;
+        const prompt = `Act as the Chief AI Customer Concierge & Pre-Qualification Agent for AnyTrader.
+Enhance this prequalified job specification:
+${JSON.stringify(spec)}
+
+Generate a concise 1-sentence conciergeSummary highlighting key diagnostic takeaways for tradespeople quoting on this job.
+Return a JSON object with field: conciergeSummary`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "trader_outreach_pack": {
+        const { lead, onboardingUrl } = payload || {};
+        const prompt = `Act as Chief AI Trader Outreach & Growth Specialist for AnyTrader UK.
+Generate an irresistible, ultra-professional outreach campaign pack for this prospect sourced from ${lead?.source || "directory"}:
+
+STRICT PLATFORM SCOPE GUARDRAILS (MANDATORY & NON-NEGOTIABLE):
+1. NEVER promise guaranteed job numbers or fixed income amounts.
+2. NEVER offer 0% platform fees forever or custom fee waivers outside official rates (15% PAYG default, reduced to 10% Pro, 5% Premium, 3% Platinum).
+3. NEVER promise exclusive regional monopolies or territory rights.
+4. NEVER claim AnyTrader allows skipping statutory verification (e.g. Gas Safe, EICR, PLI insurance, or Stripe identity checks).
+5. NEVER promise free physical tools, equipment giveaways, or cash sign-up bonuses.
+6. NEVER claim AnyTrader acts as an employer, insurer, or guarantor of homeowner payments outside Stripe Escrow.
+7. ALWAYS stick strictly to AnyTrader's actual scope: £0 monthly listing, £0 upfront lead fees, pre-inspected Property Passport job specs, and 1-tap WhatsApp privacy bridge.
+
+Lead Details:
+- Business Name: ${lead?.businessName}
+- Contact Person: ${lead?.contactName || "Owner/Manager"}
+- Trade Category: ${lead?.tradeCategory}
+- Location: ${lead?.cityLocation}
+- Rating/Source Notes: ${lead?.rating || "Top directory listing"} ${lead?.notes || ""}
+- Onboarding URL: ${onboardingUrl}
+
+Return a JSON object with fields: whatsappDirectPitch, coldEmailPitch, smsNotificationText, headlineAngle, followUpHook`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "parse_raw_leads": {
+        const rawText = String(payload?.rawText || "");
+        const prompt = `Act as an AI Lead Data Parser for AnyTrader.
+Analyze the following raw text copied from directory listings and extract all individual trader/business listings into structured objects.
+
+Raw Input Text:
+"""
+${rawText.substring(0, 6000)}
+"""
+
+Return a JSON object containing an array "leads" with objects containing:
+- businessName: string
+- contactName: string or null
+- tradeCategory: string
+- cityLocation: string
+- phone: string
+- email: string or null
+- rating: string or null
+- notes: string or null`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      case "community_campaign_pack": {
+        const { targetCityOrPostcode, focusCategory } = payload || {};
+        const prompt = `Act as Chief Consumer Growth & Community Outreach Strategist for AnyTrader UK.
+Generate a high-converting, PECR & GDPR compliant Public & Homeowner Onboarding Campaign for ${targetCityOrPostcode} focusing on ${focusCategory}.
+
+Return a JSON object with:
+- nextdoorCommunityPost: { title, body, callToAction }
+- localFacebookGroupPost: { title, body, callToAction }
+- physicalFlyerCopy: { headline, bulletPoints, callToAction }
+- recommendedHashtags: string[]`;
+        const res = await callGemini({
+          prompt,
+          model: "gemini-2.5-flash",
+          config: { responseMimeType: "application/json" }
+        });
+        return res.text ? JSON.parse(res.text) : null;
+      }
+
+      default:
+        throw new Error(`Unknown autonomous agent task type: ${taskType}`);
+    }
+  } catch (err) {
+    console.error(`Error in runServerAutonomousAgentTask [${taskType}]:`, err);
+    throw err;
+  }
+}
+
 

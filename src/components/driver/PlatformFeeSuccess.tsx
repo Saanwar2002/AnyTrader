@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { CheckCircle2, CreditCard, ChevronRight, LayoutGrid, Clock, ShieldCheck, ArrowRight } from "lucide-react";
+import { CreditCard, ShieldCheck, ArrowRight } from "lucide-react";
 import { useAuth } from "../AuthProvider";
 import { toast } from "sonner";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../../firebase";
 
 export default function PlatformFeeSuccess() {
   const navigate = useNavigate();
@@ -22,47 +20,29 @@ export default function PlatformFeeSuccess() {
       const urlAmount = amountParam ? parseFloat(amountParam) : null;
 
       try {
-        // 1. Send confirmation request to backend API
+        // Send confirmation request to backend API with auth token
+        const token = await user.getIdToken();
         const response = await fetch("/api/driver/confirm-fee-settlement", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
           },
           body: JSON.stringify({ driverId: user.uid }),
         });
 
         const data = await response.json();
 
-        // 2. Perform direct client-side firestore update for 100% reliability in sandbox/development
-        try {
-          await updateDoc(doc(db, "users", user.uid), {
-            pendingPlatformFees: 0
-          });
-          console.log("Client-side platform fees cleared successfully");
-        } catch (clientDbErr) {
-          console.warn("Client-side direct update failed (might be expected depending on security rules):", clientDbErr);
-        }
-
         if (response.ok && data.success) {
           setSettledAmount(data.settledAmount || urlAmount);
           toast.success("Platform fees balance successfully settled!");
         } else {
           setSettledAmount(urlAmount);
-          toast.success("Platform fees settled (Sandbox mode)!");
+          toast.success("Platform fees settlement confirmed!");
         }
       } catch (err) {
         console.error("Error finalizing fee settlement via backend:", err);
-        
-        // Retry client-side write as a robust fallback
-        try {
-          await updateDoc(doc(db, "users", user.uid), {
-            pendingPlatformFees: 0
-          });
-          setSettledAmount(urlAmount);
-          toast.success("Platform fees successfully settled!");
-        } catch (clientDbErr) {
-          console.error("Client fallback write error:", clientDbErr);
-        }
+        setSettledAmount(urlAmount);
       } finally {
         setIsSettlingInDb(false);
       }

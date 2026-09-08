@@ -59,7 +59,7 @@ export function ClaimPropertyPassportModal({ initialCode = "", onClose, onSucces
       }
 
       const propDoc = snapshot.docs[0];
-      const data = { id: propDoc.id, ...propDoc.data() };
+      const data: any = { id: propDoc.id, ...propDoc.data() };
 
       // Check expiry
       if (data.transferExpiresAt) {

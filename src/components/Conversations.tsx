@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, orderBy, getDocs, onSnapshot, getDoc, doc, handleFirestoreError, OperationType, updateDoc, arrayUnion } from "@/src/firebase";
+import { collection, query, where, orderBy, onSnapshot, getDoc, doc, getDocs } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType, updateDoc, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { motion, AnimatePresence } from "motion/react";
 import { MessageSquare, Clock, ChevronRight, User as UserIcon, Loader2, Trash2, CheckCircle2, X, MoreVertical, Check } from "lucide-react";
@@ -39,7 +40,7 @@ export default function Conversations() {
       const missingRecipientIds = Array.from(new Set(
         convs
           .map((conv: any) => conv.participants?.find((p: string) => p !== user.uid))
-          .filter((id: string | undefined): id is string => Boolean(id) && !profiles[id])
+          .filter((id: string | undefined): id is string => Boolean(id) && !(profiles as any)[id!])
       ));
 
       if (missingRecipientIds.length > 0) {

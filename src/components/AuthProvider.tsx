@@ -345,7 +345,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (isAdminEmail) {
                 const adminData = {
                   uid: firebaseUser.uid,
-                  email: firebaseUser.email || "saanwar2002@gmail.com",
+                  email: firebaseUser.email || "",
                   name: firebaseUser.displayName || "Admin",
                   role: "admin" as const,
                   updatedAt: new Date().toISOString()

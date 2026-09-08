@@ -191,6 +191,7 @@ export default function MyJobs() {
   };
 
   const handleRepost = async (job: any) => {
+    if (!user) return;
     setIsProcessing(job.id);
     try {
       const {

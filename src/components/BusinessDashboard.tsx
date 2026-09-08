@@ -50,7 +50,7 @@ export default function BusinessDashboard() {
     }
 
     // Fetch recent quotes across all business jobs/quotes
-    const isTraderUser = ["tradesperson", "trader", "business"].includes(profile?.role) || profile?.subscriptionType === "business";
+    const isTraderUser = ["tradesperson", "trader", "business"].includes(profile?.role || "") || profile?.subscriptionType === "business";
     const quotesQuery = query(
       collectionGroup(db, "quotes"),
       where(isTraderUser ? "tradespersonId" : "homeownerId", "==", user.uid),

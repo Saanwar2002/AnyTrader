@@ -830,7 +830,7 @@ export default function PostJobWizard() {
           const blob = new Blob(audioNoteChunksRef.current, { type: actualMimeType });
           const fileName = `jobs/${user.uid}/audionotes/${Date.now()}_AudioNote.${extension}`;
           
-          if (isSimulateMode) {
+          if ((window as any).isSimulateMode) {
              const localUrl = await readFileAsDataURL(new File([blob], fileName));
              setFormData(prev => ({ 
                ...prev, 
@@ -1915,15 +1915,21 @@ export default function PostJobWizard() {
 
       // Phase 3: PII & Safety Filter + Rate Limit check in parallel
       const safetyPromise = checkSafetyAndPII(formData.description);
-      const limitPromise = editJob ? Promise.resolve(null) : fetch("/api/check-job-limit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          userId: user.uid,
-          isEmergency: formData.urgency === "emergency" || formData.isEmergencyBoost,
-          requestedCount: formData.selectedAssets.length > 0 ? formData.selectedAssets.length : 1
-        })
-      });
+      const limitPromise = editJob ? Promise.resolve(null) : (async () => {
+        const token = await user.getIdToken();
+        return fetch("/api/check-job-limit", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ 
+            userId: user.uid,
+            isEmergency: formData.urgency === "emergency" || formData.isEmergencyBoost,
+            requestedCount: formData.selectedAssets.length > 0 ? formData.selectedAssets.length : 1
+          })
+        });
+      })();
 
       const [safetyResult, limitResponse] = await Promise.all([safetyPromise, limitPromise]);
       
@@ -2024,7 +2030,7 @@ export default function PostJobWizard() {
           postcode: (asset?.postcode || finalPostcode).toUpperCase(),
           description: finalDescription,
           status: editJob ? (editJob.status || "posted") : suggestedStatus,
-          securityAlert: securityAlert || formData.securityAlert || null,
+          securityAlert: securityAlert || (formData as any).securityAlert || null,
           hasReview: editJob?.hasReview || false,
           estimateMin: estimate?.min || Math.floor(Number(formData.selectedBudget || 0) * 0.9),
           estimateMax: estimate?.max || Math.floor(Number(formData.selectedBudget || 0) * 1.1),
@@ -2312,8 +2318,8 @@ export default function PostJobWizard() {
                     onClick={async () => {
                       try {
                         const { App: CapacitorApp } = await import('@capacitor/app');
-                        if (CapacitorApp && CapacitorApp.openAppSettings) {
-                           await CapacitorApp.openAppSettings();
+                        if (CapacitorApp && (CapacitorApp as any).openAppSettings) {
+                           await (CapacitorApp as any).openAppSettings();
                         }
                       } catch (e) {
                          console.error("Failed to open app settings", e);
@@ -3024,7 +3030,7 @@ export default function PostJobWizard() {
                     ref={audioInputRef}
                     className="hidden"
                     accept="audio/*"
-                    capture="microphone"
+                    capture={"microphone" as any}
                     onChange={handleFallbackAudio}
                   />
                 </div>
@@ -3330,7 +3336,7 @@ export default function PostJobWizard() {
                           postcode: profile.postcode,
                           city: profile.city || prev.city,
                           area: profile.area || prev.area,
-                          county: profile.county || prev.county,
+                          county: (profile as any).county || (prev as any).county,
                           fullAddress: profile.postcode
                         }));
                       }}

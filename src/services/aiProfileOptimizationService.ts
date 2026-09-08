@@ -1,6 +1,6 @@
 import { db } from "@/src/firebase";
 import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { GoogleGenAI } from "@google/genai";
+import { polishBio } from "@/src/services/gemini";
 import { TRADE_CATEGORIES } from "@/src/constants";
 import { fetchUnmatchedSearches } from "./searchOptimizationService";
 import { CATEGORY_SYNONYMS, categoryMatchesSearch } from "@/src/lib/fuzzyMatch";
@@ -107,42 +107,22 @@ export async function auditProfileAndAccountReadiness(
     } else {
       // Refine bio to simple, professional, plain English (remove jargon / informal phrasing)
       try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (apiKey) {
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: `Act as a Professional Trade Profile Copywriter for AnyTrader UK.
-Rewrite the following trader profile description into clean, accessible, professional, plain English.
-Rules:
-- NO hyperbole, marketing buzzwords ("supercharge", "empower", "flawless"), or corporate jargon.
-- Plain, friendly, professional tone that homeowners can easily understand.
-- State experience, main services offered, commitment to clean work, reliability, and upfront pricing.
-- Keep it concise (2-4 clear sentences).
-
-Current Trader Bio:
-"${rawBio}"
-
-Trader Name: ${profile.name || profile.businessName || "Professional Trader"}
-Trade Categories: ${(profile.trades || []).join(", ") || "General Trade"}
-Location: ${profile.postcode || profile.city || "UK"}`
+        const tradesStr = (profile.trades || []).join(", ") || "General Trade";
+        const tagsStr = (profile.tags || []).join(", ") || "";
+        const aiText = await polishBio(rawBio, tradesStr, tagsStr);
+        if (aiText && aiText.length > 20 && aiText !== rawBio) {
+          professionalBioDraft = aiText;
+          suggestions.push({
+            id: "sug_bio_refine",
+            category: "bio",
+            title: "Upgrade to Professional Plain-English Bio",
+            impact: "medium",
+            description: "AI reframed your bio to sound polished, accessible, and clear for homeowners without overly technical jargon.",
+            currentValue: rawBio,
+            suggestedValue: aiText,
+            actionType: "apply_bio",
+            actionLabel: "⚡ Apply Polished Bio"
           });
-
-          const aiText = response.text?.trim();
-          if (aiText && aiText.length > 20 && aiText !== rawBio) {
-            professionalBioDraft = aiText;
-            suggestions.push({
-              id: "sug_bio_refine",
-              category: "bio",
-              title: "Upgrade to Professional Plain-English Bio",
-              impact: "medium",
-              description: "AI reframed your bio to sound polished, accessible, and clear for homeowners without overly technical jargon.",
-              currentValue: rawBio,
-              suggestedValue: aiText,
-              actionType: "apply_bio",
-              actionLabel: "⚡ Apply Polished Bio"
-            });
-          }
         }
       } catch (e) {
         console.warn("Gemini bio refinement fallback used:", e);

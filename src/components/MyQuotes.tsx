@@ -159,7 +159,7 @@ export default function MyQuotes() {
       });
 
       const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
-      const validQuotes = [];
+      const validQuotes: any[] = [];
 
       for (const quote of quotesData) {
         if (quote.status === "rejected") {

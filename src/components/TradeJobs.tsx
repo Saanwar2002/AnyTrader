@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db, collection, query, where, orderBy, onSnapshot, handleFirestoreError, OperationType } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
-import { Briefcase, Clock, MapPin, Loader2, AlertCircle } from "lucide-react";
+import { Briefcase, Clock, MapPin, Loader2, AlertCircle, Zap, Calendar } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 
