@@ -1443,7 +1443,7 @@ const libraries: any[] = ['places', 'geometry'];
     
     // Fairness Engine Enforcement
     if (!mediationStakePaid) {
-      alert("To raise a dispute, you must authorize a £15 Mediation Stake. This is refunded if the claim is valid, but compensated to the trader if the claim is frivolous.");
+      alert("To raise a dispute, you must authorize a £25.00 Mediation Stake. This is refunded if the claim is valid, but compensated to the trader if the claim is frivolous.");
       return;
     }
 
@@ -1496,9 +1496,9 @@ const libraries: any[] = ['places', 'geometry'];
             currency: 'gbp',
             product_data: {
               name: 'Mediation Stake',
-              description: '£15 Mediation Stake (Refundable if claim is valid)',
+              description: '£25.00 Mediation Stake (Refundable if claim is valid)',
             },
-            unit_amount: 1500,
+            unit_amount: 2500,
           },
           userId: user.uid,
           mode: 'payment',
@@ -5810,9 +5810,9 @@ const libraries: any[] = ['places', 'geometry'];
                       className="mt-1 w-4 h-4 text-blue-600 border-black rounded focus:ring-blue-500"
                     />
                     <label htmlFor="mediationStake" className="space-y-1 cursor-pointer">
-                      <p className="text-sm font-bold text-blue-900 leading-tight">Authorize £15 Mediation Stake</p>
+                      <p className="text-sm font-bold text-blue-900 leading-tight">Authorize £25.00 Mediation Stake</p>
                       <p className="text-[10px] text-blue-700 leading-normal">
-                        To prevent frivolous claims, you must stake £15. This is **refunded** if the dispute is valid. If the dispute is found to be unreasonable (petty), the stake will be released to the trader as Inconvenience Pay.
+                        To prevent frivolous claims, you must stake £25.00. This is **refunded** if the dispute is valid. If the dispute is found to be unreasonable (petty), the stake will be released to the trader as Inconvenience Pay.
                       </p>
                     </label>
                   </div>

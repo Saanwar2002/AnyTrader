@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Video, Camera, StopCircle, Upload, CheckCircle2, ShieldCheck, Play, Loader2, Trash2, Sparkles, AlertCircle, Award, Zap, Check, RotateCcw, SwitchCamera } from "lucide-react";
-import { db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, onSnapshot } from "@/src/firebase";
+import { Video, Camera, StopCircle, Upload, CheckCircle2, ShieldCheck, Play, Loader2, Trash2, Sparkles, AlertCircle, Award, Zap, Check, RotateCcw, SwitchCamera, RefreshCw, Calendar, AlertTriangle } from "lucide-react";
+import { auth, db, doc, updateDoc, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, onSnapshot } from "@/src/firebase";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/src/lib/utils";
@@ -36,6 +36,74 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
   const videoAddonConfig = platformConfig?.paidAddons?.verifiedVideoPro;
   const plan = calculateVerifiedVideoProSubscription("monthly", videoAddonConfig);
   const isVideoProSubscriber = Boolean(profile?.hasVerifiedVideoProSubscription);
+  const isVideoProCanceling = Boolean(profile?.videoProCancelAtPeriodEnd);
+
+  const formatPeriodDate = (isoString?: string) => {
+    if (!isoString) return "End of billing period";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "End of billing period";
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return "End of billing period";
+    }
+  };
+
+  const handleCancelVideoPro = async () => {
+    setIsSubscribing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType: "video_pro" })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Subscription scheduled to cancel", {
+          description: `Your Video Pro subscription will cancel on ${formatPeriodDate(data.currentPeriodEnd)}. Benefits remain active until then.`
+        });
+      } else {
+        toast.error(data.error || "Failed to schedule cancellation.");
+      }
+    } catch (err) {
+      console.error("Cancel video pro error:", err);
+      toast.error("Failed to cancel subscription.");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  const handleReactivateVideoPro = async () => {
+    setIsSubscribing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/reactivate-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType: "video_pro" })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Subscription reactivated!", {
+          description: "Your Video Pro subscription will continue auto-renewing normally."
+        });
+      } else {
+        toast.error(data.error || "Failed to reactivate subscription.");
+      }
+    } catch (err) {
+      console.error("Reactivate video pro error:", err);
+      toast.error("Failed to reactivate subscription.");
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<any>(null);
@@ -67,26 +135,59 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
       return;
     }
 
+    if (isVideoProSubscriber && isVideoProCanceling) {
+      await handleReactivateVideoPro();
+      return;
+    }
+
+    if (isVideoProSubscriber) {
+      await handleCancelVideoPro();
+      return;
+    }
+
     setIsSubscribing(true);
     try {
-      const newStatus = !isVideoProSubscriber;
-      const updates: any = {
-        hasVerifiedVideoProSubscription: newStatus,
-        videoProSubscribedAt: newStatus ? new Date().toISOString() : null,
-        videoVerificationStatus: newStatus ? "verified" : (profile?.videoVerificationUrl ? "verified" : "none")
-      };
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: profile.uid,
+          tierName: "Verified Video Pro",
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(plan.monthlyPrice * 100),
+            recurring: { interval: 'month' },
+            product_data: {
+              name: "Verified Video Pro Add-on",
+              description: "Verified video intro badge, priority placement, and +35 AI match score boost."
+            }
+          },
+          successUrl: `${window.location.origin}/profile?video_pro=success`,
+          cancelUrl: `${window.location.origin}/profile`,
+          metadata: {
+            isVideoPro: "true",
+            type: "video_pro_subscription",
+            userId: profile.uid
+          }
+        })
+      });
 
-      await updateDoc(doc(db, "users", profile.uid), updates);
-      if (onUpdateProfile) onUpdateProfile(updates);
-
-      if (newStatus) {
-        toast.success(`⚡ Verified Video Pro Active! Granted +${plan.matchScoreBonus} AI Match Score points and Priority Quote Placement (£${plan.monthlyPrice}/mo).`);
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       } else {
-        toast.info("Verified Video Pro subscription paused.");
+        toast.success(`⚡ Verified Video Pro Active! Granted +${plan.matchScoreBonus} AI Match Score points and Priority Quote Placement (£${plan.monthlyPrice}/mo).`);
       }
     } catch (err) {
-      console.error("Subscription update error:", err);
-      toast.error("Failed to update subscription. Please try again.");
+      console.error("Subscription checkout error:", err);
+      toast.error("Failed to initiate subscription checkout. Please try again.");
     } finally {
       setIsSubscribing(false);
     }
@@ -454,11 +555,23 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
                     <Award className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <h4 className="font-extrabold text-white text-xs">Verified Video Pro Badge Subscription</h4>
                       <span className="bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0.5 rounded border border-black">
                         £15.00 / month
                       </span>
+                      {isVideoProCanceling && (
+                        <span className="bg-rose-500/80 text-white font-black text-[9px] px-1.5 py-0.5 rounded border border-rose-400/50 flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          Cancels on {formatPeriodDate(profile?.videoProCurrentPeriodEnd)}
+                        </span>
+                      )}
+                      {isVideoProSubscriber && !isVideoProCanceling && profile?.videoProCurrentPeriodEnd && (
+                        <span className="text-[9px] text-indigo-300 font-medium flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" />
+                          Renews on {formatPeriodDate(profile?.videoProCurrentPeriodEnd)}
+                        </span>
+                      )}
                     </div>
                     <p className="text-[10px] text-indigo-200">Unlock priority quote placement, +35 AI match points, and gold trust badges.</p>
                   </div>
@@ -470,17 +583,24 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
                   disabled={isSubscribing}
                   className={cn(
                     "px-4 py-2.5 rounded-xl font-extrabold text-xs border border-black shadow-sm flex items-center justify-center gap-2 transition active:scale-98 shrink-0",
-                    isVideoProSubscriber
-                      ? "bg-amber-400 hover:bg-amber-500 text-slate-950"
+                    isVideoProCanceling
+                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      : isVideoProSubscriber
+                      ? "bg-amber-400 hover:bg-rose-500 hover:text-white text-slate-950"
                       : "bg-indigo-600 hover:bg-indigo-700 text-white"
                   )}
                 >
                   {isSubscribing ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isVideoProCanceling ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Resume Auto-Renewal</span>
+                    </>
                   ) : isVideoProSubscriber ? (
                     <>
                       <Check className="w-4 h-4 text-slate-950" />
-                      <span>Subscribed (£15/mo)</span>
+                      <span>Subscribed (Click to Cancel)</span>
                     </>
                   ) : (
                     <>

@@ -29,20 +29,22 @@ This document outlines the critical technical steps required to move AnyTrader f
 - [ ] **Other Integrations**: Verify keys for Stripe, Twilio, or any other 3rd party services are correctly set in the environment.
 
 ## 4. Capacitor / Mobile App Configurations
-- [ ] **Remove Live Testing URL**: 
-    - Open `capacitor.config.json`.
-    - **CRITICAL**: Remove the `server.url` and `server.cleartext` properties before running your production build. Leaving these in will cause the app to load your development server instead of the bundled production files.
+- [x] **Remove Live Testing URL**: 
+    - Verified `capacitor.config.json`.
+    - Development URLs and cleartext traffic have been stripped. The native container serves bundled production assets and uses deep linking (`anytrader://`).
 
 ## 5. Final Application Audit
-- [ ] **Clear Test Data**: Flush audit logs and delete "Test" users/jobs from the Admin Dashboard.
-- [ ] **Check "Super Admin" Access**: Confirm that your email (`saanwar2002@gmail.com`) is correctly hardcoded in `firestore.rules` and `AdminDashboard.tsx`.
-- [ ] **Mobile Responsiveness**: Test the live URL on multiple mobile devices.
-- [ ] **Performance Check**: Ensure images are optimized and the app loads within < 3 seconds.
+- [ ] **Clear Test Data**: Flush development/mock audit logs and delete test users/jobs from the Firestore database prior to live customer onboarding.
+- [ ] **Verify Super Admin Claims & Roles**:
+    - Ensure your admin user account has the `admin` custom claim assigned via `npx tsx scripts/set-admin-claim.ts <your-email-or-uid>` or exists in `/admins/{adminId}`.
+    - Confirm access to `/admin` (`MasterAdminLayout.tsx`). Note: Hardcoded emails have been superseded by custom claims, Firestore admin records, and configurable admin email lists.
+- [ ] **Mobile Responsiveness**: Verify the live preview and custom domain on mobile devices (viewport safe-area insets, keyboard height compensation, bottom navigation spacing).
+- [ ] **Performance Check**: Verify route lazy-loading and dynamic imports (all 35+ routes in `App.tsx` use `lazyWithRetry`).
 
 ## 6. Post-Launch Monitoring
-- [ ] **Error Tracking**: Monitor the Admin Dashboard "Audit Logs" for any "Permission Denied" errors.
-- [ ] **User Feedback**: Set up a support email or feedback form for early users.
-- [ ] **AI Insights**: Regularly check the "AI Platform Insights" tab to monitor marketplace health.
+- [ ] **Error Tracking**: Monitor the Master Admin "Audit Logs" and Cloud Run logs for any unauthorized access or 4xx/5xx spikes.
+- [ ] **User Feedback**: Ensure the in-app support flow and email alerts are active for new signups.
+- [ ] **AI Insights & Telemetry**: Check unmatched search telemetry and AI Recommendation logs to monitor trade matching accuracy.
 
 ---
-*Last Updated: 2026-04-15*
+*Last Updated: 2026-09-09 (V6 Release Candidate)*

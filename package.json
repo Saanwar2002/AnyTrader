@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "recover": "git checkout -- src/components/shared/PlatformSwitcher.tsx src/App.tsx src/components/Layout.tsx",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "audit:release": "node scripts/final-release-audit.mjs"
   },
   "dependencies": {
     "@capacitor-community/native-market": "^8.0.0",

@@ -4,9 +4,9 @@ import {
   Search, ArrowRight, Settings, CheckCircle2, AlertTriangle, Clock,
   Wrench, ShieldCheck, Zap, TrendingUp, BarChart3, FileText, Download,
   Sliders, UserCheck, PieChart, Check, Send, Sparkles, MapPin, RefreshCw, X,
-  PoundSterling, CreditCard, Layers, Calculator, Info, Percent, SlidersHorizontal, LayoutGrid
+  PoundSterling, CreditCard, Layers, Calculator, Info, Percent, SlidersHorizontal, LayoutGrid, Loader2, ExternalLink
 } from "lucide-react";
-import { db, collection, query, where, onSnapshot } from "@/src/firebase";
+import { db, auth, collection, query, where, onSnapshot } from "@/src/firebase";
 import { useAuth } from "../AuthProvider";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -156,6 +156,147 @@ export default function GothamHousingPortal() {
   const [saasBillingCycle, setSaasBillingCycle] = useState<"monthly" | "annual">("monthly");
   const [isSaaSCalculatorOpen, setIsSaaSCalculatorOpen] = useState(false);
   const [calculatorDoors, setCalculatorDoors] = useState(4850);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const isGothamActive = Boolean(profile?.isGothamSubscriber || profile?.subscriptionType === "gotham_saas");
+  const isGothamCanceling = Boolean(profile?.gothamCancelAtPeriodEnd || profile?.cancelAtPeriodEnd);
+
+  const handleSyncStripeB2BInvoice = async () => {
+    if (!user) {
+      toast.error("Please sign in to proceed with Gotham SaaS onboarding");
+      return;
+    }
+    const plan = calculateGothamSaaSPlan(calculatorDoors, saasBillingCycle);
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: plan.tierName,
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(plan.monthlyFee * 100),
+            recurring: { interval: 'month' },
+            product_data: {
+              name: `Gotham B2B SaaS (${plan.tierName})`,
+              description: `Metered licensing for ${calculatorDoors.toLocaleString()} housing doors. Regulatory & Awaab's Law SLA compliance.`
+            }
+          },
+          successUrl: `${window.location.origin}/corporate?gotham_saas=success`,
+          cancelUrl: `${window.location.origin}/corporate`,
+          metadata: {
+            subscriptionType: "gotham_saas",
+            type: "gotham_saas",
+            gothamDoorsCount: String(calculatorDoors),
+            gothamTierName: plan.tierName,
+            gothamBillingCycle: saasBillingCycle,
+            userId: user.uid
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(`⚡ Gotham SaaS Subscription Active (${plan.tierName})!`);
+        setIsSaaSCalculatorOpen(false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to initiate Gotham SaaS checkout session");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCancelGothamSaaS = async () => {
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType: "gotham_saas" })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Gotham SaaS subscription scheduled for cancellation at renewal.", {
+          description: "Full regulatory SLA access remains active until your renewal date."
+        });
+      } else {
+        toast.error(data.error || "Failed to cancel Gotham subscription");
+      }
+    } catch (e) {
+      toast.error("Error scheduling Gotham cancellation");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactivateGothamSaaS = async () => {
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/reactivate-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType: "gotham_saas" })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Gotham SaaS subscription reactivated!", {
+          description: "Your B2B SaaS license will continue auto-renewing normally."
+        });
+      } else {
+        toast.error(data.error || "Failed to reactivate Gotham subscription");
+      }
+    } catch (e) {
+      toast.error("Error reactivating Gotham subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleOpenStripePortal = async () => {
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-customer-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ returnUrl: window.location.href })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || "Failed to open Stripe Customer Portal");
+      }
+    } catch (e) {
+      toast.error("Failed to connect to Stripe Portal");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const totalUnits = estates.reduce((acc, e) => acc + e.unitsCount, 0);
   const totalActiveRepairs = tickets.filter(t => t.status !== "Completed").length;
@@ -709,17 +850,63 @@ export default function GothamHousingPortal() {
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                 <span>Includes Housing Regulator Compliance Audit Trail & Unlimited Dispatch.</span>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setCalculatorDoors(totalUnits);
-                  setIsSaaSCalculatorOpen(true);
-                }}
-                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl border border-black shadow-md flex items-center gap-1.5 transition active:scale-95"
-              >
-                <Calculator className="w-4 h-4" />
-                Open SaaS License Calculator
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {isGothamActive ? (
+                  isGothamCanceling ? (
+                    <button
+                      type="button"
+                      onClick={handleReactivateGothamSaaS}
+                      disabled={isProcessing}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center gap-1.5 transition"
+                    >
+                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Resume Renewal
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCancelGothamSaaS}
+                      disabled={isProcessing}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center gap-1.5 transition"
+                    >
+                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-slate-950" />}
+                      Cancel at Renewal
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSyncStripeB2BInvoice}
+                    disabled={isProcessing}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center gap-1.5 transition"
+                  >
+                    {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4 text-amber-300" />}
+                    Subscribe to Gotham SaaS
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleOpenStripePortal}
+                  disabled={isProcessing}
+                  className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs rounded-xl border border-white/20 text-white flex items-center gap-1.5 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-300" />
+                  Stripe Portal
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCalculatorDoors(totalUnits);
+                    setIsSaaSCalculatorOpen(true);
+                  }}
+                  className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl border border-black shadow-md flex items-center gap-1.5 transition active:scale-95"
+                >
+                  <Calculator className="w-4 h-4" />
+                  SaaS Calculator
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1119,22 +1306,51 @@ export default function GothamHousingPortal() {
               })()}
 
               {/* Modal Actions */}
-              <div className="flex gap-3 pt-1">
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                {isGothamActive ? (
+                  isGothamCanceling ? (
+                    <button
+                      type="button"
+                      onClick={handleReactivateGothamSaaS}
+                      disabled={isProcessing}
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center justify-center gap-2 transition"
+                    >
+                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      Resume Auto-Renewal
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleCancelGothamSaaS}
+                      disabled={isProcessing}
+                      className="flex-1 py-3 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center justify-center gap-2 transition"
+                    >
+                      {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4 text-white" />}
+                      Cancel at Renewal
+                    </button>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSyncStripeB2BInvoice}
+                    disabled={isProcessing}
+                    className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center justify-center gap-2 transition"
+                  >
+                    {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4 text-amber-300" />}
+                    Confirm & Sync Stripe B2B Invoice
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => {
-                    const plan = calculateGothamSaaSPlan(calculatorDoors, saasBillingCycle);
-                    toast.success(
-                      `⚡ Gotham SaaS Plan Updated to ${plan.tierName}!\n` +
-                      `${calculatorDoors.toLocaleString()} Doors @ £${plan.effectiveRatePerDoor.toFixed(2)}/door/mo = £${plan.monthlyFee.toLocaleString()}/mo synced with Stripe B2B Direct Invoicing.`
-                    );
-                    setIsSaaSCalculatorOpen(false);
-                  }}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl border border-black shadow-md flex items-center justify-center gap-2 transition"
+                  onClick={handleOpenStripePortal}
+                  disabled={isProcessing}
+                  className="px-4 py-3 bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs rounded-xl border border-black transition flex items-center justify-center gap-1.5"
                 >
-                  <CreditCard className="w-4 h-4 text-amber-300" />
-                  Confirm & Sync Stripe B2B Invoice
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-300" />
+                  Stripe Portal
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setIsSaaSCalculatorOpen(false)}

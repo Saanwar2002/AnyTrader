@@ -14,6 +14,12 @@ import twilio from 'twilio';
 import rateLimit from "express-rate-limit";
 import { startInstantMatchEngine } from "./instantMatchWorker.ts";
 import * as geminiServer from "./src/services/geminiServer.ts";
+import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError } from "./src/server/httpErrors.ts";
+import { runProductionChecks } from "./src/server/productionChecks.ts";
+import { validateJobTransition, validateMilestoneTransition, validateRideTransition } from "./src/server/stateMachine.ts";
+import { PaymentLedgerEngine } from "./src/server/paymentLedger.ts";
+import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload } from "./src/server/authorization.ts";
+import { domainEvents } from "./src/server/domainEvents.ts";
 
 dotenv.config();
 
@@ -1085,10 +1091,20 @@ async function startServer() {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.client_reference_id;
         
-        if (session.metadata?.isExclusiveAddon === 'true' && userId && db) {
+        if ((session.metadata?.isVideoPro === 'true' || session.metadata?.type === 'video_pro_subscription') && userId && db) {
+          await db.collection("users").doc(userId).update({
+             hasVerifiedVideoProSubscription: true,
+             videoProSubscribedAt: new Date().toISOString(),
+             videoVerificationStatus: "verified",
+             videoProSubscriptionId: session.subscription as string || session.id,
+             updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        else if ((session.metadata?.isExclusiveAddon === 'true' || session.metadata?.type === 'exclusive_leads') && userId && db) {
           await db.collection("users").doc(userId).update({
              hasExclusiveAddon: true,
              isExclusiveActive: true,
+             exclusiveSubscribedAt: new Date().toISOString(),
              exclusiveSubscriptionId: session.subscription as string || session.id, // Depending on mode
              updatedAt: admin.firestore.FieldValue.serverTimestamp()
           });
@@ -1099,7 +1115,12 @@ async function startServer() {
             const rawTier = session.metadata?.tierName || "Pro";
             const lowerTier = rawTier.toLowerCase();
             let canonicalTier = 'pro';
-            if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
+            let isLandlord = false;
+            if (lowerTier.includes('landlord') || session.metadata?.tier === 'landlord' || session.metadata?.subscriptionType === 'landlord') {
+              canonicalTier = 'landlord';
+              isLandlord = true;
+            }
+            else if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
             else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
             else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
             else canonicalTier = 'payg';
@@ -1109,21 +1130,34 @@ async function startServer() {
               subscriptionId: subscriptionId,
               tierId: rawTier,
               tier: canonicalTier,
+              isLandlord: isLandlord || canonicalTier === 'landlord',
+              subscriptionType: isLandlord ? 'landlord' : (canonicalTier !== 'payg' ? 'tier' : 'standard'),
               isPro: canonicalTier !== 'payg',
               isProInvoiceSubscriber: canonicalTier !== 'payg',
               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
         } else if (session.mode === 'payment') {
-          if (session.metadata?.type === 'mediation_stake' && session.metadata?.jobId && db) {
+          if (session.metadata?.type === 'ad_wallet_topup' && userId && db) {
+            const topupAmount = Number(session.metadata?.topupAmount) || (session.amount_total ? session.amount_total / 100 : 0);
+            if (topupAmount > 0) {
+              await db.collection("users").doc(userId).set({
+                adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          } else if (session.metadata?.type === 'mediation_stake' && session.metadata?.jobId && db) {
             await db.collection("jobs").doc(session.metadata.jobId).update({
               status: "disputed",
-              mediationStakePaid: true,
+              "dispute.status": "pending_arbitration",
+              "dispute.mediationStakePaid": true,
+              "dispute.mediationStakeAmount": 25.00,
+              "dispute.stakePaymentId": session.id,
+              "dispute.paidAt": admin.firestore.FieldValue.serverTimestamp(),
               disputeReason: session.metadata.disputeReason || "Unspecified",
               technicalFaultReport: session.metadata.technicalFaultReport || "Unspecified",
               disputedAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            // We could also trigger notifications here if needed
           }
           if (session.metadata?.type === 'boost' && session.metadata?.jobId && db) {
             const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
@@ -1158,7 +1192,7 @@ async function startServer() {
                }, { merge: true });
             }
           } else if (session.metadata?.type === 'milestone_funding' && session.metadata?.jobId && session.metadata?.quoteId && session.metadata?.milestoneId && db) {
-            // Log successful funding of a milestone
+            // Log successful funding of a milestone with V6 Payment Ledger & State Machine
             const { jobId, quoteId, milestoneId } = session.metadata;
             const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
             const quoteDoc = await quoteRef.get();
@@ -1166,20 +1200,49 @@ async function startServer() {
             if (quoteDoc.exists) {
               const quoteData = quoteDoc.data();
               const milestones = quoteData?.milestones || [];
+              let fundedAmount = 0;
               const updatedMilestones = milestones.map((m: any) => {
                 if (m.id === milestoneId) {
+                  try {
+                    validateMilestoneTransition(m.status || 'pending', 'funded');
+                  } catch (stateErr) {
+                    console.warn(`Milestone transition warning on ${m.id}:`, stateErr);
+                  }
+                  fundedAmount = Number(m.amount || m.verifiedAmount || (session.amount_total ? session.amount_total / 100 : 0));
                   return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: session.payment_intent as string };
                 }
                 return m;
               });
               
               await quoteRef.update({ milestones: updatedMilestones });
+
+              // Record to immutable payment ledger
+              try {
+                await PaymentLedgerEngine.recordEscrowFunding(db, {
+                  jobId,
+                  milestoneId,
+                  paymentIntentId: session.payment_intent as string || `pi_${event.id}`,
+                  idempotencyKey: `webhook_${event.id}`,
+                  customerId: session.client_reference_id || "homeowner",
+                  traderId: quoteData?.tradespersonId || "trader",
+                  verifiedAmount: session.amount_total || Math.round(fundedAmount * 100),
+                  currency: session.currency || "gbp"
+                });
+              } catch (ledgErr) {
+                console.error("Ledger escrow funding error:", ledgErr);
+              }
+
+              await domainEvents.dispatch("MILESTONE_FUNDED", milestoneId, session.client_reference_id || "homeowner", {
+                jobId,
+                quoteId,
+                amount: fundedAmount
+              }, `webhook_${event.id}`, db);
               
               // Notify trader
               await db.collection("notifications").add({
                 userId: quoteData?.tradespersonId,
                 title: "Milestone Funded! 💰",
-                message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title}". You can now start work!`,
+                message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title || 'Milestone'}". You can now start work!`,
                 type: "status",
                 link: `/job/${jobId}`,
                 read: false,
@@ -1200,8 +1263,18 @@ async function startServer() {
             const driverId = session.metadata.driverId;
             const amount = session.amount_total ? session.amount_total / 100 : 0;
 
+            const rideRef = db.collection("ride_requests").doc(rideId);
+            const rideSnap = await rideRef.get();
+            const rideData = rideSnap.data();
+
+            try {
+              validateRideTransition(rideData?.status || "in_progress", "completed");
+            } catch (rideTransErr) {
+              console.warn(`Ride transition warning on ${rideId}:`, rideTransErr);
+            }
+
             // 1. Update ride status
-            await db.collection("ride_requests").doc(rideId).update({
+            await rideRef.update({
               status: "completed",
               paymentStatus: "paid",
               payoutTransferred: true, // Handled automatically by Stripe transfer_data
@@ -1209,7 +1282,26 @@ async function startServer() {
               paidAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            // 2. Update driver metrics
+            // 2. Record ledger entry for ride payment
+            const ledgerEntryId = `ledg_ride_${event.id}`;
+            const farePence = session.amount_total || Math.round(amount * 100);
+            const feePence = Math.round(farePence * 0.12);
+            await db.collection("payment_ledger").doc(ledgerEntryId).set({
+              entryId: ledgerEntryId,
+              transactionId: session.payment_intent as string || `pi_${event.id}`,
+              idempotencyKey: `webhook_ride_${event.id}`,
+              payerId: rideData?.passengerId || session.client_reference_id || "passenger",
+              payeeId: driverId || "driver",
+              amount: farePence,
+              platformFee: feePence,
+              netPayout: farePence - feePence,
+              currency: session.currency || "gbp",
+              type: "DIRECT_PAYOUT",
+              status: "completed",
+              createdAt: new Date().toISOString()
+            });
+
+            // 3. Update driver metrics
             if (driverId) {
               const today = new Date().toISOString().split('T')[0];
               const metricsRef = db.collection("driver_metrics").doc(driverId);
@@ -1270,6 +1362,28 @@ async function startServer() {
              const userId = usersQuery.docs[0].id;
              await db.collection("users").doc(userId).update({
                subscriptionStatus: "canceled",
+               tier: "payg",
+               isPro: false,
+               isProInvoiceSubscriber: false,
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             });
+           }
+
+           const videoProQuery = await db.collection("users").where("videoProSubscriptionId", "==", subscription.id).get();
+           if (!videoProQuery.empty) {
+             const vUserId = videoProQuery.docs[0].id;
+             await db.collection("users").doc(vUserId).update({
+               hasVerifiedVideoProSubscription: false,
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             });
+           }
+
+           const exclusiveQuery = await db.collection("users").where("exclusiveSubscriptionId", "==", subscription.id).get();
+           if (!exclusiveQuery.empty) {
+             const eUserId = exclusiveQuery.docs[0].id;
+             await db.collection("users").doc(eUserId).update({
+               hasExclusiveAddon: false,
+               isExclusiveActive: false,
                updatedAt: admin.firestore.FieldValue.serverTimestamp()
              });
            }
@@ -1352,11 +1466,57 @@ async function startServer() {
         console.warn("Stripe is not configured. Mocking successful checkout flow for development testing.");
         // If Stripe is not set up, just fake the redirect back and update the database directly for local testing
         if (db) {
-           if (metadata.isExclusiveAddon === 'true') {
+           if (metadata.isVideoPro === 'true' || metadata.type === 'video_pro_subscription') {
+             await db.collection("users").doc(userId).set({
+               hasVerifiedVideoProSubscription: true,
+               videoProSubscribedAt: new Date().toISOString(),
+               videoVerificationStatus: "verified",
+               videoProSubscriptionId: "mock_sub_vpro_" + Math.random().toString(36).substring(7),
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             }, { merge: true });
+           }
+           else if (metadata.isExclusiveAddon === 'true' || metadata.type === 'exclusive_leads') {
              await db.collection("users").doc(userId).set({
                hasExclusiveAddon: true,
                isExclusiveActive: true,
-               exclusiveSubscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
+               exclusiveSubscribedAt: new Date().toISOString(),
+               exclusiveSubscriptionId: "mock_sub_excl_" + Math.random().toString(36).substring(7),
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             }, { merge: true });
+           }
+           else if (metadata.subscriptionType === 'gotham_saas' || metadata.type === 'gotham_saas') {
+             await db.collection("users").doc(userId).set({
+               subscriptionStatus: "active",
+               subscriptionId: "mock_sub_gotham_" + Math.random().toString(36).substring(7),
+               tierId: metadata.gothamTierName || "Gotham Enterprise",
+               tier: "gotham",
+               subscriptionType: "gotham_saas",
+               isGothamSubscriber: true,
+               gothamDoorsCount: Number(metadata.gothamDoorsCount) || 100,
+               gothamTierName: metadata.gothamTierName || "Gotham Enterprise",
+               gothamBillingCycle: metadata.gothamBillingCycle || "monthly",
+               gothamCancelAtPeriodEnd: false,
+               cancelAtPeriodEnd: false,
+               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
+             }, { merge: true });
+           }
+           else if (metadata.subscriptionType === 'driver_gold' || metadata.type === 'driver_gold') {
+             await db.collection("users").doc(userId).set({
+               subscriptionStatus: "active",
+               subscriptionId: "mock_sub_gold_driver_" + Math.random().toString(36).substring(7),
+               tierId: "Gold Driver",
+               tier: "gold",
+               driverTier: "gold",
+               subscriptionType: "driver_gold",
+               isGoldDriver: true,
+               commissionRate: 0.10,
+               destinationFilters: 4,
+               advanceBookingDays: 14,
+               priorityDispatch: 50,
+               driverCancelAtPeriodEnd: false,
+               cancelAtPeriodEnd: false,
+               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
                updatedAt: admin.firestore.FieldValue.serverTimestamp()
              }, { merge: true });
            }
@@ -1380,7 +1540,15 @@ async function startServer() {
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
              }, { merge: true });
            } else if (mode === 'payment') {
-             if (metadata.type === 'milestone_funding' && metadata.jobId && metadata.quoteId && metadata.milestoneId) {
+             if (metadata.type === 'ad_wallet_topup') {
+               const topupAmount = Number(metadata.topupAmount) || 0;
+               if (topupAmount > 0) {
+                 await db.collection("users").doc(userId).set({
+                   adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
+                   updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                 }, { merge: true });
+               }
+             } else if (metadata.type === 'milestone_funding' && metadata.jobId && metadata.quoteId && metadata.milestoneId) {
                const { jobId, quoteId, milestoneId } = metadata;
                const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
                const quoteDoc = await quoteRef.get();
@@ -1644,6 +1812,321 @@ async function startServer() {
     }
   });
 
+  // Stripe Customer Portal Session (Manage subscriptions, cancel, update cards, invoices)
+  app.post("/api/create-customer-portal-session", requireAuth, paymentLimiter, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+      const { returnUrl } = req.body;
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+
+      const userData = userDoc.data();
+      const customerId = userData?.stripeCustomerId;
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ url: returnUrl || `${appUrl}/billing?portal=mock_preview` });
+      }
+
+      if (!customerId) {
+        return res.status(400).json({ error: "No active Stripe customer account found for this profile." });
+      }
+
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl || `${appUrl}/billing`,
+      });
+
+      res.json({ url: portalSession.url });
+    } catch (error: any) {
+      console.error("Customer Portal Session Error:", error);
+      res.status(500).json({ error: error.message || "Failed to create portal session" });
+    }
+  });
+
+  // Cancel Subscription at Next Renewal Date (Cancel at Period End)
+  app.post("/api/cancel-subscription", requireAuth, paymentLimiter, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const { subscriptionType = "tier" } = req.body; // 'tier' | 'exclusive_leads' | 'video_pro'
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+
+      const userData = userDoc.data() || {};
+      let subId: string | undefined;
+      let fieldUpdates: any = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (subscriptionType === "exclusive_leads") {
+        subId = userData.exclusiveSubscriptionId;
+        const currentEnd = userData.exclusiveCurrentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        fieldUpdates.exclusiveCancelAtPeriodEnd = true;
+        fieldUpdates.exclusiveCurrentPeriodEnd = currentEnd;
+      } else if (subscriptionType === "video_pro") {
+        subId = userData.videoProSubscriptionId;
+        const currentEnd = userData.videoProCurrentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        fieldUpdates.videoProCancelAtPeriodEnd = true;
+        fieldUpdates.videoProCurrentPeriodEnd = currentEnd;
+      } else if (subscriptionType === "gotham_saas") {
+        subId = userData.gothamSubscriptionId || userData.subscriptionId;
+        const currentEnd = userData.gothamCurrentPeriodEnd || userData.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        fieldUpdates.gothamCancelAtPeriodEnd = true;
+        fieldUpdates.cancelAtPeriodEnd = true;
+        fieldUpdates.gothamCurrentPeriodEnd = currentEnd;
+        fieldUpdates.currentPeriodEnd = currentEnd;
+      } else if (subscriptionType === "driver_gold") {
+        subId = userData.driverSubscriptionId || userData.subscriptionId;
+        const currentEnd = userData.driverCurrentPeriodEnd || userData.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        fieldUpdates.driverCancelAtPeriodEnd = true;
+        fieldUpdates.cancelAtPeriodEnd = true;
+        fieldUpdates.driverCurrentPeriodEnd = currentEnd;
+        fieldUpdates.currentPeriodEnd = currentEnd;
+      } else {
+        // Default membership tier
+        subId = userData.subscriptionId;
+        const currentEnd = userData.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        fieldUpdates.cancelAtPeriodEnd = true;
+        fieldUpdates.currentPeriodEnd = currentEnd;
+      }
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        // Fallback for mock/development environment
+        await db.collection("users").doc(authUid).update(fieldUpdates);
+        return res.json({
+          success: true,
+          mock: true,
+          cancelAtPeriodEnd: true,
+          currentPeriodEnd: fieldUpdates.currentPeriodEnd || fieldUpdates.exclusiveCurrentPeriodEnd || fieldUpdates.videoProCurrentPeriodEnd,
+          message: "Subscription set to cancel at the end of the current billing cycle without renewing."
+        });
+      }
+
+      if (subId && !subId.startsWith("mock_")) {
+        // Call Stripe API to set cancel_at_period_end = true
+        const updatedSub = await stripe.subscriptions.update(subId, {
+          cancel_at_period_end: true
+        });
+
+        const periodEndIso = new Date(updatedSub.current_period_end * 1000).toISOString();
+        if (subscriptionType === "exclusive_leads") {
+          fieldUpdates.exclusiveCancelAtPeriodEnd = true;
+          fieldUpdates.exclusiveCurrentPeriodEnd = periodEndIso;
+        } else if (subscriptionType === "video_pro") {
+          fieldUpdates.videoProCancelAtPeriodEnd = true;
+          fieldUpdates.videoProCurrentPeriodEnd = periodEndIso;
+        } else {
+          fieldUpdates.cancelAtPeriodEnd = true;
+          fieldUpdates.currentPeriodEnd = periodEndIso;
+        }
+      }
+
+      await db.collection("users").doc(authUid).update(fieldUpdates);
+
+      res.json({
+        success: true,
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: fieldUpdates.currentPeriodEnd || fieldUpdates.exclusiveCurrentPeriodEnd || fieldUpdates.videoProCurrentPeriodEnd,
+        message: "Subscription will cancel at the end of the current billing cycle. You will retain all benefits until your renewal date."
+      });
+    } catch (error: any) {
+      console.error("Cancel Subscription Error:", error);
+      res.status(500).json({ error: error.message || "Failed to schedule cancellation" });
+    }
+  });
+
+  // Reactivate / Resume Subscription Before Period End
+  app.post("/api/reactivate-subscription", requireAuth, paymentLimiter, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const { subscriptionType = "tier" } = req.body; // 'tier' | 'exclusive_leads' | 'video_pro'
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+
+      const userData = userDoc.data() || {};
+      let subId: string | undefined;
+      let fieldUpdates: any = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (subscriptionType === "exclusive_leads") {
+        subId = userData.exclusiveSubscriptionId;
+        fieldUpdates.exclusiveCancelAtPeriodEnd = false;
+      } else if (subscriptionType === "video_pro") {
+        subId = userData.videoProSubscriptionId;
+        fieldUpdates.videoProCancelAtPeriodEnd = false;
+      } else if (subscriptionType === "gotham_saas") {
+        subId = userData.gothamSubscriptionId || userData.subscriptionId;
+        fieldUpdates.gothamCancelAtPeriodEnd = false;
+        fieldUpdates.cancelAtPeriodEnd = false;
+      } else if (subscriptionType === "driver_gold") {
+        subId = userData.driverSubscriptionId || userData.subscriptionId;
+        fieldUpdates.driverCancelAtPeriodEnd = false;
+        fieldUpdates.cancelAtPeriodEnd = false;
+      } else {
+        subId = userData.subscriptionId;
+        fieldUpdates.cancelAtPeriodEnd = false;
+      }
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        // Fallback for mock/development environment
+        await db.collection("users").doc(authUid).update(fieldUpdates);
+        return res.json({
+          success: true,
+          mock: true,
+          cancelAtPeriodEnd: false,
+          message: "Subscription successfully reactivated and will auto-renew normally."
+        });
+      }
+
+      if (subId && !subId.startsWith("mock_")) {
+        await stripe.subscriptions.update(subId, {
+          cancel_at_period_end: false
+        });
+      }
+
+      await db.collection("users").doc(authUid).update(fieldUpdates);
+
+      res.json({
+        success: true,
+        cancelAtPeriodEnd: false,
+        message: "Subscription successfully reactivated! Auto-renewal is resumed."
+      });
+    } catch (error: any) {
+      console.error("Reactivate Subscription Error:", error);
+      res.status(500).json({ error: error.message || "Failed to reactivate subscription" });
+    }
+  });
+
+  // Dispute Mediation Stake Stripe PaymentIntent (£25.00)
+  app.post("/api/disputes/create-stake-intent", requireAuth, paymentLimiter, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const { jobId, disputeReason, technicalFaultReport, isPropertyDamage = false, photos = [] } = req.body;
+
+      if (!jobId) {
+        return res.status(400).json({ error: "jobId is required" });
+      }
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const jobDoc = await db.collection("jobs").doc(jobId).get();
+      if (!jobDoc.exists) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const jobData = jobDoc.data() || {};
+      const stakeAmountPence = 2500; // £25.00
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        // Fallback for mock/dev environment
+        await db.collection("jobs").doc(jobId).update({
+          status: "disputed",
+          dispute: {
+            raisedBy: authUid,
+            reason: disputeReason || "Dispute raised",
+            technicalFaultReport: technicalFaultReport || "",
+            isPropertyDamage: Boolean(isPropertyDamage),
+            mediationStakePaid: true,
+            mediationStakeAmount: 25.00,
+            stakePaymentId: "mock_pi_stake_" + Math.random().toString(36).substring(7),
+            photos: Array.isArray(photos) ? photos : [],
+            status: "pending_arbitration",
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          },
+          disputedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.json({
+          success: true,
+          mock: true,
+          amount: 25.00,
+          status: "succeeded",
+          message: "Mediation stake of £25.00 authorized successfully. Dispute is now pending arbitration."
+        });
+      }
+
+      // Create real Stripe PaymentIntent
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: stakeAmountPence,
+        currency: "gbp",
+        metadata: {
+          type: "mediation_stake",
+          jobId,
+          disputeReason: disputeReason || "",
+          technicalFaultReport: technicalFaultReport || "",
+          isPropertyDamage: String(isPropertyDamage),
+          userId: authUid
+        },
+        description: `Mediation Dispute Stake for Job #${jobData.jobNo || jobId} (£25.00)`,
+        automatic_payment_methods: {
+          enabled: true
+        }
+      });
+
+      // Save pending dispute record
+      await db.collection("jobs").doc(jobId).update({
+        dispute: {
+          raisedBy: authUid,
+          reason: disputeReason || "Dispute raised",
+          technicalFaultReport: technicalFaultReport || "",
+          isPropertyDamage: Boolean(isPropertyDamage),
+          mediationStakePaid: false,
+          mediationStakeAmount: 25.00,
+          paymentIntentId: paymentIntent.id,
+          photos: Array.isArray(photos) ? photos : [],
+          status: "awaiting_payment",
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      });
+
+      res.json({
+        success: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        amount: 25.00
+      });
+    } catch (error: any) {
+      console.error("Create Dispute Stake Intent Error:", error);
+      res.status(500).json({ error: error.message || "Failed to initiate mediation stake" });
+    }
+  });
+
   // Server-Authoritative Direct-to-Driver Taxi Payment (QR Handshake)
   app.post("/api/rides/create-trip-payment", requireAuth, async (req, res) => {
     try {
@@ -1834,27 +2317,16 @@ async function startServer() {
       const { amount } = req.body; // Optional amount
       const user = (req as any).user;
 
-      if (user.uid !== driverId) {
-        // Check if admin
-        if (db) {
-          const adminDoc = await db.collection("admins").doc(user.uid).get();
-          const userDoc = await db.collection("users").doc(user.uid).get();
-          const role = userDoc.data()?.role;
-          if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
-            return res.status(403).json({ error: "Forbidden: Unauthorized access to driver payout" });
-          }
-        } else {
-          return res.status(403).json({ error: "Forbidden: Unauthorized access to driver payout" });
-        }
-      }
+      // Enforce authorization with admin bypass
+      assertResourceOwner(user, driverId);
 
-      if (!db) return res.status(500).json({ error: "Database not connected" });
+      if (!db) throw new BadRequestError("Database not connected");
 
       const driverDoc = await db.collection("users").doc(driverId).get();
-      if (!driverDoc.exists) return res.status(404).json({ error: "Driver not found" });
+      if (!driverDoc.exists) throw new BadRequestError("Driver not found");
 
       const stripeAccountId = driverDoc.data()?.stripeAccountId;
-      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
+      if (!stripeAccountId) throw new BadRequestError("No Stripe account connected");
 
       const stripe = getStripe();
 
@@ -1866,7 +2338,7 @@ async function startServer() {
       const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
 
       if (available <= 0) {
-        return res.status(400).json({ error: "No available balance for payout" });
+        throw new BadRequestError("No available balance for payout");
       }
 
       // Create a payout
@@ -1879,22 +2351,24 @@ async function startServer() {
         stripeAccount: stripeAccountId,
       });
 
+      await domainEvents.dispatch("DRIVER_PAYOUT_INITIATED", payout.id, driverId, {
+        amount: payoutAmount,
+        currency: 'gbp'
+      }, undefined, db);
+
       res.json({ success: true, payout });
     } catch (error: any) {
       console.error("Stripe Payout Error:", error);
-      res.status(500).json({ error: error.message });
+      sendHttpError(res, error, req);
     }
   });
 
   app.get("/api/driver/stripe-balance/:driverId", requireAuth, async (req, res) => {
     try {
       const { driverId } = req.params;
-      const callerUid = (req as any).user.uid;
-      const callerRole = (req as any).user.role;
+      const user = (req as any).user;
 
-      if (callerUid !== driverId && callerRole !== 'admin' && callerRole !== 'ecosystem_manager') {
-        return res.status(403).json({ error: "Forbidden: Not authorized to view this driver balance" });
-      }
+      assertResourceOwner(user, driverId);
 
       if (!db) return res.json({ available: 0, pending: 0, currency: 'gbp', mock: true });
 
@@ -1931,7 +2405,7 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Stripe Balance Error:", error);
-      res.status(500).json({ error: error.message });
+      sendHttpError(res, error, req);
     }
   });
 
@@ -2058,81 +2532,137 @@ async function startServer() {
     }
   });
 
-  // Server-Authoritative Milestone Release Route & QR Handshake
+  // Server-Authoritative Milestone Release Route & QR Handshake (V6 Hardened)
   app.post("/api/release-milestone", requireAuth, async (req, res) => {
     try {
       const { jobId, quoteId, milestoneId, isQrHandshake } = req.body;
-      const authUid = (req as any).user.uid;
-      if (!db) return res.status(500).json({ error: "Database not initialized" });
+      const authUser = (req as any).user;
+      const authUid = authUser.uid;
+      if (!db) throw new BadRequestError("Database not initialized");
+      const firestoreDb = db;
+      if (!jobId || !quoteId) throw new BadRequestError("jobId and quoteId are required");
 
-      const jobRef = db.collection("jobs").doc(jobId);
-      const jobDoc = await jobRef.get();
-      if (!jobDoc.exists) return res.status(404).json({ error: "Job not found" });
+      const idempotencyKey = (req.headers["x-idempotency-key"] as string) || 
+        req.body.idempotencyKey || 
+        `rel_${jobId}_${quoteId}_${milestoneId || '0'}_${isQrHandshake ? 'qr' : 'manual'}`;
 
-      const jobData = jobDoc.data();
-      const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
-      const isAdmin = (req as any).user?.role === "admin" || (req as any).user?.admin === true;
-      const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
+      const { result, wasReplayed } = await PaymentLedgerEngine.executeIdempotentOperation(
+        firestoreDb,
+        idempotencyKey,
+        "RELEASE_MILESTONE",
+        async () => {
+          const jobRef = firestoreDb.collection("jobs").doc(jobId);
+          const jobDoc = await jobRef.get();
+          if (!jobDoc.exists) throw new BadRequestError("Job not found");
 
-      if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
-        return res.status(403).json({ error: "Unauthorized: only the job owner or authorized admin can release milestone funds" });
-      }
+          const jobData = jobDoc.data();
+          const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
+          const isAdmin = authUser?.role === "admin" || authUser?.admin === true;
+          const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
 
-      const quoteRef = jobRef.collection("quotes").doc(quoteId);
-      const quoteDoc = await quoteRef.get();
-      if (!quoteDoc.exists) return res.status(404).json({ error: "Quote not found" });
+          if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
+            throw new ForbiddenError("Unauthorized: only the job owner or authorized admin can release milestone funds");
+          }
 
-      const quoteData = quoteDoc.data();
-      const currentMilestones = quoteData?.milestones || [];
-      const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
-        if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
-          return { ...m, status: 'funds_released', releasedAt: new Date().toISOString(), releaseDate: new Date().toISOString() };
+          const quoteRef = jobRef.collection("quotes").doc(quoteId);
+          const quoteDoc = await quoteRef.get();
+          if (!quoteDoc.exists) throw new BadRequestError("Quote not found");
+
+          const quoteData = quoteDoc.data();
+          const currentMilestones = quoteData?.milestones || [];
+          
+          let releasedAmount = 0;
+          let targetMilestoneTitle = "Work Stage";
+
+          const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
+            if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
+              // Mathematical state machine validation
+              validateMilestoneTransition(m.status || 'funded', 'released');
+              releasedAmount = Number(m.amount || m.verifiedAmount || 0);
+              targetMilestoneTitle = m.title || "Work Stage";
+              return { 
+                ...m, 
+                status: 'funds_released', 
+                releasedAt: new Date().toISOString(), 
+                releaseDate: new Date().toISOString() 
+              };
+            }
+            return m;
+          });
+
+          const quoteUpdatePayload: any = {
+            milestones: updatedMilestones,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          };
+
+          if (isQrHandshake) {
+            const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
+            quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
+            quoteUpdatePayload.paymentStatus = "handshake_complete";
+            
+            await jobRef.update({
+              paymentStatus: "handshake_complete",
+              isPaid: true,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+
+          await quoteRef.update(quoteUpdatePayload);
+
+          // Record ledger entry
+          const ledgerEntryId = `ledg_rel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+          const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
+          const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
+
+          await firestoreDb.collection("payment_ledger").doc(ledgerEntryId).set({
+            entryId: ledgerEntryId,
+            transactionId: `rel_${jobId}_${quoteId}`,
+            idempotencyKey,
+            payerId: jobData?.homeownerId || authUid,
+            payeeId: quoteData?.tradespersonId || "trader",
+            amount: Math.round(releasedAmount * 100),
+            platformFee: platformFeePence,
+            netPayout: netPayoutPence,
+            currency: "gbp",
+            type: "ESCROW_RELEASE",
+            status: "completed",
+            createdAt: new Date().toISOString()
+          });
+
+          // Notify Trader
+          if (quoteData?.tradespersonId) {
+            await firestoreDb.collection("notifications").add({
+              userId: quoteData.tradespersonId,
+              title: isQrHandshake ? "Work Verified & Funds Released! 🤝" : "Funds Released! 💸",
+              message: isQrHandshake
+                ? `QR Handshake complete for "${jobData?.title || 'Job'}". Funds released to your account.`
+                : `The homeowner has released funds for milestone: "${targetMilestoneTitle}".`,
+              type: "status",
+              link: `/job/${jobId}`,
+              read: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+          }
+
+          await domainEvents.dispatch("MILESTONE_RELEASED", milestoneId || "m0", authUid, {
+            jobId,
+            quoteId,
+            releasedAmount,
+            isQrHandshake: Boolean(isQrHandshake)
+          }, idempotencyKey, firestoreDb);
+
+          return { success: true, jobId, quoteId, milestoneId, releasedAmount };
         }
-        return m;
-      });
+      );
 
-      const quoteUpdatePayload: any = {
-        milestones: updatedMilestones,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      };
-
-      if (isQrHandshake) {
-        const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
-        quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
-        quoteUpdatePayload.paymentStatus = "handshake_complete";
-        
-        await jobRef.update({
-          paymentStatus: "handshake_complete",
-          isPaid: true,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-
-      await quoteRef.update(quoteUpdatePayload);
-
-      // Notify Trader
-      if (quoteData?.tradespersonId) {
-        await db.collection("notifications").add({
-          userId: quoteData.tradespersonId,
-          title: isQrHandshake ? "Work Verified & Funds Released! 🤝" : "Funds Released! 💸",
-          message: isQrHandshake
-            ? `QR Handshake complete for "${jobData?.title || 'Job'}". Funds released to your account.`
-            : `The homeowner has released funds for milestone: "${quoteData?.milestones?.find((m: any) => m.id === milestoneId)?.title || 'Work Stage'}".`,
-          type: "status",
-          link: `/job/${jobId}`,
-          read: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-
-      res.json({ success: true });
+      res.json({ ...result, replayed: wasReplayed });
     } catch (error: any) {
       console.error("Milestone Release Error:", error);
-      res.status(500).json({ error: error.message || "Failed to release milestone" });
+      sendHttpError(res, error, req);
     }
   });
 
-  // Server-Authoritative Review Submission & Rating Aggregation (Task 4.4)
+  // Server-Authoritative Review Submission & Rating Aggregation (Task 4.4 & V6 Hardened)
   app.post("/api/reviews/submit", requireAuth, async (req, res) => {
     try {
       const reviewerId = (req as any).user.uid;
@@ -2145,21 +2675,32 @@ async function startServer() {
         type = "tradesperson_review"
       } = req.body;
 
-      if (!db) return res.status(500).json({ error: "Database not initialized" });
-      if (!jobId || !revieweeId) return res.status(400).json({ error: "Job ID and Reviewee ID are required" });
+      if (!db) throw new BadRequestError("Database not initialized");
+      const firestoreDb = db;
+      if (!jobId || !revieweeId) throw new BadRequestError("Job ID and Reviewee ID are required");
+
+      if (reviewerId === revieweeId) {
+        throw new BadRequestError("Self-reviews are strictly forbidden.");
+      }
 
       const numRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
       const isLowRating = numRating <= 2 && type === "tradesperson_review";
 
-      const reviewRef = db.collection("reviews").doc();
+      const reviewRef = firestoreDb.collection("reviews").doc();
       const status = isLowRating ? "cooling_off" : "published";
       const publishAt = isLowRating
         ? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14-day cooling-off
         : new Date();
 
-      await db.runTransaction(async (transaction) => {
-        const userRef = db.collection("users").doc(revieweeId);
+      await firestoreDb.runTransaction(async (transaction) => {
+        const userRef = firestoreDb.collection("users").doc(revieweeId);
         const userDoc = await transaction.get(userRef);
+
+        const jobRef = firestoreDb.collection("jobs").doc(jobId);
+        const jobDoc = await transaction.get(jobRef);
+        if (!jobDoc.exists) throw new BadRequestError(`Job ${jobId} not found`);
+
+        const currentJobStatus = jobDoc.data()?.status || "in_progress";
 
         // 1. Write the review document
         transaction.set(reviewRef, {
@@ -2207,9 +2748,9 @@ async function startServer() {
           }
         }
 
-        // 3. Update Job document status
-        const jobRef = db.collection("jobs").doc(jobId);
+        // 3. Update Job document status with state machine check
         if (type === "tradesperson_review") {
+          validateJobTransition(currentJobStatus, "completed");
           transaction.update(jobRef, {
             status: "completed",
             hasReview: true,
@@ -2229,7 +2770,7 @@ async function startServer() {
         const delayDays = 3 + Math.floor(Math.random() * 5);
         const visibleAt = new Date(Date.now() + delayDays * 24 * 60 * 60 * 1000);
 
-        await db.collection("notifications").add({
+        await firestoreDb.collection("notifications").add({
           userId: revieweeId,
           title: "Trust & Fairness Update",
           message: "The Trust & Fairness engine is conducting a standard quality review of a recent interaction. This process ensures platform balance and takes 14 days.",
@@ -2240,7 +2781,7 @@ async function startServer() {
           link: `/jobs/${jobId}`
         });
       } else {
-        await db.collection("notifications").add({
+        await firestoreDb.collection("notifications").add({
           userId: revieweeId,
           title: "New Review Received! ⭐",
           message: `You received a ${numRating}-star review for your recent job.`,
@@ -2251,6 +2792,13 @@ async function startServer() {
         });
       }
 
+      await domainEvents.dispatch("REVIEW_SUBMITTED", reviewRef.id, reviewerId, {
+        jobId,
+        revieweeId,
+        rating: numRating,
+        isLowRating
+      }, undefined, firestoreDb);
+
       res.json({
         success: true,
         reviewId: reviewRef.id,
@@ -2259,22 +2807,83 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Review Submission Error:", error);
-      res.status(500).json({ error: error.message || "Failed to submit review" });
+      sendHttpError(res, error, req);
     }
   });
 
-  // Server-Enforced Job Creation Route (Task 4.5)
+  // Server-Authoritative Quote Acceptance Route (V6 Hardened)
+  app.post("/api/jobs/:jobId/accept-quote", requireAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const { quoteId } = req.body;
+      const authUser = (req as any).user;
+      if (!db) throw new BadRequestError("Database not initialized");
+      if (!quoteId) throw new BadRequestError("quoteId is required in request body");
+
+      const jobRef = db.collection("jobs").doc(jobId);
+      const jobDoc = await jobRef.get();
+      if (!jobDoc.exists) throw new BadRequestError(`Job ${jobId} not found`);
+
+      const jobData = jobDoc.data()!;
+      // Enforce BOLA/IDOR protection: only the job owner or admin can accept quotes
+      assertResourceOwner(authUser, jobData.homeownerId || jobData.userId);
+
+      // Enforce mathematical state transition
+      validateJobTransition(jobData.status || "posted", "accepted");
+
+      const quoteRef = jobRef.collection("quotes").doc(quoteId);
+      const quoteDoc = await quoteRef.get();
+      if (!quoteDoc.exists) throw new BadRequestError(`Quote ${quoteId} not found on job ${jobId}`);
+
+      const quoteData = quoteDoc.data()!;
+      const traderId = quoteData.tradespersonId || quoteData.traderId;
+
+      const batch = db.batch();
+      batch.update(jobRef, {
+        status: "accepted",
+        acceptedQuoteId: quoteId,
+        acceptedTradespersonId: traderId,
+        acceptedTraderId: traderId,
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      batch.update(quoteRef, {
+        status: "accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      await domainEvents.dispatch("QUOTE_ACCEPTED", quoteId, authUser.uid, {
+        jobId,
+        traderId,
+        amount: quoteData.amount || quoteData.totalAmount || 0,
+      }, undefined, db);
+
+      res.json({ success: true, jobId, quoteId, status: "accepted" });
+    } catch (error: any) {
+      console.error("Quote Acceptance Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // Server-Enforced Job Creation Route (Task 4.5 & V6 Hardened)
   app.post("/api/jobs/create", requireAuth, async (req, res) => {
     try {
       const homeownerId = (req as any).user.uid;
-      const jobPayload = req.body;
+      const rawPayload = req.body;
 
-      if (!db) return res.status(500).json({ error: "Database not initialized" });
-      if (!jobPayload || !jobPayload.title || !jobPayload.category) {
-        return res.status(400).json({ error: "Missing required job fields: title and category" });
+      if (!db) throw new BadRequestError("Database not initialized");
+      if (!rawPayload || !rawPayload.title || !rawPayload.category) {
+        throw new BadRequestError("Missing required job fields: title and category");
       }
 
-      const isEmergency = jobPayload.urgency === "emergency" || jobPayload.isEmergencyBoost === true;
+      // Mass-assignment & privilege stripping
+      const sanitizedPayload = sanitizeClientPayload(rawPayload);
+
+      const isEmergency = sanitizedPayload.urgency === "emergency" || sanitizedPayload.isEmergencyBoost === true;
 
       // 1. Check Posting Quota if not emergency
       if (!isEmergency) {
@@ -2298,21 +2907,23 @@ async function startServer() {
 
             const postLimit = isBusiness ? (hasActiveSubscription ? 50 : 10) : 5;
             if (activeJobsSnap.size >= postLimit) {
-              return res.status(403).json({
-                error: `Job posting monthly quota reached (${postLimit} jobs). Please upgrade your subscription.`
-              });
+              throw new ForbiddenError(`Job posting monthly quota reached (${postLimit} jobs). Please upgrade your subscription.`);
             }
           }
         }
       }
 
-      // 2. Insert sanitized job record
+      // 2. Validate state machine transition from draft to posted
+      const initialStatus = sanitizedPayload.status || "posted";
+      validateJobTransition("draft", initialStatus);
+
+      // 3. Insert sanitized job record
       const jobRef = db.collection("jobs").doc();
       const sanitizedJob = {
-        ...jobPayload,
+        ...sanitizedPayload,
         id: jobRef.id,
         homeownerId,
-        status: jobPayload.status || "posted",
+        status: initialStatus,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
@@ -2321,7 +2932,7 @@ async function startServer() {
       res.json({ success: true, jobId: jobRef.id, job: sanitizedJob });
     } catch (error: any) {
       console.error("Server Job Creation Error:", error);
-      res.status(500).json({ error: error.message || "Failed to create job" });
+      sendHttpError(res, error, req);
     }
   });
 
@@ -2411,10 +3022,10 @@ async function startServer() {
       const isAllowed = (jobCount + requestedCount) <= tier.jobPostsLimit;
 
       // Check for duplicate accounts based on deviceId
-      let securityAlert = null;
+      let securityAlert: string | null = null;
       let suggestedStatus = "posted";
       
-      if (userData?.deviceId) {
+      if (userData?.deviceId && db) {
         const duplicateUsers = await db.collection("users").where("deviceId", "==", userData.deviceId).get();
         if (duplicateUsers.size > 1) {
           securityAlert = "Potential duplicate account detected (same device)";
@@ -2607,16 +3218,18 @@ async function startServer() {
       let userRole = "homeowner";
       let userCategory = null;
       try {
-        const userDoc = await db.collection("users").doc(uid).get();
-        const userData = userDoc.data();
-        userRole = userData?.role || "homeowner";
-        userCategory = userData?.primaryTrade || userData?.category || null;
-        const tierId = userData?.tierId || (userRole === "tradesperson" ? "Basic" : "Standard");
-        
-        const platformConfig = await getCachedConfig("global");
-        const tiers = userRole === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
-        const tier = tiers?.find((t: any) => t.name === tierId);
-        discount = tier?.shopDiscount || 0;
+        if (db) {
+          const userDoc = await db.collection("users").doc(uid).get();
+          const userData = userDoc.data();
+          userRole = userData?.role || "homeowner";
+          userCategory = userData?.primaryTrade || userData?.category || null;
+          const tierId = userData?.tierId || (userRole === "tradesperson" ? "Basic" : "Standard");
+          
+          const platformConfig = await getCachedConfig("global");
+          const tiers = userRole === "tradesperson" ? platformConfig?.feeTiers : platformConfig?.businessTiers;
+          const tier = tiers?.find((t: any) => t.name === tierId);
+          discount = tier?.shopDiscount || 0;
+        }
       } catch (tierErr) {
         console.warn("Could not fetch tier for discount:", tierErr);
       }
@@ -3276,7 +3889,17 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       const locks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       res.json({ success: true, locks, inProcessCronDisabled: process.env.DISABLE_IN_PROCESS_CRON === "true" });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // V6 Pre-Flight Production Readiness & Invariant Audit Route
+  app.get("/api/admin/production-audit", requireAdmin, (req, res) => {
+    try {
+      const auditReport = runProductionChecks(process.env, db);
+      res.json({ success: true, ...auditReport });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
     }
   });
 
@@ -3308,6 +3931,8 @@ Limit your response to just the text of the tip. Do not use quotes.`;
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`TradeQuote UK server running on http://localhost:${PORT}`);
+    const preflight = runProductionChecks(process.env, db);
+    console.log(`[V6 Pre-Flight Gate] Overall Status: ${preflight.overallStatus} (${preflight.checks.filter(c => c.status === 'FAIL').length} fails, ${preflight.checks.filter(c => c.status === 'WARN').length} warns)`);
     // Start background systems with distributed locking
     startBackgroundSchedulers();
     startMatchingSystem();

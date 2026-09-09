@@ -2048,7 +2048,9 @@ export default function AnyTraderAdmin() {
                         
                         if (isProtected) return (
                           <div className="flex justify-center">
-                            <Lock className="w-4 h-4 text-slate-300" title={u.role === "admin" ? "Staff Account (Protected from Bulk Delete)" : "Protected Account"} />
+                            <span title={u.role === "admin" ? "Staff Account (Protected from Bulk Delete)" : "Protected Account"}>
+                              <Lock className="w-4 h-4 text-slate-300" />
+                            </span>
                           </div>
                         );
                         
@@ -4434,7 +4436,7 @@ export default function AnyTraderAdmin() {
           const exportSubscriptionsCSV = () => {
             const headers = ["Name", "Email", "Tier", "AddOns", "Status", "Next Billing Date", "Cancel at Period End"];
             const rows = tradespeople.map(u => {
-              const addons = [];
+              const addons: string[] = [];
               if (u.hasExclusiveAddon || u.isExclusiveActive) addons.push("Exclusive Leads");
               if (u.hasVerifiedVideoProSubscription) addons.push("Video Pro");
               return [

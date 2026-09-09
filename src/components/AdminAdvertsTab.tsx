@@ -463,7 +463,7 @@ export default function AdminAdvertsTab() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cost/Click (£)</label>
-                    <input type="number" step="0.01" value={costPerDisplay} onChange={e => setCostPerDisplay(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="0" />
+                    <input type="number" step="0.01" value={costPerDisplay} onChange={e => setCostPerDisplay(e.target.value)} className="w-full bg-slate-50 border border-black rounded-xl px-3 h-11 outline-none" min="0" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Clicks/Day</label>

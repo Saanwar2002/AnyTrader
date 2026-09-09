@@ -123,7 +123,7 @@ export const resolveTier = (profile: any): ProviderTierName => {
       return 'Silver Professional';
   }
   
-  if (lower.includes('platinum') || lower.includes('enterprise powerhouse') || lower.includes('enterprise') || lower === 'platinum') {
+  if (lower.includes('platinum') || lower.includes('enterprise powerhouse') || lower.includes('powerhouse') || lower.includes('enterprise') || lower === 'platinum') {
     return 'Platinum Enterprise';
   }
   if (lower.includes('gold') || lower.includes('elite') || lower.includes('premium') || lower.includes('business professional')) {

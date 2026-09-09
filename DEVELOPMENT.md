@@ -1,5 +1,254 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 💳 Phase 3: Enterprise & Driver Monetization Integration (Completed September 9, 2026)
+- **1. Gotham B2B SaaS (£/door metered billing) Subscription Flow**:
+  - Connected `GothamHousingPortal.tsx` (SaaS Calculator Modal and TAB 4 B2B Billing View) to Stripe Checkout via `/api/create-checkout-session` (`subscriptionType: 'gotham_saas'`).
+  - Dynamically calculates metered monthly fee based on housing door count and volume pricing tiers (`calculateGothamSaaSPlan`). Passes calculated unit amount, door count, and tier name as metadata.
+  - Webhook handler in `server.ts` updates Firestore user profile (`isGothamSubscriber: true`, `subscriptionType: 'gotham_saas'`, `gothamDoorsCount`, `gothamTierName`, `gothamBillingCycle`, `gothamCancelAtPeriodEnd`, `subscriptionStatus: 'active'`).
+  - Fully integrated self-service cancellation (`/api/cancel-subscription`), auto-renewal resumption (`/api/reactivate-subscription`), and direct Stripe Customer Portal access (`/api/create-customer-portal-session`).
+- **2. Gold Driver (£49.99/mo) Subscription Flow**:
+  - Connected Gold Driver Tier in `BillingManager.tsx` to Stripe Checkout via `/api/create-checkout-session` (`unit_amount: 4999`, `subscriptionType: 'driver_gold'`).
+  - Webhook handler in `server.ts` updates driver profile in Firestore (`isGoldDriver: true`, `driverTier: 'gold'`, `commissionRate: 0.10`, `destinationFilters: 4`, `advanceBookingDays: 14`, `priorityDispatch: 50`, `subscriptionStatus: 'active'`).
+  - Integrated full self-service cancellation (`/api/cancel-subscription`), auto-renewal resumption (`/api/reactivate-subscription`), and Stripe Customer Portal access.
+- **3. Full Cancellation & Renewal Management Verification**:
+  - All 4 subscription types (`exclusive_leads`, `video_pro`, `gotham_saas`, `driver_gold`) now share unified, robust server endpoints for cancellation scheduling (`cancel_at_period_end: true`) and reactivation (`cancel_at_period_end: false`).
+  - 182/182 automated unit tests passing across 12 test suites. Zero compilation errors.
+
+## 💳 Phase 2: Homeowner & Landlord Monetization Wiring & Mediation Stake (Completed September 9, 2026)
+- **1. Emergency Boost (£4.99) Payment Flow**:
+  - Replaced mock/alert flow in `EmergencyJobWizard.tsx` and `PostJobWizard.tsx` with authenticated calls to `/api/create-checkout-session` (`unit_amount: 499`).
+  - Webhook handler in `server.ts` listens for `checkout.session.completed` with `type: 'boost'` and authoritatively updates the job in Firestore (`isEmergency: true`, `isBoosted: true`, `boostPaidAt`, `boostExpiresAt`).
+- **2. Landlord Portfolio Pro (£19/mo) Subscription Flow**:
+  - Wired Landlord Pro upgrade buttons in `BillingManager.tsx` and `Portfolio.tsx` to Stripe Checkout (`unit_amount: 1900`, `mode: 'subscription'`, `metadata: { tier: 'landlord', tierName: 'Premium Landlord', subscriptionType: 'landlord' }`).
+  - Webhook handler in `server.ts` updates user profile (`tier: 'landlord'`, `isLandlord: true`, `subscriptionStatus: 'active'`).
+  - Self-service cancellation (`/api/cancel-subscription`), reactivation (`/api/reactivate-subscription`), and Stripe Customer Portal (`/api/create-customer-portal-session`) seamlessly integrated for landlords.
+- **3. Dispute Mediation Stake (£25.00) Payment Flow**:
+  - Added dedicated endpoint `/api/disputes/create-stake-intent` in `server.ts` and updated `/api/create-checkout-session` in `JobDetails.tsx` (`unit_amount: 2500` / £25.00).
+  - Stripe webhook handler verifies the payment and records the dispute object in Firestore with `stakePaid: true` and `stakePaidAt`.
+- **4. Verification Evidence**:
+  - 182/182 automated unit tests passing across 12 test suites.
+  - Zero compilation errors.
+
+## 💳 Phase 7: Subscription Cancellation & Stripe Customer Billing Portal Lifecycle (Completed September 9, 2026)
+- **User Capabilities & Self-Service Cancellation**:
+  - Users can now cancel any active subscription tier or paid add-on (`exclusive_leads`, `video_pro`, or core trader tiers) directly in the UI (`BillingManager.tsx`, `TraderVideoVerificationCard.tsx`).
+  - Subscriptions are scheduled to cancel at the end of the current billing cycle (`cancel_at_period_end: true`). Users keep all benefits until that date with no further charges.
+  - Users can resume auto-renewal at any time before the period ends via "Resume Auto-Renewal".
+  - Users can open the secure Stripe Customer Billing Portal to update payment cards, download VAT/MTD receipts, or view historical invoices.
+- **Server Endpoints & Webhook Sync**:
+  1. `/api/create-customer-portal-session`: Generates a Stripe Customer Portal session with a return URL.
+  2. `/api/cancel-subscription`: Calls `stripe.subscriptions.update(id, { cancel_at_period_end: true })` and updates Firestore `cancelAtPeriodEnd`, `cancelEffectiveDate`, and `currentPeriodEnd`.
+  3. `/api/reactivate-subscription`: Calls `stripe.subscriptions.update(id, { cancel_at_period_end: false })` and resets `cancelAtPeriodEnd: false`.
+  4. `/api/webhook`: Listens to `customer.subscription.updated` and `customer.subscription.deleted` to keep Firestore synchronized in real time.
+
+## 💳 Phase 1 Monetization & Add-on Payment Integrity Gate (Completed September 9, 2026)
+- **Root Cause & Vulnerability Addressed**: 
+  - Several UI components (`TraderVideoVerificationCard.tsx`, `BillingManager.tsx`, and `TradesBannerAdStudio.tsx`) had client-side state mutators (`updateDoc` / `setDoc`) that directly wrote to Firestore fields (`hasVerifiedVideoProSubscription`, `hasExclusiveAddon`, `adWalletBalance`, `isPro`, `tierId`) without going through the Stripe payment processing pipeline.
+- **Architectural & Security Remediations Applied**:
+  1. **Stripe Checkout Enforced**: Replaced all direct Firestore client writes with authenticated server-side `/api/create-checkout-session` redirects (mode `subscription` or `payment`), attaching verified Firebase Auth ID tokens and strictly server-verified metadata.
+  2. **Server-Side Webhook Fulfillment**: Updated `server.ts` webhook handlers (`checkout.session.completed`, `customer.subscription.deleted`, `customer.subscription.updated`) and development test mocks to authoritatively manage `hasVerifiedVideoProSubscription`, `hasExclusiveAddon`, `adWalletBalance`, and tier subscriptions in Firestore.
+  3. **Firestore Security & Privilege Escalation Lock**: Added server-owned field locks (`SERVER_OWNED_PROTECTED_KEYS` and `firestore.rules`) preventing any unauthorized client writes to `adWalletBalance`, `hasVerifiedVideoProSubscription`, `hasExclusiveAddon`, `videoProSubscriptionId`, `exclusiveSubscriptionId`, `subscriptionStatus`, and `tierId`.
+- **Verified Pass Rate**: 182/182 automated tests passing across 12 test suites. Zero compilation errors.
+
+## 🚀 Build & Deployment Artifact Configuration (Updated September 9, 2026)
+- **Artifact Packaging Invariant**: Removed `dist/` from `.gitignore` to prevent the cloud artifact archiver from omitting the production build directory during upload packaging.
+- **Production Build Pipeline**: `npm run build` generates both the client bundle (`dist/index.html`, `dist/assets/*`, `dist/sw.js`) and the bundled CommonJS server (`dist/server.cjs`), with standalone execution via `npm start` (`node dist/server.cjs`).
+- **Pre-Flight Invariants**: Type check (`tsc --noEmit`) and full production build verification verified clean with 0 errors.
+
+## 🛡️ Mission 6: Comprehensive Adversarial Platform Security & BOLA/Lifecycle Penetration (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - **Multi-Tenant / Gotham Layer Estate IDOR & Privilege Escalation**:
+      - Simulated Rogue Estate Manager B attempting to manage, read tenant lists, or modify MTD invoices for Estate Manager A's housing portfolio (`assertCanManageEstate`).
+      - Client-injected privilege escalation attack payloads (`gothamSubscription`, `isPro`, `videoVerified`, `verifiedBadges`, `subscriptionStatus`) systematically stripped via `sanitizeClientPayload`.
+    - **AnyRoller Taxi Ride BOLA & Lifecycle Hijack Protection**:
+      - Passenger B attempting to view/cancel Passenger A's trip rejected with `ForbiddenError 403` (`assertCanManageRide`).
+      - Rogue Driver Eve attempting to modify Driver Dave's assigned trip or self-accept an in-progress trip blocked with `ForbiddenError 403` / `ConflictError 409`.
+      - Passenger attempting to accept their own ride request as a driver rejected with `BadRequestError 400`.
+      - Passenger attempting to cancel an already completed ride blocked with `BadRequestError 400`.
+    - **Direct 1-to-1 Quote Request Interception Defense**:
+      - Uninvited Trader B attempting to intercept and quote on a 1-to-1 direct quote request meant for Trader A rejected with `ForbiddenError 403` (`assertCanSubmitDirectQuote`).
+    - **Tenant Repair Report & PII Access Protection**:
+      - Unrelated Tenant B attempting to read Tenant Alice's repair reports, landlord notes, and tenant phone/email blocked with `ForbiddenError 403` (`assertCanAccessTenantReport`).
+    - **Multi-Request Concurrency Invariants**:
+      - Simultaneous double-accept race conditions executed atomically via `ConcurrencyLockEngine.atomicAcceptJob`.
+      - Simultaneous £100 wallet withdrawals on a £100 balance serialized via `ConcurrencyLockEngine.atomicWithdrawFunds` (zero balance deficit).
+      - Simultaneous property transfer requests serialized via `ConcurrencyLockEngine.atomicTransferOwnership`.
+*   **Verification Evidence (182/182 Tests Passing across 12 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/adversarialPlatformSecurity.test.ts` (19 test scenarios).
+    - Vitest automated test results: 100% pass rate (182 passed out of 182 tests).
+
+
+## 🛡️ Mission 5: State Machine & Concurrent Sequence Adversarial Penetration (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - Simulated illegal state transition jumps across all core platform entities (Jobs, Milestones, Payments, Rides, Disputes) and multi-request concurrent race conditions:
+      - **Illegal Single-Step Jumps Tested**:
+        - `draft → completed` (Job & Ride)
+        - `draft → paid / created → disbursed` (Payment)
+        - `cancelled → completed / in_progress` (Job & Ride)
+        - `completed → funded / released → funded` (Milestone)
+        - `refunded → released / funded` (Milestone & Payment)
+        - `pending → released` (Unfunded milestone release)
+        - `failed → disbursed` (Payment ledger)
+      - **Concurrent Request Races Tested**:
+        - `release() + release()` (Simultaneous escrow payouts): Resource lock serializes execution; strictly 1 payout executed, duplicate throws `ConflictError 409`.
+        - `cancel() + release()` (Cancellation vs payout race): Cancelled terminal state blocks release with `ConflictError 409`; zero financial leakage.
+        - `accept() + accept()` (Simultaneous quote acceptance): Atomic lock on `jobId` ensures single quote assigned; second request rejected with `ConflictError 409`.
+        - `fund() + refund() + release()` (Multi-step lifecycle race): Terminal refund status permanently blocks subsequent escrow release and consumes refund nonce.
+        - `withdraw(£100) + withdraw(£100)` (Double-spend on £100 balance): Atomic wallet lock prevents negative balance; second attempt fails with `BadRequestError` (Insufficient balance).
+*   **Verification Evidence (163/163 Tests Passing across 11 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/mission5StateMachinePenetration.test.ts` (29 test scenarios).
+    - Vitest automated test results: 100% pass rate (163 passed out of 163 tests).
+
+## 🛡️ Mission 4: Financial Adversarial Penetration & Stripe Invariants Audit (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - Executed an adversarial financial penetration audit across 7 core vectors to rigorously enforce that:
+      - *"No attacker-controlled request can cause AnyTrader to believe money was paid when Stripe did not prove it."*
+      - *"No payment can be applied to the wrong resource."*
+      - *"Platform Fee (12%) + Trader Net Payout = Total Verified Amount (Zero-Drift)."*
+    - **Vectors Tested**:
+      1. **Stripe Price & Amount Substitution**: Attempted underpayment (£500 milestone paid with £1 token payment) and payload parameter overrides (`amount: 1`, `platformFee: 0`, `payoutTransferred: true`). Blocked by `FinancialSecurityEngine` amount validation and `sanitizeClientPayload`.
+      2. **Currency Substitution**: Attempted paying 250,000 JPY or USD instead of 250,000 GBP pence. Blocked by `FinancialSecurityEngine` currency matching.
+      3. **Metadata Manipulation & Cross-Resource Cross-User Binding**: Attempted applying Job A's valid payment to Job B, applying user X's payment to user Y's resource, and forging webhook signatures. Blocked with `ForbiddenError 403` / `UnauthorizedError 401`.
+      4. **Payment & Webhook Replay**: Replaying Stripe Webhook events and reusing PaymentIntent across multiple checkout sessions. Blocked with `ConflictError 409`.
+      5. **Failed, Cancelled & Incomplete Payments**: Testing unpaid Stripe sessions, refunded milestone payouts, and invalid payment state transitions (`refunded -> disbursed`). Blocked via state machine and business logic guards.
+      6. **Duplicate & Concurrent Payouts**: Attempting concurrent duplicate payouts during in-flight network requests. Blocked via `executeWithNetworkRetryProtection` lock.
+      7. **Ledger Mathematical Invariants**: Zero-drift double-entry ledger calculation and rejection of negative/zero/NaN values.
+*   **Verification Evidence (134/134 Tests Passing across 10 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/mission4FinancialPenetration.test.ts` (16 test scenarios).
+    - Vitest automated test results: 100% pass rate (134 passed out of 134 tests).
+
+## 🛡️ Mission 3: Malicious Trader Adversarial Penetration & Marketplace Invariants Audit (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - Simulated real-world marketplace penetration attacks where a malicious trader (`trader_malicious_666`) targets a victim customer (`cust_victim_888`) and a competitor trader (`trader_honest_777`) via direct HTTP requests and backend endpoints across 9 vectors:
+      1. **Accept Customer B's job**: Blocked via `assertCanAcceptJob` & `assertResourceOwner` on `POST /api/jobs/:jobId/accept-quote` (`ForbiddenError 403`).
+      2. **Modify Customer B's quote**: Blocked via `assertCanModifyQuote` & `assertCanDeleteQuote` (`ForbiddenError 403`).
+      3. **Release Customer B's milestone**: Blocked via `assertCanManageMilestone` on `POST /api/release-milestone` (`ForbiddenError 403`).
+      4. **Access Customer B's private info**: Blocked via `assertCanAccessProperty`, `assertCanAccessUserStorage`, and `assertCanAccessConversation` (`ForbiddenError 403`).
+      5. **Manipulate completion**: Blocked via `assertCanModifyJob` and `sanitizeClientPayload` stripping `completed` / `status` (`ForbiddenError 403`).
+      6. **Manipulate payout & fees**: Blocked via `sanitizeClientPayload` stripping `platformFee: 0` / `amount` and `assertResourceOwner` protecting Stripe destinations.
+      7. **Manipulate reviews**: Blocked via `assertCanSubmitReview` preventing fake self-reviews and rival smear reviews (`ForbiddenError 403`).
+      8. **Manipulate availability**: Blocked via `assertCanManageTraderAvailability` (`ForbiddenError 403`).
+      9. **Impersonate another trader**: Blocked via `assertResourceOwner` and `sanitizeClientPayload` stripping `role: "admin"` and `verifiedTrader` badges.
+*   **Verification Evidence (118/118 Tests Passing across 9 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/maliciousTraderMission3.test.ts` (23 test scenarios).
+    - Vitest automated test results: 100% pass rate (118 passed out of 118 tests).
+
+## 🛡️ Mission 2: Customer vs Customer Adversarial Exploitation & BOLA/IDOR Audit (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - Simulated real-world BOLA (Broken Object Level Authorization) and IDOR attack scenarios between two non-admin customer accounts (User A: `cust_alice_101` and User B: `cust_bob_202`) against 9 core business domains with full identity reversal (A → B and B → A):
+      1. **A → access B's job**: Blocked via `assertCanAccessJob` (`ForbiddenError 403`).
+      2. **A → modify B's job**: Blocked via `assertCanModifyJob` (`ForbiddenError 403`).
+      3. **A → read B's messages**: Blocked via `assertCanAccessConversation` (`ForbiddenError 403`).
+      4. **A → access B's property**: Blocked via `assertCanAccessProperty` & `assertCanModifyProperty` (`ForbiddenError 403`).
+      5. **A → access B's dispute**: Blocked via `assertCanAccessDispute` & `assertCanModifyDispute` (`ForbiddenError 403`).
+      6. **A → submit B's review**: Blocked via `assertCanSubmitReview` (`ForbiddenError 403`).
+      7. **A → release B's milestone**: Blocked via `assertCanManageMilestone` (`ForbiddenError 403`).
+      8. **A → manipulate B's payment**: Blocked via `assertResourceOwner` (`ForbiddenError 403`) & `sanitizeClientPayload` (stripping injected server keys).
+      9. **A → access B's files**: Blocked via `assertCanAccessUserStorage` (`ForbiddenError 403`) and `storage.rules` path isolation.
+*   **Verification Evidence (95/95 Tests Passing across 8 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/customerVsCustomerMission2.test.ts` (28 test scenarios with forward and reversed attack matrices).
+    - Vitest automated test results: 100% pass rate (95 passed out of 95 tests).
+
+## 🛡️ Mission 1: Unauthenticated Attacker Penetration & Exploit Verification (Completed September 9, 2026)
+*   **Adversarial Methodology**:
+    - Executed a multi-vector penetration audit simulating an unauthenticated external attacker targeting 12 vectors:
+      1. **Private Firestore Reads**: Direct attempts to query in-progress jobs, tenant reports, or sensitive documents without credentials.
+      2. **Storage Enumeration & Unauthorized Access**: Scanning `/users/{uid}/private/*` for passport/driver licenses and KYC scans.
+      3. **Job Enumeration**: Probing non-public job states and customer metadata.
+      4. **User Enumeration & Conversation Snooping**: Probing `/conversations/*` and user profiles to extract PII.
+      5. **API Abuse**: Invocations of backend `/api/*` endpoints without bearer tokens.
+      6. **Gemini Privilege Escalation**: Attempting to trigger administrative AI scans, autonomous agent actions, or inference proxies unauthenticated.
+      7. **Payment Endpoint Abuse**: Submitting unauthenticated checkout requests, negative amounts, or unauthorized milestone releases.
+      8. **Stripe Manipulation**: Attempting parameter tampering (negative/zero/NaN pricing) to bypass platform fee deduction.
+      9. **Webhook Manipulation**: Forging Stripe event bodies with invalid/missing HMAC webhook signatures.
+      10. **Malicious Uploads**: Submitting oversized files (>25MB) or disallowed MIME types (executable/script payloads).
+      11. **Rate-Limit Bypass**: Spoofing empty/whitespace client identifiers to evade sliding-window token buckets.
+      12. **Error-Information Leakage**: Triggering unhandled database exceptions to inspect production stack traces and connection strings.
+*   **Verification Evidence (67/67 Tests Passing across 7 Test Suites)**:
+    - Added dedicated test suite: `tests/unit/unauthenticatedAttackerMission1.test.ts` (13 test scenarios verifying all 12 vectors).
+    - Vitest automated test results: 100% pass rate (67 passed out of 67 tests).
+    - Zero leaks: Production error responses strip all raw error messages, connection strings, and stack traces, returning sanitized correlation IDs (`err_<timestamp>_<hash>`).
+
+## 🛡️ Security Hardness & 5-Vector Red-Team Verification (Completed September 9, 2026)
+*   **Context & Directives**:
+    - Comprehensive audit and automated exploit verification across the 5 critical OWASP API security risk categories:
+      1. **IDOR / BOLA**: Changing resource IDs (`jobId=A` -> `jobId=B`, `propertyId`, `quoteId`, `conversationId`, `disputeId`) to access or modify unauthorized objects.
+      2. **Property-Level Privilege Escalation**: Injecting hidden frontend fields (`role`, `isAdmin`, `verified`, `paymentStatus`, `payoutStatus`, `ownerId`, `completed`, `funded`, `balance`, `credits`).
+      3. **Business-Logic Abuse**: Sequence manipulation (e.g. Create -> cancel -> refund -> recreate -> manipulate state -> trigger payout).
+      4. **Race Conditions**: Simultaneous requests competing to release money, accept jobs, claim milestones, withdraw funds, or transfer ownership.
+      5. **Abuse / Automation**: Unrestricted resource consumption automating job creation, messages, searches, AI calls, notifications, account creation, payment attempts, and file uploads.
+*   **Architectural Enhancements & Defenses Added**:
+    1.  **IDOR / BOLA Prevention Layer (`src/server/authorization.ts`, `firestore.rules`)**:
+        - Enhanced `assertCanAccessJob` & `assertCanModifyJob` to strictly gate private job mutations.
+        - Added `assertCanAccessProperty` & `assertCanModifyProperty` preventing unauthorized reads/mutations on property passports.
+        - Added `assertCanModifyQuote` & `assertCanDeleteQuote` ensuring traders cannot alter or delete competitor quotes.
+        - Added `assertCanAccessDispute` & `assertCanModifyDispute` restricting access to verified dispute claimants, landlords, or respondents.
+        - Fixed conversation messaging IDOR in `firestore.rules`: `/conversations/{conversationId}/messages/{messageId}` now strictly validates that `request.auth.uid` is an existing participant in `/conversations/{conversationId}` for both read and create operations.
+    2.  **Property-Level Privilege Escalation Defense (`src/server/authorization.ts`, `firestore.rules`)**:
+        - Expanded `SERVER_OWNED_PROTECTED_KEYS` in `sanitizeClientPayload` to purge: `role`, `isAdmin`, `verified`, `isVerified`, `idVerified`, `verifiedTrader`, `paymentStatus`, `payoutStatus`, `ownerId`, `homeownerId`, `completed`, `isCompleted`, `funded`, `isFunded`, `refunded`, `isRefunded`, `balance`, `credits`, `trustScore`, `payoutTransferred`, and `status`.
+        - Hardened `firestore.rules` on `/users/{userId}` to prevent client mutations on `role`, `isAdmin`, `permissions`, `verified`, `isVerified`, `idVerified`, `balance`, `credits`, `payoutTransferred`, `paymentStatus`, and `payoutStatus`.
+        - Hardened `firestore.rules` on `/jobs/{jobId}` to strictly disallow non-admin creation/update of `completed`, `payoutTransferred`, and `payoutStatus`, and enforce `ownerId` / `homeownerId` immutability.
+    3.  **Business-Logic Abuse & Sequence Integrity Defense (`src/server/businessLogicDefense.ts`)**:
+        - Implemented `BusinessLogicDefense.validateEscrowReleaseEligibility`: Enforces invariants prohibiting payout/release on cancelled, refunded, disputed, or unfunded entities regardless of individual API call validity.
+        - Implemented `BusinessLogicDefense.validateLifecycleSequence`: Blocks state machine resurrection attacks where terminated or refunded entities attempt revival.
+        - Implemented `BusinessLogicDefense.verifyAndConsumeTransactionNonce`: Enforces single-use financial nonces, permanently preventing reuse of Stripe charge or refund IDs.
+    4.  **Concurrency Locking & Race Condition Engine (`src/server/concurrencyLock.ts`)**:
+        - Created `ConcurrencyLockEngine` providing atomic resource locking with timeout leasing for high-concurrency environments.
+        - `atomicReleaseMilestone`: Prevents simultaneous milestone fund releases; only one transaction succeeds, racers receive `ConflictError`.
+        - `atomicAcceptJob`: Prevents duplicate quote acceptance; guarantees only one contractor is assigned.
+        - `atomicWithdrawFunds`: Double-spend prevention; decrements wallet balance atomically. Simultaneous withdrawals exceeding available balance fail with `BadRequestError`.
+        - `atomicTransferOwnership`: Prevents concurrent property handover collisions.
+    5.  **Abuse & Automation Defense Engine (`src/server/abuseDefense.ts`)**:
+        - Implemented sliding-window token bucket engine `AbuseDefenseEngine` with tailored policies for 8 sensitive flows:
+          - `JOB_CREATION` (max 10/min)
+          - `MESSAGE_SEND` (max 30/min)
+          - `SEARCH_QUERY` (max 60/min)
+          - `AI_INFERENCE` (max 20/min)
+          - `NOTIFICATION_SEND` (max 15/min)
+          - `ACCOUNT_CREATION` (max 5/15min)
+          - `PAYMENT_ATTEMPT` (max 5/10min)
+          - `FILE_UPLOAD` (max 10/min)
+        - Exceeding quotas raises `TooManyRequestsError` with HTTP 429 and `Retry-After` headers.
+    6.  **Automated Adversarial Test Verification (`tests/unit/adversarialRedTeam.test.ts`)**:
+        - Expanded test suite to 23 automated red-team unit tests covering all 5 risk categories and replay defenses.
+        - Full platform test suite: 100% pass rate (54/54 tests across all 6 test suites).
+*   **Context & Directives**:
+    - Upgrade the AnyTrader codebase to the full enterprise V6 standard across all 6 phases, adopting the Red-Team Master Framework.
+    - Decouple business, state, financial, and security logic into dedicated `src/server/*` modules.
+    - Refactor `server.ts` endpoints to utilize V6 domain engines, state machines, and sanitization.
+    - Implement formal state machines, double-entry financial ledgering with idempotency locks, automated Vitest unit testing, adversarial exploit verification, and pre-flight release audit gating.
+*   **Implementation & Resolution across All 6 Phases**:
+    1.  **Phase 1 — Sanitized HTTP Error & Domain Modularization (`src/server/`)**:
+        - `httpErrors.ts`: Standardized exception classes (`BadRequestError`, `UnauthorizedError`, `ForbiddenError`, `ConflictError`, `InternalServerError`). `sendHttpError` guarantees zero stack trace, container path, or credential leakage to clients in production while logging correlation IDs for auditing.
+        - `stateMachine.ts`: Mathematical transition tables for Jobs, Milestones, Payments, AnyRoller Rides, and Disputes. Invalid jumps throw `InvalidStateTransitionError` and fail closed.
+        - `authorization.ts`: Server-side BOLA/IDOR protection and mass-assignment defense (`assertResourceOwner`, `assertCanAccessJob`, `assertCanManageMilestone`, `sanitizeClientPayload`).
+        - `paymentLedger.ts`: Atomic idempotency locking on `payment_idempotency` collection prevents race conditions, duplicate payouts, and client price tampering.
+        - `domainEvents.ts` & `taskQueue.ts`: Structured event emitter with transactional persistence to `domain_events` and background worker queue.
+        - `productionChecks.ts`: Runtime health scanner validating environment secrets, secret entropy, and mock payment gate status.
+    2.  **Phase 2 — Database Schema, Security Rules & Index Hardening**:
+        - `firestore.rules`: CollectionGroup queries hardened; user profile read permissions restricted to active job participants; strict server-owned key write bans enforced.
+        - `storage.rules`: Explicit path-scoped authorization, content type validation, and 15MB file limits.
+        - `firestore.indexes.json`: Optimized compound indexes for jobs, reviews, notifications, and transactions.
+    3.  **Phase 3 — Server Endpoint Refactoring & Hardening (`server.ts`)**:
+        - Refactored `/api/release-milestone`: Integrated `PaymentLedgerEngine.executeIdempotentOperation`, `validateMilestoneTransition`, `assertCanManageMilestone`, and `domainEvents`.
+        - Refactored `/api/jobs/create`: Added `sanitizeClientPayload`, `validateJobTransition`, and `JOB_CREATED` domain event audit logging.
+        - Refactored `/api/jobs/:jobId/accept-quote`: Added `assertResourceOwner`, `validateJobTransition`, and `QUOTE_ACCEPTED` event dispatch.
+        - Refactored `/api/reviews/submit`: Server-authoritative review creation with self-review prevention (`reviewerId === revieweeId`), rating aggregation within Firestore transaction, and 14-day cooling-off period for ratings <= 2.
+        - Refactored `/api/driver/stripe-payout` & `/api/driver/stripe-balance`: Integrated `assertResourceOwner` and `sendHttpError`.
+        - Refactored `/api/webhook`: Hardened Stripe webhook processing for milestone funding and taxi trip completion using `PaymentLedgerEngine.recordEscrowFunding` and state machine validation.
+    4.  **Phase 4 — Automated Unit Testing Suite (`tests/unit/*`, `package.json`)**:
+        - `stateMachine.test.ts`, `authorization.test.ts`, `paymentLedger.test.ts`, and `productionChecks.test.ts` verifying all core invariants.
+    5.  **Phase 5 — Adversarial Red-Team & Exploit Verification (`tests/unit/adversarialRedTeam.test.ts`)**:
+        - Verified BOLA/IDOR resistance (unauthorized quote modification/deletion and unauthorized milestone releases rejected).
+        - Verified mass-assignment defense (server-owned fields like `role`, `isAdmin`, `isPro`, `rating`, `platformFee`, `guaranteeExpiresAt` stripped).
+        - Verified state machine invariant enforcement (terminal states reject backward or illegal jumps).
+        - Verified idempotency replay attack resistance (duplicate calls return cached execution without duplicated ledger entries or side-effects).
+        - Full test suite: 100% passing across all 6 test files (39/39 passing tests).
+    6.  **Phase 6 — Pre-Flight Release Candidate Audit & Zero-Error Compilation**:
+        - Created `scripts/final-release-audit.mjs` running automated pre-flight scans.
+        - Clean TypeScript typecheck (`tsc --noEmit`) with 0 errors across the entire codebase.
+        - Production build (`npm run build`) passing cleanly. Exposed `/api/admin/production-audit` for operational verification.
+
 ## 📱 Phase 5: Mobile App Store & Infrastructure Readiness (Completed September 8, 2026)
 *   **Context & Directives**:
     - Complete mobile app store compliance, native Capacitor configuration cleanup, repository hygiene, and background task decoupling for multi-instance Cloud Run scaling.

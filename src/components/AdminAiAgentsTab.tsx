@@ -1220,7 +1220,7 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white p-5 rounded-3xl border border-black shadow-sm space-y-1">
                 <span className="text-[11px] font-bold text-slate-500 uppercase">Total Incomings</span>
-                <p className="text-2xl font-black text-emerald-600">£{financials.totalIncomings.toFixed(2)}</p>
+                <p className="text-2xl font-black text-emerald-600">£{(financials.totalRevenue ?? 0).toFixed(2)}</p>
                 <span className="text-[10px] font-bold text-slate-400">Trade Subs & SaaS Doors</span>
               </div>
               <div className="bg-white p-5 rounded-3xl border border-black shadow-sm space-y-1">
@@ -1316,10 +1316,10 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
                     <span className="bg-rose-100 text-rose-800 text-xs font-bold px-2.5 py-1 rounded-full border border-rose-300">
                       {t.type.toUpperCase()}
                     </span>
-                    <span className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleTimeString()}</span>
+                    <span className="text-xs text-slate-400">{new Date(t.detectedAt).toLocaleTimeString()}</span>
                   </div>
-                  <p className="text-xs text-slate-700 font-medium">{t.description}</p>
-                  <p className="text-xs font-bold text-emerald-600">Action: {t.autoMitigationTaken}</p>
+                  <p className="text-xs text-slate-700 font-medium">{t.details}</p>
+                  <p className="text-xs font-bold text-emerald-600">Action: {t.status}</p>
                 </div>
               ))}
             </div>
@@ -1356,7 +1356,7 @@ export default function AdminAiAgentsTab({ users, jobs, reviews, logs }: AdminAi
                     <span className="text-xs text-slate-400">{new Date(c.createdAt).toLocaleTimeString()}</span>
                   </div>
                   <h4 className="font-black text-slate-900 text-base">{c.headline}</h4>
-                  <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.bodyCopy}</p>
+                  <p className="text-xs text-slate-600 whitespace-pre-wrap">{c.bodyText}</p>
                 </div>
               ))}
             </div>

@@ -91,15 +91,20 @@ service cloud.firestore {
       );
       allow delete: if isOwner(userId) || isAdmin();
       
-      // Prevent privilege escalation and financial/subscription/rating tampering
+      // Prevent privilege escalation and financial/subscription/rating/verification tampering
       allow update: if isSignedIn() && (
         isAdmin() || (
           isOwner(userId) && (
             request.resource.data.get('isAdmin', false) == false && 
             !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager']) &&
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-              'subscriptionStatus', 'subscriptionId', 'hasExclusiveAddon', 'tierId',
-              'pendingPlatformFees', 'stripeCustomerId', 'gothamSubscription',
+              'role', 'isAdmin', 'permissions', 'verified', 'isVerified', 'idVerified',
+              'subscriptionStatus', 'subscriptionId', 'hasExclusiveAddon', 'isExclusiveActive',
+              'exclusiveSubscribedAt', 'exclusiveSubscriptionId', 'hasVerifiedVideoProSubscription',
+              'videoProSubscribedAt', 'videoProSubscriptionId', 'adWalletBalance', 'adSpendTotal',
+              'tierId', 'tier', 'isPro', 'isProInvoiceSubscriber',
+              'pendingPlatformFees', 'stripeCustomerId', 'stripeAccountId', 'gothamSubscription',
+              'balance', 'credits', 'payoutTransferred', 'paymentStatus', 'payoutStatus',
               'rating', 'totalReviews', 'trustScore'
             ])
           )
@@ -218,8 +223,17 @@ service cloud.firestore {
       allow update: if isSignedIn() && (resource == null || request.auth.uid in resource.data.participants || isAdmin());
       
       match /messages/{messageId} {
-        allow read, list: if isSignedIn();
-        allow create: if isSignedIn() && (request.auth.uid == request.resource.data.senderId || isAdmin());
+        allow read, list: if isSignedIn() && (
+          isAdmin() ||
+          (exists(/databases/$(database)/documents/conversations/$(conversationId)) && 
+           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants)
+        );
+        allow create: if isSignedIn() && (
+          isAdmin() ||
+          (request.auth.uid == request.resource.data.senderId &&
+           exists(/databases/$(database)/documents/conversations/$(conversationId)) &&
+           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants)
+        );
       }
     }
 
@@ -456,18 +470,26 @@ service cloud.firestore {
     match /jobs/{jobId} {
       allow read, list: if true; // Public read for feed & marketplace discovery
       allow create: if isSignedIn() && (
-        request.resource.data.get('homeownerId', '') == request.auth.uid || 
-        request.resource.data.get('userId', '') == request.auth.uid || 
-        request.resource.data.get('ownerId', '') == request.auth.uid || 
-        request.resource.data.get('posterId', '') == request.auth.uid || 
-        request.resource.data.get('customerId', '') == request.auth.uid || 
-        request.resource.data.get('isRecurringInstance', false) == true || 
-        isAdmin()
+        isAdmin() ||
+        ((request.resource.data.get('homeownerId', '') == request.auth.uid || 
+          request.resource.data.get('userId', '') == request.auth.uid || 
+          request.resource.data.get('ownerId', '') == request.auth.uid || 
+          request.resource.data.get('posterId', '') == request.auth.uid || 
+          request.resource.data.get('customerId', '') == request.auth.uid || 
+          request.resource.data.get('isRecurringInstance', false) == true) &&
+         request.resource.data.get('payoutTransferred', false) == false &&
+         request.resource.data.get('payoutStatus', 'pending') != 'transferred' &&
+         request.resource.data.get('completed', false) == false)
       );
-      // Owner has full update rights; accepted trader can only update operational fields; admin has full rights
+      // Owner has update rights (without changing ownerId or forging financial payout status); accepted trader can only update operational fields; admin has full rights
       allow update: if isSignedIn() && (
         isAdmin() ||
-        isJobOwner(resource.data) ||
+        (
+          isJobOwner(resource.data) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'payoutTransferred', 'payoutStatus', 'ownerId', 'homeownerId'
+          ])
+        ) ||
         (
           isJobTradesperson(resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([

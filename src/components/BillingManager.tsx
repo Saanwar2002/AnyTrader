@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { 
   Check, CreditCard, ShieldCheck, Zap, Star, Award, 
   ArrowRight, Info, Loader2, Sparkles, TrendingUp, 
-  PoundSterling, Package, Plus, Trash2, Wallet, Video, BellRing, Clock
+  PoundSterling, Package, Plus, Trash2, Wallet, Video, BellRing, Clock,
+  Calendar, AlertTriangle, RefreshCw, ExternalLink, Car
 } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -90,9 +91,13 @@ export default function BillingManager() {
     setIsProcessing(true);
     
     try {
+      const token = await auth.currentUser?.getIdToken();
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           userId: user.uid,
           tierName: tier.name,
@@ -119,30 +124,15 @@ export default function BillingManager() {
       const data = await response.json();
       if (data.url) {
         window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       } else {
-        const canonical = normalizeTraderTier(tier.name);
-        await updateDoc(doc(db, "users", user.uid), {
-          tierId: tier.name,
-          tier: canonical,
-          isPro: canonical !== 'payg',
-          isProInvoiceSubscriber: canonical !== 'payg',
-          subscriptionStatus: "active",
-          updatedAt: serverTimestamp()
-        });
-        alert(`Successfully switched to ${tier.name}! (Mock)`);
+        toast.success(`Successfully activated ${tier.name}!`);
         navigate("/dashboard");
       }
     } catch (err) {
       console.error("Billing Error:", err);
-      const canonical = normalizeTraderTier(tier.name);
-      await updateDoc(doc(db, "users", user.uid), {
-        tierId: tier.name,
-        tier: canonical,
-        isPro: canonical !== 'payg',
-        isProInvoiceSubscriber: canonical !== 'payg',
-        subscriptionStatus: "active"
-      });
-      navigate("/dashboard");
+      toast.error("Failed to start checkout session.");
     } finally {
       setIsProcessing(false);
     }
@@ -196,15 +186,175 @@ export default function BillingManager() {
   );
 
   // -------------------------------------------------------------
-  // CUSTOMER / PASSENGER BILLING UI (PAYMENT METHODS)
+  // CUSTOMER / LANDLORD BILLING UI
   // -------------------------------------------------------------
   if ((profile?.role as string) === "homeowner" || (profile?.role as string) === "customer") {
+    const isLandlordPro = profile?.tier === "landlord" || profile?.isLandlord;
+    const isCanceling = Boolean(profile?.cancelAtPeriodEnd);
+    const renewalDate = profile?.currentPeriodEnd ? new Date(profile.currentPeriodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Next billing cycle';
+
     return (
       <div className="min-h-screen bg-slate-50 pb-20">
-        <div className="max-w-2xl mx-auto px-6 pt-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Payment Methods</h1>
-            <p className="text-slate-500 font-medium">Manage your cards and bank accounts for seamless booking and rides.</p>
+        <div className="max-w-3xl mx-auto px-6 pt-8 space-y-8">
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Billing & Subscriptions</h1>
+            <p className="text-slate-500 font-medium">Manage your membership plan, payment methods, and invoice history.</p>
+          </div>
+
+          {/* Landlord Pro Subscription Card */}
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-[2rem] border border-black shadow-2xl p-6 sm:p-8 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6 pb-6 border-b border-white/10">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20 text-xs font-bold uppercase tracking-wider mb-3">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Landlord Portfolio Plan
+                </div>
+                <h2 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                  Premium Landlord Membership
+                </h2>
+                <p className="text-xs text-slate-300 font-medium mt-1 max-w-lg leading-relaxed">
+                  Full multi-property automated passport management, CP12 & EICR compliance expiration alerts, tenant repair bridge, and 1-tap bulk trade dispatch.
+                </p>
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-3xl font-black text-white">£19.00</span>
+                <span className="text-xs text-slate-400 font-bold"> / month</span>
+              </div>
+            </div>
+
+            {/* Current Status Badge & Action Controls */}
+            {isLandlordPro ? (
+              <div className="bg-white/10 rounded-2xl p-5 border border-white/15 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-extrabold uppercase tracking-wider border border-emerald-500/30 flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5" /> Active Subscription
+                      </span>
+                      {isCanceling && (
+                        <span className="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 text-xs font-extrabold uppercase tracking-wider border border-rose-500/30">
+                          Cancels {renewalDate}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-300 font-semibold mt-2">
+                      {isCanceling 
+                        ? `Your subscription will remain fully active until ${renewalDate}. You won't be charged again.`
+                        : `Your subscription auto-renews on ${renewalDate} for £19.00/mo.`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {isCanceling ? (
+                      <button
+                        onClick={() => handleReactivateSubscription('tier')}
+                        disabled={isProcessing}
+                        className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
+                      >
+                        {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Resume Auto-Renewal
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleCancelSubscription('tier')}
+                        disabled={isProcessing}
+                        className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-rose-500/30 text-rose-200 border border-rose-300/30 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                      >
+                        {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                        Cancel at Renewal
+                      </button>
+                    )}
+
+                    <button
+                      onClick={handleOpenCustomerPortal}
+                      disabled={isProcessing}
+                      className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-blue-200" />
+                      Stripe Portal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    "Unlimited Property Passports & Digital Twins",
+                    "Automated CP12 Gas & EICR Compliance Expiration Alerts",
+                    "Tenant Repair Portal & In-App WhatsApp Sharing Bridge",
+                    "⚡ 1-Tap Bulk Compliance & Emergency Trade Dispatch",
+                    "Dedicated Portfolio Analytics & Insurance Risk Reports"
+                  ].map((feature, idx) => (
+                    <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-slate-200">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 text-emerald-400" />
+                      </div>
+                      <span>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <p className="text-[11px] text-slate-400 font-medium">Cancel anytime in 1-click. Instant activation.</p>
+                  <button
+                    onClick={async () => {
+                      if (!user) return;
+                      setIsProcessing(true);
+                      try {
+                        const token = await auth.currentUser?.getIdToken();
+                        const response = await fetch("/api/create-checkout-session", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                          },
+                          body: JSON.stringify({
+                            userId: user.uid,
+                            tierName: "Premium Landlord",
+                            price_data: {
+                              currency: 'gbp',
+                              unit_amount: 1900,
+                              product_data: {
+                                name: 'Landlord Pro Portfolio Membership',
+                                description: 'Multi-property passport digital twins, automated CP12/EICR compliance alerts & bulk trade dispatch'
+                              },
+                              recurring: { interval: 'month' }
+                            },
+                            mode: 'subscription',
+                            metadata: {
+                              tier: 'landlord',
+                              tierName: 'Premium Landlord',
+                              subscriptionType: 'landlord'
+                            },
+                            successUrl: `${window.location.origin}/portfolio?subscription_success=true`,
+                            cancelUrl: `${window.location.origin}/billing`
+                          })
+                        });
+                        const data = await response.json();
+                        if (data.url) {
+                          window.location.href = data.url;
+                        } else {
+                          toast.error(data.error || "Failed to start checkout session");
+                        }
+                      } catch (e: any) {
+                        console.error(e);
+                        toast.error("Failed to initiate Landlord Pro upgrade");
+                      } finally {
+                        setIsProcessing(false);
+                      }
+                    }}
+                    disabled={isProcessing}
+                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition"
+                  >
+                    {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 text-amber-300" />}
+                    Upgrade to Landlord Pro (£19/mo)
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-[2rem] border border-black shadow-xl shadow-slate-200/50 p-6 mb-6">
@@ -272,26 +422,163 @@ export default function BillingManager() {
     return currentCanonical === tierCanonical;
   };
 
-  const handleToggleExclusiveLeads = async () => {
-    if (!user || !profile) return;
+  const formatPeriodDate = (isoString?: string) => {
+    if (!isoString) return "End of current period";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "End of current period";
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return "End of current period";
+    }
+  };
+
+  const handleOpenCustomerPortal = async () => {
+    if (!user) return;
     setIsProcessing(true);
     try {
-      const currentActive = Boolean(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false);
-      const nextState = !currentActive;
-      await updateDoc(doc(db, "users", user.uid), {
-        hasExclusiveAddon: nextState,
-        isExclusiveActive: nextState,
-        exclusiveSubscribedAt: nextState ? new Date().toISOString() : null,
-        updatedAt: serverTimestamp()
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-customer-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          returnUrl: `${window.location.origin}/billing`
+        })
       });
-      if (nextState) {
-        toast.success(`⚡ Priority Exclusive Offers Active! (£${platformConfig?.paidAddons?.exclusiveLeads?.price ?? 29}/mo)`);
-      } else {
-        toast.info("Priority Exclusive Offers paused.");
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       }
     } catch (e) {
       console.error(e);
-      toast.error("Failed to update Exclusive Leads add-on");
+      toast.error("Failed to open billing portal");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCancelSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro') => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType })
+      });
+      const data = await response.json();
+      if (data.success) {
+        const formattedDate = formatPeriodDate(data.currentPeriodEnd);
+        toast.success("Subscription scheduled to cancel", {
+          description: `Your subscription will cancel on ${formattedDate}. You will keep all benefits until then with no further charges.`
+        });
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to cancel subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactivateSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro') => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/reactivate-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Subscription reactivated!", {
+          description: "Your subscription has been renewed and will continue auto-renewing normally."
+        });
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to reactivate subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleExclusiveLeads = async () => {
+    if (!user || !profile) return;
+    const isCurrentlyActive = Boolean(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false);
+    const isCanceling = Boolean(profile?.exclusiveCancelAtPeriodEnd);
+
+    if (isCurrentlyActive && isCanceling) {
+      await handleReactivateSubscription('exclusive_leads');
+      return;
+    }
+
+    if (isCurrentlyActive) {
+      await handleCancelSubscription('exclusive_leads');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: "Exclusive Leads Add-on",
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(exclusivePrice * 100),
+            recurring: { interval: 'month' },
+            product_data: {
+              name: "Exclusive Leads Add-on",
+              description: "30-minute head start on incoming quotes with priority matching."
+            }
+          },
+          successUrl: `${window.location.origin}/billing?exclusive=success`,
+          cancelUrl: `${window.location.origin}/billing`,
+          metadata: {
+            isExclusiveAddon: "true",
+            type: "exclusive_leads",
+            userId: user.uid
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
+      } else {
+        toast.success(`⚡ Priority Exclusive Offers Active! (£${exclusivePrice.toFixed(2)}/mo)`);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to start checkout for Exclusive Leads add-on");
     } finally {
       setIsProcessing(false);
     }
@@ -299,25 +586,125 @@ export default function BillingManager() {
 
   const handleToggleVideoPro = async () => {
     if (!user || !profile) return;
+    const isCurrentlyActive = Boolean(profile?.hasVerifiedVideoProSubscription);
+    const isCanceling = Boolean(profile?.videoProCancelAtPeriodEnd);
+
+    if (isCurrentlyActive && isCanceling) {
+      await handleReactivateSubscription('video_pro');
+      return;
+    }
+
+    if (isCurrentlyActive) {
+      await handleCancelSubscription('video_pro');
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const currentActive = Boolean(profile?.hasVerifiedVideoProSubscription);
-      const nextState = !currentActive;
-      const updates: any = {
-        hasVerifiedVideoProSubscription: nextState,
-        videoProSubscribedAt: nextState ? new Date().toISOString() : null,
-        videoVerificationStatus: nextState ? "verified" : (profile?.videoVerificationUrl ? "verified" : "none"),
-        updatedAt: serverTimestamp()
-      };
-      await updateDoc(doc(db, "users", user.uid), updates);
-      if (nextState) {
-        toast.success(`⚡ Verified Video Pro Active! (£${platformConfig?.paidAddons?.verifiedVideoPro?.monthlyPrice ?? 15}/mo)`);
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: "Verified Video Pro",
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(videoProMonthly * 100),
+            recurring: { interval: 'month' },
+            product_data: {
+              name: "Verified Video Pro Add-on",
+              description: "Verified video intro badge, priority placement, and +35 AI match score boost."
+            }
+          },
+          successUrl: `${window.location.origin}/billing?video_pro=success`,
+          cancelUrl: `${window.location.origin}/billing`,
+          metadata: {
+            isVideoPro: "true",
+            type: "video_pro_subscription",
+            userId: user.uid
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
       } else {
-        toast.info("Verified Video Pro subscription paused.");
+        toast.success(`⚡ Verified Video Pro Active! (£${videoProMonthly.toFixed(2)}/mo)`);
       }
     } catch (e) {
       console.error(e);
-      toast.error("Failed to update Verified Video Pro subscription");
+      toast.error("Failed to start checkout for Verified Video Pro subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleToggleGoldDriver = async () => {
+    if (!user || !profile) return;
+    const isCurrentlyActive = Boolean(profile?.isGoldDriver || profile?.driverTier === "gold");
+    const isCanceling = Boolean(profile?.driverCancelAtPeriodEnd || profile?.cancelAtPeriodEnd);
+
+    if (isCurrentlyActive && isCanceling) {
+      await handleReactivateSubscription('driver_gold');
+      return;
+    }
+
+    if (isCurrentlyActive) {
+      await handleCancelSubscription('driver_gold');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: "Gold Driver Subscription",
+          mode: "subscription",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: 4999, // £49.99
+            recurring: { interval: 'month' },
+            product_data: {
+              name: "Gold Driver Subscription",
+              description: "10% commission rate, 4 destination filters, 14-day advance booking, and priority dispatch."
+            }
+          },
+          successUrl: `${window.location.origin}/billing?driver_gold=success`,
+          cancelUrl: `${window.location.origin}/billing`,
+          metadata: {
+            subscriptionType: "driver_gold",
+            type: "driver_gold",
+            userId: user.uid
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
+      } else {
+        toast.success("⚡ Gold Driver Subscription Active! (£49.99/mo)");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to start checkout for Gold Driver subscription");
     } finally {
       setIsProcessing(false);
     }
@@ -451,6 +838,7 @@ export default function BillingManager() {
   const videoProMonthly = platformConfig?.paidAddons?.verifiedVideoPro?.monthlyPrice ?? 15.00;
   const isExclusiveActive = Boolean(profile?.hasExclusiveAddon && profile?.isExclusiveActive !== false);
   const isVideoProActive = Boolean(profile?.hasVerifiedVideoProSubscription);
+  const isGoldDriverActive = Boolean(profile?.isGoldDriver || profile?.driverTier === "gold");
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
@@ -494,36 +882,76 @@ export default function BillingManager() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-[#1e3a5f] p-8 rounded-[2.5rem] text-white mb-12 shadow-xl shadow-blue-900/10 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden"
+          className="bg-[#1e3a5f] p-8 rounded-[2.5rem] text-white mb-12 shadow-xl shadow-blue-900/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8 relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-32 -mt-32" />
           
           <div className="relative z-10 flex items-center gap-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-black/20">
+            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-black/20 shrink-0">
               <Package className="w-8 h-8 text-blue-300" />
             </div>
             <div>
               <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Your Current Plan</p>
               <h2 className="text-3xl font-black">{profile?.tierId || "Free Trial"}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-blue-100/60">Status:</span>
-                <span className="flex items-center gap-1 text-xs font-bold text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  {profile?.subscriptionStatus === "active" ? "Active" : "Trial Period"}
+              <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  {profile?.subscriptionStatus === "active" ? "Active Subscription" : "Trial Period"}
                 </span>
+
+                {profile?.cancelAtPeriodEnd ? (
+                  <span className="flex items-center gap-1 text-xs font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/30">
+                    <AlertTriangle className="w-3 h-3 text-amber-300" />
+                    Cancels on {formatPeriodDate(profile?.currentPeriodEnd)} (Benefits Active)
+                  </span>
+                ) : profile?.currentPeriodEnd ? (
+                  <span className="flex items-center gap-1 text-xs text-blue-200 font-medium">
+                    <Calendar className="w-3 h-3 text-blue-300" />
+                    Renews on {formatPeriodDate(profile?.currentPeriodEnd)}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
 
-          <div className="relative z-10 grid grid-cols-2 gap-4 md:gap-8 w-full md:w-auto">
-             <div className="bg-white/5 p-4 rounded-3xl border border-black/10">
-                <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Fees Paid</p>
-                <p className="text-xl font-black">£0.00</p>
-             </div>
-             <div className="bg-white/5 p-4 rounded-3xl border border-black/10">
-                <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-1">Credits Saved</p>
-                <p className="text-xl font-black">£{(profile?.phantomFeesSaved || 0).toFixed(2)}</p>
-             </div>
+          <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+            {profile?.subscriptionStatus === "active" && (
+              <>
+                {profile?.cancelAtPeriodEnd ? (
+                  <button
+                    onClick={() => handleReactivateSubscription('tier')}
+                    disabled={isProcessing}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition shadow-sm"
+                  >
+                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Resume Auto-Renewal
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleCancelSubscription('tier')}
+                    disabled={isProcessing}
+                    className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-rose-500/30 text-rose-200 border border-rose-300/30 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                  >
+                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                    Cancel at Renewal
+                  </button>
+                )}
+
+                <button
+                  onClick={handleOpenCustomerPortal}
+                  disabled={isProcessing}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-200" />
+                  Stripe Portal
+                </button>
+              </>
+            )}
+
+            <div className="bg-white/5 p-3 px-4 rounded-2xl border border-black/10 text-right">
+              <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest mb-0.5">Credits Saved</p>
+              <p className="text-lg font-black">£{(profile?.phantomFeesSaved || 0).toFixed(2)}</p>
+            </div>
           </div>
         </motion.div>
 
@@ -626,7 +1054,7 @@ export default function BillingManager() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Exclusive Leads Add-on */}
             <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex flex-col justify-between">
               <div className="space-y-3">
@@ -636,9 +1064,17 @@ export default function BillingManager() {
                   </div>
                   <span className={cn(
                     "text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full",
-                    isExclusiveActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+                    profile?.exclusiveCancelAtPeriodEnd 
+                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                      : isExclusiveActive 
+                      ? "bg-emerald-100 text-emerald-800" 
+                      : "bg-slate-100 text-slate-600"
                   )}>
-                    {isExclusiveActive ? "Active" : "Optional Add-On"}
+                    {profile?.exclusiveCancelAtPeriodEnd 
+                      ? "Canceling" 
+                      : isExclusiveActive 
+                      ? "Active" 
+                      : "Optional Add-On"}
                   </span>
                 </div>
                 <div>
@@ -647,6 +1083,21 @@ export default function BillingManager() {
                     <span className="text-2xl font-black text-slate-900">£{exclusivePrice.toFixed(2)}</span>
                     <span className="text-xs text-slate-400 font-bold">/mo</span>
                   </div>
+                  {isExclusiveActive && (
+                    <div className="mt-1">
+                      {profile?.exclusiveCancelAtPeriodEnd ? (
+                        <p className="text-[11px] text-amber-700 font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                          Cancels on {formatPeriodDate(profile?.exclusiveCurrentPeriodEnd)} (Benefits active until then)
+                        </p>
+                      ) : profile?.exclusiveCurrentPeriodEnd ? (
+                        <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          Renews on {formatPeriodDate(profile?.exclusiveCurrentPeriodEnd)}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Get 30-minute advance notifications on newly posted leads before they enter the open public feed. Maximum 3 exclusive leads matched daily.
@@ -666,12 +1117,28 @@ export default function BillingManager() {
                 disabled={isProcessing}
                 className={cn(
                   "w-full mt-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2",
-                  isExclusiveActive 
-                    ? "bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100" 
+                  profile?.exclusiveCancelAtPeriodEnd
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : isExclusiveActive 
+                    ? "bg-amber-50 text-amber-900 border border-amber-300 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-300" 
                     : "bg-slate-900 text-white hover:bg-slate-800"
                 )}
               >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : isExclusiveActive ? "Active (Click to Pause)" : `Subscribe (£${exclusivePrice.toFixed(2)}/mo)`}
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : profile?.exclusiveCancelAtPeriodEnd ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Resume Auto-Renewal
+                  </>
+                ) : isExclusiveActive ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    Cancel at Renewal
+                  </>
+                ) : (
+                  `Subscribe (£${exclusivePrice.toFixed(2)}/mo)`
+                )}
               </button>
             </div>
 
@@ -684,9 +1151,17 @@ export default function BillingManager() {
                   </div>
                   <span className={cn(
                     "text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full",
-                    isVideoProActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"
+                    profile?.videoProCancelAtPeriodEnd
+                      ? "bg-purple-100 text-purple-900 border border-purple-300"
+                      : isVideoProActive 
+                      ? "bg-emerald-100 text-emerald-800" 
+                      : "bg-slate-100 text-slate-600"
                   )}>
-                    {isVideoProActive ? "Active" : "Optional Add-On"}
+                    {profile?.videoProCancelAtPeriodEnd
+                      ? "Canceling"
+                      : isVideoProActive 
+                      ? "Active" 
+                      : "Optional Add-On"}
                   </span>
                 </div>
                 <div>
@@ -695,6 +1170,21 @@ export default function BillingManager() {
                     <span className="text-2xl font-black text-slate-900">£{videoProMonthly.toFixed(2)}</span>
                     <span className="text-xs text-slate-400 font-bold">/mo</span>
                   </div>
+                  {isVideoProActive && (
+                    <div className="mt-1">
+                      {profile?.videoProCancelAtPeriodEnd ? (
+                        <p className="text-[11px] text-purple-700 font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-purple-600 shrink-0" />
+                          Cancels on {formatPeriodDate(profile?.videoProCurrentPeriodEnd)} (Benefits active until then)
+                        </p>
+                      ) : profile?.videoProCurrentPeriodEnd ? (
+                        <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          Renews on {formatPeriodDate(profile?.videoProCurrentPeriodEnd)}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Host an authentic 15-30s video intro showcasing your skills, vehicle, and credentials. Includes our gold verification shield.
@@ -714,12 +1204,115 @@ export default function BillingManager() {
                 disabled={isProcessing}
                 className={cn(
                   "w-full mt-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2",
-                  isVideoProActive 
-                    ? "bg-purple-50 text-purple-900 border border-purple-300 hover:bg-purple-100" 
+                  profile?.videoProCancelAtPeriodEnd
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : isVideoProActive 
+                    ? "bg-purple-50 text-purple-900 border border-purple-300 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-300" 
                     : "bg-purple-600 text-white hover:bg-purple-700"
                 )}
               >
-                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : isVideoProActive ? "Active (Click to Pause)" : `Subscribe (£${videoProMonthly.toFixed(2)}/mo)`}
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : profile?.videoProCancelAtPeriodEnd ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Resume Auto-Renewal
+                  </>
+                ) : isVideoProActive ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-purple-600" />
+                    Cancel at Renewal
+                  </>
+                ) : (
+                  `Subscribe (£${videoProMonthly.toFixed(2)}/mo)`
+                )}
+              </button>
+            </div>
+
+            {/* Gold Driver Subscription Tier */}
+            <div className="bg-white p-6 rounded-2xl border border-black shadow-sm flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                    <Car className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <span className={cn(
+                    "text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full",
+                    profile?.driverCancelAtPeriodEnd
+                      ? "bg-amber-100 text-amber-900 border border-amber-300"
+                      : isGoldDriverActive 
+                      ? "bg-emerald-100 text-emerald-800" 
+                      : "bg-slate-100 text-slate-600"
+                  )}>
+                    {profile?.driverCancelAtPeriodEnd
+                      ? "Canceling"
+                      : isGoldDriverActive 
+                      ? "Active Gold" 
+                      : "Driver Tier"}
+                  </span>
+                </div>
+                <div>
+                  <h4 className="text-base font-black text-slate-900">Gold Driver Tier</h4>
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-2xl font-black text-slate-900">£49.99</span>
+                    <span className="text-xs text-slate-400 font-bold">/mo</span>
+                  </div>
+                  {isGoldDriverActive && (
+                    <div className="mt-1">
+                      {profile?.driverCancelAtPeriodEnd ? (
+                        <p className="text-[11px] text-amber-700 font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                          Cancels on {formatPeriodDate(profile?.driverCurrentPeriodEnd || profile?.currentPeriodEnd)} (Gold benefits active until then)
+                        </p>
+                      ) : (profile?.driverCurrentPeriodEnd || profile?.currentPeriodEnd) ? (
+                        <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          Renews on {formatPeriodDate(profile?.driverCurrentPeriodEnd || profile?.currentPeriodEnd)}
+                        </p>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Top tier driver subscription with reduced 10% commission rate, 4 daily destination filters, 14-day advance booking window, and priority ride dispatch (+50 score).
+                </p>
+                <div className="text-[11px] font-bold text-slate-700 space-y-1 pt-2">
+                  <div className="flex items-center gap-1.5 text-amber-700">
+                    <Check className="w-3.5 h-3.5" /> Low 10% Platform Commission
+                  </div>
+                  <div className="flex items-center gap-1.5 text-amber-700">
+                    <Check className="w-3.5 h-3.5" /> 4 Daily Destination Filters
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleToggleGoldDriver}
+                disabled={isProcessing}
+                className={cn(
+                  "w-full mt-6 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2",
+                  profile?.driverCancelAtPeriodEnd
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : isGoldDriverActive 
+                    ? "bg-amber-50 text-amber-900 border border-amber-300 hover:bg-rose-50 hover:text-rose-900 hover:border-rose-300" 
+                    : "bg-amber-500 text-slate-950 hover:bg-amber-400"
+                )}
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : profile?.driverCancelAtPeriodEnd ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Resume Auto-Renewal
+                  </>
+                ) : isGoldDriverActive ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    Cancel at Renewal
+                  </>
+                ) : (
+                  "Subscribe (£49.99/mo)"
+                )}
               </button>
             </div>
 

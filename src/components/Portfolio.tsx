@@ -485,6 +485,92 @@ export default function Portfolio() {
             </div>
           </div>
 
+          {/* Landlord Pro Subscription Banner */}
+          <div className="p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl border border-black shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Zap className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-sm tracking-wide text-white">Landlord Pro Membership</h3>
+                  {(profile?.tier === "landlord" || profile?.isLandlord) ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                      Active
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-black uppercase tracking-wider">
+                      £19.00 / mo
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                  {(profile?.tier === "landlord" || profile?.isLandlord)
+                    ? profile?.cancelAtPeriodEnd 
+                      ? `Your subscription will cancel on ${profile?.currentPeriodEnd ? new Date(profile.currentPeriodEnd).toLocaleDateString('en-GB') : 'end of cycle'}. You retain full Pro access.`
+                      : `Auto-renews on ${profile?.currentPeriodEnd ? new Date(profile.currentPeriodEnd).toLocaleDateString('en-GB') : 'next cycle'}. Multi-property digital twins, CP12 & EICR alerts & bulk trade dispatch enabled.`
+                    : "Automate CP12 Gas & EICR alerts, receive tenant repair reports directly on WhatsApp, and bulk dispatch 1-tap trades."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {(profile?.tier === "landlord" || profile?.isLandlord) ? (
+                <button
+                  onClick={() => navigate("/billing")}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs rounded-xl border border-white/20 transition flex items-center gap-1.5"
+                >
+                  Manage Membership
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (!user) return;
+                    try {
+                      const response = await fetch("/api/create-checkout-session", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          userId: user.uid,
+                          tierName: "Premium Landlord",
+                          price_data: {
+                            currency: 'gbp',
+                            unit_amount: 1900,
+                            product_data: {
+                              name: 'Landlord Pro Portfolio Membership',
+                              description: 'Multi-property passport digital twins, automated CP12/EICR compliance alerts & bulk trade dispatch'
+                            },
+                            recurring: { interval: 'month' }
+                          },
+                          mode: 'subscription',
+                          metadata: {
+                            tier: 'landlord',
+                            tierName: 'Premium Landlord',
+                            subscriptionType: 'landlord'
+                          },
+                          successUrl: `${window.location.origin}/portfolio?subscription_success=true`,
+                          cancelUrl: `${window.location.origin}/portfolio`
+                        })
+                      });
+                      const data = await response.json();
+                      if (data.url) {
+                        window.location.href = data.url;
+                      } else {
+                        toast.error(data.error || "Failed to start checkout session");
+                      }
+                    } catch (e: any) {
+                      console.error(e);
+                      toast.error("Failed to initiate Landlord Pro upgrade");
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-900 font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition flex items-center gap-1.5"
+                >
+                  Upgrade to Landlord Pro (£19/mo)
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* Portfolio Compliance Summary Banner */}
           {properties.length > 0 && (
             <div className="p-4 bg-slate-900 text-white rounded-2xl border border-black shadow-md grid grid-cols-1 sm:grid-cols-3 gap-3">

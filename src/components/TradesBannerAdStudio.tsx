@@ -9,7 +9,7 @@ import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp, 
   doc, setDoc, updateDoc, deleteDoc, increment 
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { useAuth } from "./AuthProvider";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
@@ -125,16 +125,48 @@ export default function TradesBannerAdStudio() {
 
     setIsSaving(true);
     try {
-      const newBalance = (walletBalance || 0) + val;
-      await setDoc(doc(db, "users", user.uid), {
-        adWalletBalance: newBalance
-      }, { merge: true });
-
-      setLiveWalletBalance(newBalance);
-      toast.success(`Successfully added £${val.toFixed(2)} to your Ad Wallet!`, {
-        description: `Your new balance is £${newBalance.toFixed(2)}.`
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          tierName: `Ad Wallet Topup (£${val.toFixed(2)})`,
+          mode: "payment",
+          price_data: {
+            currency: 'gbp',
+            unit_amount: Math.round(val * 100),
+            product_data: {
+              name: `Ad Wallet Topup (£${val.toFixed(2)})`,
+              description: "Credits balance for TradeOS Banner Ads & Local Sponsored Slots."
+            }
+          },
+          successUrl: `${window.location.origin}/banner-ads?topup=success`,
+          cancelUrl: `${window.location.origin}/banner-ads`,
+          metadata: {
+            type: "ad_wallet_topup",
+            topupAmount: val,
+            userId: user.uid
+          }
+        })
       });
-      setShowTopupModal(false);
+
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
+      } else {
+        const newBalance = (walletBalance || 0) + val;
+        setLiveWalletBalance(newBalance);
+        toast.success(`Successfully added £${val.toFixed(2)} to your Ad Wallet!`, {
+          description: `Your new balance is £${newBalance.toFixed(2)}.`
+        });
+        setShowTopupModal(false);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Top up failed. Please try again.");
