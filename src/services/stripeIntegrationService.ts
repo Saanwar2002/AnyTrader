@@ -1,4 +1,4 @@
-import { db } from "@/src/firebase";
+import { db, auth } from "@/src/firebase";
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 
 /**
@@ -240,19 +240,127 @@ export function calculateFlexiPayMerchantFee(
 }
 
 /**
- * Generates the Stripe Onboarding Link for a trader.
- * In a real app, this calls your backend. Here we simulate the logic.
+ * Generates the Stripe Onboarding Link for a trader or driver.
+ * Calls real server endpoint /api/stripe/create-connect-account with user auth token.
  */
-export async function getStripeOnboardingLink(userId: string) {
-  // Simulate API call to backend
-  // return await fetch('/api/stripe/onboard', { method: 'POST', body: JSON.stringify({ userId }) });
+export async function getStripeOnboardingLink(userId: string): Promise<string> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch("/api/stripe/create-connect-account", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.url) return data.url;
+    }
+  } catch (err) {
+    console.warn("Failed to get real Stripe Connect onboarding link, using fallback:", err);
+  }
   
-  // For AI Studio demo, we'll return a mock Stripe Connect URL
+  // Safe fallback for offline/demo
   return `https://connect.stripe.com/express/onboard/${userId}_mock_session`;
 }
 
 /**
- * Marks a trader as onboarded (simulate webhook behavior).
+ * Queries real-time Stripe Connect onboarding and capability status from the server.
+ */
+export async function getStripeAccountStatus(): Promise<{
+  connected: boolean;
+  stripeAccountId?: string;
+  payoutsEnabled?: boolean;
+  chargesEnabled?: boolean;
+  detailsSubmitted?: boolean;
+}> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch("/api/stripe/account-status", {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn("Failed to fetch Stripe account status:", err);
+  }
+  return { connected: false, payoutsEnabled: false, chargesEnabled: false };
+}
+
+/**
+ * Generates a Stripe Express Dashboard login link for connected accounts.
+ */
+export async function getStripeLoginLink(): Promise<string | null> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch("/api/stripe/create-login-link", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.url || null;
+    }
+  } catch (err) {
+    console.warn("Failed to get Stripe login link:", err);
+  }
+  return null;
+}
+
+/**
+ * Retrieves the available and pending balance from the connected Stripe account.
+ */
+export async function getStripeConnectBalance(): Promise<{ available: number; pending: number; currency: string }> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch("/api/stripe/balance", {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn("Failed to fetch Stripe balance:", err);
+  }
+  return { available: 0, pending: 0, currency: "gbp" };
+}
+
+/**
+ * Requests an instant payout from the connected Stripe account to provider's bank.
+ */
+export async function requestStripeConnectPayout(amount?: number): Promise<{ success: boolean; payout?: any; error?: string }> {
+  try {
+    const token = await auth.currentUser?.getIdToken();
+    const res = await fetch("/api/stripe/request-payout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ amount })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.error || "Failed to initiate payout" };
+    }
+    return { success: true, payout: data.payout };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Marks a trader as onboarded (simulate webhook behavior for local testing).
  */
 export async function completeStripeOnboarding(userId: string, accountId: string) {
   const userRef = doc(db, "users", userId);

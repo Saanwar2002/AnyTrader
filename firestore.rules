@@ -39,10 +39,13 @@ service cloud.firestore {
       );
     }
 
-    // --- Platform Config (Readable by all for init) ---
+    // --- Platform Config (Readable by all for init, strictly forbidding secrets) ---
+    match /platform_config/secrets {
+      allow read, write: if false; // Deny all client SDK access to API keys & secrets
+    }
     match /platform_config/{document=**} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read: if document != 'secrets';
+      allow write: if isAdmin() && document != 'secrets';
     }
     match /platform_categories/{document=**} {
       allow read: if true;
@@ -77,9 +80,9 @@ service cloud.firestore {
 
     // --- User Profiles (Private PII & Full Profile) ---
     match /users/{userId} {
-      // Authenticated users can read public metadata and profile details required for jobs/chats/reviews
-      allow read: if isSignedIn() || 
-                     (resource != null && (
+      // Authenticated users can read their own profile, admins can read all, or public profiles of providers
+      allow read: if isOwner(userId) || isAdmin() || 
+                     (isSignedIn() && resource != null && (
                        resource.data.get('role', '') in ['tradesperson', 'trader', 'business', 'driver', 'consultant'] ||
                        resource.data.get('isPublic', false) == true
                      ));
@@ -126,7 +129,16 @@ service cloud.firestore {
     match /ride_requests/{rideId} {
       allow create: if isSignedIn() && (request.resource.data.get('passengerId', '') == request.auth.uid || request.resource.data.get('riderId', '') == request.auth.uid);
       allow read: if isSignedIn() && (resource == null || resource.data.status in ["pending", "searching", "offered", "draft"] || resource.data.get('passengerId', '') == request.auth.uid || resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && (resource == null || resource.data.get('passengerId', '') == request.auth.uid || resource.data.get('riderId', '') == request.auth.uid || resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid || isAdmin());
+      allow update: if isAdmin() || (
+        isSignedIn() && (
+          resource.data.get('passengerId', '') == request.auth.uid ||
+          resource.data.get('riderId', '') == request.auth.uid ||
+          (
+            (resource.data.get('driverId', '') == request.auth.uid || resource.data.get('assignedDriverId', '') == request.auth.uid) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'location', 'updatedAt'])
+          )
+        )
+      );
       allow delete: if isAdmin();
 
       match /chat/{messageId} {
@@ -141,7 +153,13 @@ service cloud.firestore {
     }
     
     match /live_tracking/{rideId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (
+        resource == null || 
+        resource.data.driverId == request.auth.uid || 
+        resource.data.passengerId == request.auth.uid ||
+        resource.data.get('riderId', '') == request.auth.uid ||
+        isAdmin()
+      );
       allow write: if isSignedIn() && (resource == null || resource.data.driverId == request.auth.uid || request.resource.data.driverId == request.auth.uid || isAdmin());
     }
 
@@ -150,7 +168,7 @@ service cloud.firestore {
       allow write: if isOwner(driverId) || isAdmin();
     }
 
-    // --- Notifications (User-scoped read/update; admin write) ---
+    // --- Notifications (User-scoped read/update; verified sender or admin create) ---
     match /notifications/{notificationId} {
       allow read: if isSignedIn() && (
         resource == null || 
@@ -160,7 +178,11 @@ service cloud.firestore {
         resource.data.get('homeownerId', '') == request.auth.uid || 
         isAdmin()
       );
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && (
+        request.resource.data.get('senderId', '') == request.auth.uid || 
+        request.resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
       allow update: if isAdmin() || (
         isSignedIn() && 
         resource != null && 
@@ -334,7 +356,7 @@ service cloud.firestore {
 
     match /shop_orders/{orderId} {
       allow read: if isSignedIn() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && !request.resource.data.keys().hasAny(['paid', 'status', 'total', 'fulfilled']);
       allow update: if isAdmin();
     }
 
@@ -368,7 +390,7 @@ service cloud.firestore {
 
     // --- Tenant Issues (Hardened: Protected from public data extraction) ---
     match /tenant_issues/{issueId} {
-      allow create: if request.resource.data.get('tenantName', '') is string && 
+      allow create: if isSignedIn() && request.resource.data.get('tenantName', '') is string && 
                        request.resource.data.get('title', '') is string;
       allow get, list: if isSignedIn() && (
         resource.data.get('landlordOwnerId', '') == request.auth.uid || 
@@ -545,11 +567,11 @@ service cloud.firestore {
 
     // --- Consultancy System ---
     match /rateCards/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || resource.data.get('isPublic', false) == true || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
     match /availabilityWindows/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (resource == null || resource.data.consultantId == request.auth.uid || resource.data.get('isPublic', false) == true || isAdmin());
       allow write: if isSignedIn() && (request.resource.data.consultantId == request.auth.uid || isAdmin());
     }
     match /calendarSyncs/{id} {

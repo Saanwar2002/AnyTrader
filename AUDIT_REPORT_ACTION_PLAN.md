@@ -14,10 +14,10 @@ This document serves as the master engineering roadmap to remediate all **58 sho
 ---
 
 ## 📊 High-Level Status Dashboard
-- **Total Tasks**: 35 action items across 6 phases
-- **Completed**: 26 / 35 (74.3%)
-- **Current Phase**: Phase 5 (Mobile App Store & Infrastructure Readiness)
-- **Current Task**: Task 5.1
+- **Total Tasks**: 38 action items across 7 phases
+- **Completed**: 30 / 38 (78.9%)
+- **Current Phase**: Phase 6 & Phase 7 (Performance, Architecture & Zero-Custody Stripe Connect)
+- **Current Status**: All 195 Unit Tests Passing (14/14 Suites), TypeScript Strict Lint Passing (0 errors)
 
 ---
 
@@ -360,15 +360,39 @@ This document serves as the master engineering roadmap to remediate all **58 sho
   - **Files**: `vite.config.ts`
   - **Status**: `[ ] Pending`
 
-- [ ] **Task 6.6: Fix TypeScript Compiler Errors (`npm run lint` Gate)**
+- [x] **Task 6.6: Fix TypeScript Compiler Errors (`npm run lint` Gate)**
   - **Audit Ref**: M-2, M-3
   - **Objective**: Triage and resolve the TypeScript errors in the codebase so that `npm run lint` (`tsc --noEmit`) passes cleanly as an automated quality gate.
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-10)`
+  - **Verification**: `npm run lint` (`tsc --noEmit`) passes with 0 errors across entire frontend and backend codebases.
 
 - [ ] **Task 6.7: Modularize God Components**
   - **Audit Ref**: M-1
   - **Objective**: Incrementally break down files exceeding 5,000 lines (`AnyTraderAdmin.tsx`, `DriverTerminal.tsx`, `JobDetails.tsx`, `PassengerBooking.tsx`) into modular subcomponents and custom hooks.
   - **Status**: `[ ] Pending`
+
+---
+
+## 💳 Phase 7: Zero-Custody Financial Infrastructure & Dynamic Pricing Controls
+*Goal: Ensure 100% compliance with financial regulations by eliminating platform custody of client money, enforcing destination charge routing via Stripe Connect, and providing dynamic admin pricing control with zero client tampering.*
+
+- [x] **Task 7.1: Stripe Connect Direct Destination Routing for Client Escrow**
+  - **Objective**: Route 100% of homeowner milestone escrow directly to the tradesperson's connected Stripe account (`transfer_data.destination`), collecting platform commission via `application_fee_amount`. Eliminate platform balance custody.
+  - **Files**: `src/server/pricingCatalog.ts`, `server.ts`
+  - **Status**: `[x] Completed (2026-09-10)`
+  - **Verification**: Verified via `tests/unit/stripeConnectFinancialAudit.test.ts`.
+
+- [x] **Task 7.2: Server-Authoritative Dynamic Pricing Catalog with Admin Firestore Overrides**
+  - **Objective**: Discard client-submitted prices; authoritatively compute line items on the server while honoring dynamic admin adjustments saved in Firestore (`platform_config/global_tiers` and `platform_config/global`) with 5s in-memory caching.
+  - **Files**: `src/server/pricingCatalog.ts`, `server.ts`
+  - **Status**: `[x] Completed (2026-09-10)`
+  - **Verification**: Verified via `tests/unit/stripeConnectFinancialAudit.test.ts` with simulated admin tier documents.
+
+- [x] **Task 7.3: Fail-Closed Webhook Underpayment Protection**
+  - **Objective**: Authoritatively recalculate expected pence in webhook processing; immediately reject sessions where `amount_total` is less than expected.
+  - **Files**: `server.ts`
+  - **Status**: `[x] Completed (2026-09-10)`
+  - **Verification**: Verified with HMAC verification and fail-closed underpayment tests.
 
 ---
 
@@ -409,3 +433,7 @@ This document serves as the master engineering roadmap to remediate all **58 sho
 | 5.3 | Repository Hygiene & Build Artifact Removal | 2026-09-08 | `.gitignore` updated with build outputs & native assets | Verified ✅ |
 | 5.4 | Background Cron & Worker Cloud Run Decoupling | 2026-09-08 | Distributed lock `acquireCronLock` + `/api/cron/*` endpoints | Verified ✅ |
 | 5.5 | Third-Party IP Polling Removal | 2026-09-08 | Purged client ipify; server-side `req.ip` behind proxy | Verified ✅ |
+| 6.6 | TypeScript Lint Quality Gate (`npm run lint`) | 2026-09-10 | `tsc --noEmit` passing with 0 errors | Verified ✅ |
+| 7.1 | Stripe Connect Direct Destination Routing for Client Escrow | 2026-09-10 | `transfer_data.destination` zero platform custody test | Verified ✅ |
+| 7.2 | Dynamic Server-Authoritative Pricing & Admin Overrides | 2026-09-10 | Dynamic Firestore tier/commission resolution test | Verified ✅ |
+| 7.3 | Webhook Underpayment Rejection | 2026-09-10 | Fail-closed expected pence verification | Verified ✅ |

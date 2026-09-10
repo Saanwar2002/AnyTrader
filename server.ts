@@ -14,12 +14,14 @@ import twilio from 'twilio';
 import rateLimit from "express-rate-limit";
 import { startInstantMatchEngine } from "./instantMatchWorker.ts";
 import * as geminiServer from "./src/services/geminiServer.ts";
-import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError } from "./src/server/httpErrors.ts";
+import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError } from "./src/server/httpErrors.ts";
 import { runProductionChecks } from "./src/server/productionChecks.ts";
 import { validateJobTransition, validateMilestoneTransition, validateRideTransition } from "./src/server/stateMachine.ts";
 import { PaymentLedgerEngine } from "./src/server/paymentLedger.ts";
 import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload } from "./src/server/authorization.ts";
+import { BusinessLogicDefense } from "./src/server/businessLogicDefense.ts";
 import { domainEvents } from "./src/server/domainEvents.ts";
+import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
 
 dotenv.config();
 
@@ -1201,6 +1203,14 @@ async function startServer() {
               const quoteData = quoteDoc.data();
               const milestones = quoteData?.milestones || [];
               let fundedAmount = 0;
+              const targetMilestone = milestones.find((m: any) => m.id === milestoneId);
+              const expectedPence = targetMilestone ? Math.round(Number(targetMilestone.amount || targetMilestone.verifiedAmount || 0) * 100) : 0;
+
+              if (session.amount_total && expectedPence > 0 && session.amount_total < expectedPence) {
+                console.error(`[Security Alert] Underpayment rejected in webhook: expected ${expectedPence} pence, received ${session.amount_total} pence.`);
+                return res.status(400).send("Underpayment rejected");
+              }
+
               const updatedMilestones = milestones.map((m: any) => {
                 if (m.id === milestoneId) {
                   try {
@@ -1444,16 +1454,20 @@ async function startServer() {
     }
   });
 
-  // Stripe Checkout Session
+  // Stripe Checkout Session (Server-Authoritative Pricing & Stripe Connect Routing)
   app.post("/api/create-checkout-session", requireAuth, paymentLimiter, async (req, res) => {
     try {
       const authUid = (req as any).user.uid;
-      const { priceId, tierName, successUrl, cancelUrl, mode = 'subscription', metadata = {} } = req.body;
+      const { successUrl, cancelUrl } = req.body;
       const userId = authUid; // Derive strictly from verified Firebase token
       const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
 
       const finalSuccessUrl = successUrl || `${appUrl}/profile?session_id={CHECKOUT_SESSION_ID}`;
       const finalCancelUrl = cancelUrl || `${appUrl}/profile`;
+
+      // 1. Resolve strictly server-authoritative pricing and Stripe Connect routing
+      // Completely bypasses and ignores client-provided price_data to prevent price manipulation
+      const authoritativeResult = await resolveAuthoritativeLineItem(req.body, authUid, db);
 
       let stripe;
       try {
@@ -1464,156 +1478,160 @@ async function startServer() {
           return res.status(503).json({ error: "Payment processing is currently unavailable: Stripe gateway is unconfigured." });
         }
         console.warn("Stripe is not configured. Mocking successful checkout flow for development testing.");
-        // If Stripe is not set up, just fake the redirect back and update the database directly for local testing
+        
+        // Authoritative Mock Fulfillment for local dev/testing
         if (db) {
-           if (metadata.isVideoPro === 'true' || metadata.type === 'video_pro_subscription') {
-             await db.collection("users").doc(userId).set({
-               hasVerifiedVideoProSubscription: true,
-               videoProSubscribedAt: new Date().toISOString(),
-               videoVerificationStatus: "verified",
-               videoProSubscriptionId: "mock_sub_vpro_" + Math.random().toString(36).substring(7),
-               updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             }, { merge: true });
-           }
-           else if (metadata.isExclusiveAddon === 'true' || metadata.type === 'exclusive_leads') {
-             await db.collection("users").doc(userId).set({
-               hasExclusiveAddon: true,
-               isExclusiveActive: true,
-               exclusiveSubscribedAt: new Date().toISOString(),
-               exclusiveSubscriptionId: "mock_sub_excl_" + Math.random().toString(36).substring(7),
-               updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             }, { merge: true });
-           }
-           else if (metadata.subscriptionType === 'gotham_saas' || metadata.type === 'gotham_saas') {
-             await db.collection("users").doc(userId).set({
-               subscriptionStatus: "active",
-               subscriptionId: "mock_sub_gotham_" + Math.random().toString(36).substring(7),
-               tierId: metadata.gothamTierName || "Gotham Enterprise",
-               tier: "gotham",
-               subscriptionType: "gotham_saas",
-               isGothamSubscriber: true,
-               gothamDoorsCount: Number(metadata.gothamDoorsCount) || 100,
-               gothamTierName: metadata.gothamTierName || "Gotham Enterprise",
-               gothamBillingCycle: metadata.gothamBillingCycle || "monthly",
-               gothamCancelAtPeriodEnd: false,
-               cancelAtPeriodEnd: false,
-               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-               updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             }, { merge: true });
-           }
-           else if (metadata.subscriptionType === 'driver_gold' || metadata.type === 'driver_gold') {
-             await db.collection("users").doc(userId).set({
-               subscriptionStatus: "active",
-               subscriptionId: "mock_sub_gold_driver_" + Math.random().toString(36).substring(7),
-               tierId: "Gold Driver",
-               tier: "gold",
-               driverTier: "gold",
-               subscriptionType: "driver_gold",
-               isGoldDriver: true,
-               commissionRate: 0.10,
-               destinationFilters: 4,
-               advanceBookingDays: 14,
-               priorityDispatch: 50,
-               driverCancelAtPeriodEnd: false,
-               cancelAtPeriodEnd: false,
-               currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-               updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             }, { merge: true });
-           }
-           else if (mode === 'subscription') {
-             const rawTier = tierName || "Pro";
-             const lowerTier = rawTier.toLowerCase();
-             let canonicalTier = 'pro';
-             if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
-             else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
-             else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
-             else canonicalTier = 'payg';
-
-             await db.collection("users").doc(userId).set({
-                tierId: rawTier,
-                tier: canonicalTier,
-                isPro: canonicalTier !== 'payg',
-                isProInvoiceSubscriber: canonicalTier !== 'payg',
-                subscriptionStatus: "active",
-                subscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
-                currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-             }, { merge: true });
-           } else if (mode === 'payment') {
-             if (metadata.type === 'ad_wallet_topup') {
-               const topupAmount = Number(metadata.topupAmount) || 0;
-               if (topupAmount > 0) {
-                 await db.collection("users").doc(userId).set({
-                   adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
-                   updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                 }, { merge: true });
-               }
-             } else if (metadata.type === 'milestone_funding' && metadata.jobId && metadata.quoteId && metadata.milestoneId) {
-               const { jobId, quoteId, milestoneId } = metadata;
-               const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
-               const quoteDoc = await quoteRef.get();
-               if (quoteDoc.exists) {
-                 const quoteData = quoteDoc.data();
-                 const milestones = quoteData?.milestones || [];
-                 const updatedMilestones = milestones.map((m: any) => {
-                   if (m.id === milestoneId) {
-                     return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: "mock_pi_" + Math.random().toString(36).substring(7) };
-                   }
-                   return m;
-                 });
-                 await quoteRef.update({ milestones: updatedMilestones });
-                 await db.collection("notifications").add({
-                   userId: quoteData?.tradespersonId,
-                   title: "Milestone Funded! 💰",
-                   message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title}". You can now start work!`,
-                   type: "status",
-                   link: `/job/${jobId}`,
-                   read: false,
-                   createdAt: admin.firestore.FieldValue.serverTimestamp()
-                 });
-               }
-             } else if (metadata.type === 'mediation_stake' && metadata.jobId) {
-               await db.collection("jobs").doc(metadata.jobId).update({
-                 status: "disputed",
-                 mediationStakePaid: true,
-                 disputeReason: metadata.disputeReason || "Unspecified",
-                 technicalFaultReport: metadata.technicalFaultReport || "Unspecified",
-                 disputedAt: admin.firestore.FieldValue.serverTimestamp()
-               });
-             } else if (metadata.jobId && metadata.type === 'boost') {
-                const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-                const isIM = metadata.tier === 'instant_match';
-                await db.collection("jobs").doc(metadata.jobId).set({
-                  isBoosted: true,
-                  boostTier: metadata.tier || 'emergency_boost',
-                  boostExpiresAt,
-                  postedDate: admin.firestore.FieldValue.serverTimestamp(),
-                  isInstantMatch: isIM,
-                  isEmergencyBoost: metadata.tier === 'emergency_boost',
-                  retryCount: 0
+          const meta = authoritativeResult.metadata;
+          if (meta.isVideoPro === 'true' || meta.type === 'video_pro_subscription') {
+            await db.collection("users").doc(userId).set({
+              hasVerifiedVideoProSubscription: true,
+              videoProSubscribedAt: new Date().toISOString(),
+              videoVerificationStatus: "verified",
+              videoProSubscriptionId: "mock_sub_vpro_" + Math.random().toString(36).substring(7),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } else if (meta.isExclusiveAddon === 'true' || meta.type === 'exclusive_leads') {
+            await db.collection("users").doc(userId).set({
+              hasExclusiveAddon: true,
+              isExclusiveActive: true,
+              exclusiveSubscribedAt: new Date().toISOString(),
+              exclusiveSubscriptionId: "mock_sub_excl_" + Math.random().toString(36).substring(7),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } else if (meta.subscriptionType === 'gotham_saas' || meta.type === 'gotham_saas') {
+            await db.collection("users").doc(userId).set({
+              subscriptionStatus: "active",
+              subscriptionId: "mock_sub_gotham_" + Math.random().toString(36).substring(7),
+              tierId: meta.gothamTierName || "Gotham Enterprise",
+              tier: "gotham",
+              subscriptionType: "gotham_saas",
+              isGothamSubscriber: true,
+              gothamDoorsCount: Number(meta.gothamDoorsCount) || 100,
+              gothamTierName: meta.gothamTierName || "Gotham Enterprise",
+              gothamBillingCycle: meta.gothamBillingCycle || "monthly",
+              gothamCancelAtPeriodEnd: false,
+              cancelAtPeriodEnd: false,
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } else if (meta.subscriptionType === 'driver_gold' || meta.type === 'driver_gold') {
+            await db.collection("users").doc(userId).set({
+              subscriptionStatus: "active",
+              subscriptionId: "mock_sub_gold_driver_" + Math.random().toString(36).substring(7),
+              tierId: "Gold Driver",
+              tier: "gold",
+              driverTier: "gold",
+              subscriptionType: "driver_gold",
+              isGoldDriver: true,
+              commissionRate: 0.10,
+              destinationFilters: 4,
+              advanceBookingDays: 14,
+              priorityDispatch: 50,
+              driverCancelAtPeriodEnd: false,
+              cancelAtPeriodEnd: false,
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } else if (authoritativeResult.mode === 'subscription') {
+            const canonicalTier = meta.tier || 'pro';
+            await db.collection("users").doc(userId).set({
+              tierId: meta.tierName || "Pro",
+              tier: canonicalTier,
+              isPro: canonicalTier !== 'payg',
+              isProInvoiceSubscriber: canonicalTier !== 'payg',
+              subscriptionStatus: "active",
+              subscriptionId: "mock_sub_" + Math.random().toString(36).substring(7),
+              currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          } else if (authoritativeResult.mode === 'payment') {
+            if (meta.type === 'ad_wallet_topup') {
+              const topupAmount = Number(meta.topupAmount) || 0;
+              if (topupAmount > 0) {
+                await db.collection("users").doc(userId).set({
+                  adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
+              }
+            } else if (meta.type === 'milestone_funding' && meta.jobId && meta.quoteId && meta.milestoneId) {
+              const { jobId, quoteId, milestoneId } = meta;
+              const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
+              const quoteDoc = await quoteRef.get();
+              if (quoteDoc.exists) {
+                const quoteData = quoteDoc.data();
+                const milestones = quoteData?.milestones || [];
+                const updatedMilestones = milestones.map((m: any) => {
+                  if (m.id === milestoneId) {
+                    return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: "mock_pi_" + Math.random().toString(36).substring(7) };
+                  }
+                  return m;
+                });
+                await quoteRef.update({ milestones: updatedMilestones });
 
-                if (isIM) {
-                   const matchRef = db.collection("instant_matches").doc();
-                   await matchRef.set({
-                     id: matchRef.id,
-                     jobId: metadata.jobId,
-                     customerId: userId,
-                     chargeAmountPence: 299,
-                     chargeTier: "instant_match",
-                     feeWaived: false,
-                     status: "searching",
-                     currentAttempt: 0,
-                     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                     searchingAt: admin.firestore.FieldValue.serverTimestamp()
-                   });
-                   await db.collection("jobs").doc(metadata.jobId).set({
-                      instantMatchId: matchRef.id,
-                      matchedViaInstantMatch: true
-                   }, { merge: true });
-                }
-             }
-           }
+                // Record to immutable payment ledger
+                await PaymentLedgerEngine.recordEscrowFunding(db, {
+                  jobId,
+                  milestoneId,
+                  paymentIntentId: `mock_pi_${Date.now()}`,
+                  idempotencyKey: `mock_fund_${jobId}_${milestoneId}`,
+                  customerId: userId,
+                  traderId: meta.traderId || quoteData?.tradespersonId || "trader",
+                  verifiedAmount: authoritativeResult.authoritativeAmountPence,
+                  currency: "gbp"
+                });
+
+                await db.collection("notifications").add({
+                  userId: quoteData?.tradespersonId,
+                  title: "Milestone Funded! 💰",
+                  message: `Homeowner funded "${milestones.find((m: any) => m.id === milestoneId)?.title || 'Milestone'}". You can now start work!`,
+                  type: "status",
+                  link: `/job/${jobId}`,
+                  read: false,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            } else if (meta.type === 'mediation_stake' && meta.jobId) {
+              await db.collection("jobs").doc(meta.jobId).update({
+                status: "disputed",
+                mediationStakePaid: true,
+                disputeReason: meta.disputeReason || "Unspecified",
+                technicalFaultReport: meta.technicalFaultReport || "Unspecified",
+                disputedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            } else if (meta.jobId && meta.type === 'boost') {
+              const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+              const isIM = meta.tier === 'instant_match';
+              await db.collection("jobs").doc(meta.jobId).set({
+                isBoosted: true,
+                boostTier: meta.tier || 'emergency_boost',
+                boostExpiresAt,
+                postedDate: admin.firestore.FieldValue.serverTimestamp(),
+                isInstantMatch: isIM,
+                isEmergencyBoost: meta.tier === 'emergency_boost',
+                retryCount: 0
+              }, { merge: true });
+
+              if (isIM) {
+                const matchRef = db.collection("instant_matches").doc();
+                await matchRef.set({
+                  id: matchRef.id,
+                  jobId: meta.jobId,
+                  customerId: userId,
+                  chargeAmountPence: 299,
+                  chargeTier: "instant_match",
+                  feeWaived: false,
+                  status: "searching",
+                  currentAttempt: 0,
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                  searchingAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+                await db.collection("jobs").doc(meta.jobId).set({
+                  instantMatchId: matchRef.id,
+                  matchedViaInstantMatch: true
+                }, { merge: true });
+              }
+            }
+          }
         }
         return res.json({ url: finalSuccessUrl.replace("{CHECKOUT_SESSION_ID}", "mock_session_success") });
       }
@@ -1648,29 +1666,24 @@ async function startServer() {
       }
 
       const sessionOptions: any = {
-        mode: mode as any,
+        mode: authoritativeResult.mode as any,
         payment_method_types: ['card'],
-        line_items: [
-          req.body.price_data ? {
-            price_data: req.body.price_data,
-            quantity: 1,
-          } : {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
+        line_items: [authoritativeResult.lineItem],
         success_url: finalSuccessUrl,
         cancel_url: finalCancelUrl,
         client_reference_id: userId,
-        metadata: {
-           tierName: tierName || "",
-           ...metadata
-        }
+        metadata: authoritativeResult.metadata,
       };
+
+      // Direct Stripe Connect destination charge for client funds:
+      // Platform never holds client money; only platform fee goes to platform account
+      if (authoritativeResult.paymentIntentData) {
+        sessionOptions.payment_intent_data = authoritativeResult.paymentIntentData;
+      }
 
       if (customerId) {
         sessionOptions.customer = customerId;
-        if (mode === 'payment') {
+        if (authoritativeResult.mode === 'payment') {
           sessionOptions.saved_payment_method_options = {
             payment_method_save: "enabled",
           };
@@ -1682,7 +1695,7 @@ async function startServer() {
       res.json({ url: session.url });
     } catch (error: any) {
       console.error("Stripe Checkout Error:", error);
-      res.status(500).json({ error: error.message || "Failed to create checkout session" });
+      sendHttpError(res, error, req);
     }
   });
 
@@ -2127,6 +2140,54 @@ async function startServer() {
     }
   });
 
+  // Server-Authoritative Ride Acceptance (V6 Hardened against BOLA)
+  app.post("/api/rides/accept", requireAuth, async (req, res) => {
+    try {
+      const { rideId } = req.body;
+      const driverId = (req as any).user.uid;
+      if (!db) throw new BadRequestError("Database not initialized");
+
+      await db.runTransaction(async (transaction: any) => {
+        const rideRef = db!.collection("ride_requests").doc(rideId);
+        const rideDoc = await transaction.get(rideRef);
+        
+        if (!rideDoc.exists) {
+          throw new BadRequestError("Ride request not found");
+        }
+        
+        const rideData = rideDoc.data();
+        if (rideData.status !== "pending") {
+          throw new ConflictError("Ride is no longer available");
+        }
+        
+        if (rideData.driverId) {
+          throw new ConflictError("Ride has already been accepted by another driver");
+        }
+        
+        const driverRef = db!.collection("driver_status").doc(driverId);
+        
+        transaction.update(rideRef, {
+          driverId,
+          status: 'accepted',
+          assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        
+        transaction.set(driverRef, {
+          status: 'busy',
+          currentRideId: rideId,
+          lastActiveAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+
+      await domainEvents.dispatch("RIDE_ACCEPTED", rideId, driverId, { driverId }, undefined, db);
+
+      res.json({ success: true, rideId, driverId });
+    } catch (error: any) {
+      console.error("Accept Ride Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
   // Server-Authoritative Direct-to-Driver Taxi Payment (QR Handshake)
   app.post("/api/rides/create-trip-payment", requireAuth, async (req, res) => {
     try {
@@ -2409,6 +2470,285 @@ async function startServer() {
     }
   });
 
+  // =========================================================================
+  // UNIFIED STRIPE CONNECT ONBOARDING & PAYOUTS (TRADERS, DRIVERS, PROVIDERS)
+  // Ensures direct money routing to providers: Platform NEVER holds client funds.
+  // =========================================================================
+
+  // 1. Create or Resume Stripe Connect Express Onboarding
+  app.post("/api/stripe/create-connect-account", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      if (!db) throw new BadRequestError("Database not connected");
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) throw new NotFoundError("User profile not found");
+      const userData = userDoc.data() || {};
+
+      const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        // Fallback for dev / mock testing
+        const mockAccountId = userData.stripeAccountId || `acct_mock_${authUid.substring(0, 12)}`;
+        await db.collection("users").doc(authUid).set({
+          stripeAccountId: mockAccountId,
+          stripeOnboardingComplete: true,
+          payoutsEnabled: true,
+          chargesEnabled: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        return res.json({
+          success: true,
+          mock: true,
+          stripeAccountId: mockAccountId,
+          url: `${appUrl}/billing?stripe_connect=success&account_id=${mockAccountId}`
+        });
+      }
+
+      let accountId = userData.stripeAccountId;
+      if (!accountId || accountId.startsWith("acct_mock_")) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "GB",
+          email: userData.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+          business_type: "individual",
+          metadata: {
+            firebaseUid: authUid,
+            role: userData.role || "trader",
+          }
+        });
+        accountId = account.id;
+        await db.collection("users").doc(authUid).set({
+          stripeAccountId: accountId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${appUrl}/billing?stripe_connect=refresh`,
+        return_url: `${appUrl}/billing?stripe_connect=success&account_id=${accountId}`,
+        type: "account_onboarding",
+      });
+
+      res.json({
+        success: true,
+        url: accountLink.url,
+        stripeAccountId: accountId
+      });
+    } catch (error: any) {
+      console.error("Create Connect Account Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // 2. Query Stripe Connect Status & Sync with Firestore
+  app.get("/api/stripe/account-status", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      if (!db) return res.json({ connected: false, payoutsEnabled: false, chargesEnabled: false });
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) return res.json({ connected: false, payoutsEnabled: false, chargesEnabled: false });
+      const userData = userDoc.data() || {};
+      const accountId = userData.stripeAccountId;
+
+      if (!accountId) {
+        return res.json({ connected: false, payoutsEnabled: false, chargesEnabled: false });
+      }
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({
+          connected: true,
+          mock: true,
+          stripeAccountId: accountId,
+          payoutsEnabled: true,
+          chargesEnabled: true,
+          detailsSubmitted: true
+        });
+      }
+
+      if (accountId.startsWith("acct_mock_")) {
+        return res.json({
+          connected: true,
+          mock: true,
+          stripeAccountId: accountId,
+          payoutsEnabled: true,
+          chargesEnabled: true,
+          detailsSubmitted: true
+        });
+      }
+
+      const account = await stripe.accounts.retrieve(accountId);
+      const payoutsEnabled = Boolean(account.payouts_enabled);
+      const chargesEnabled = Boolean(account.charges_enabled);
+      const detailsSubmitted = Boolean(account.details_submitted);
+
+      if (payoutsEnabled !== userData.payoutsEnabled || chargesEnabled !== userData.chargesEnabled) {
+        await db.collection("users").doc(authUid).set({
+          payoutsEnabled,
+          chargesEnabled,
+          stripeOnboardingComplete: detailsSubmitted,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      res.json({
+        connected: true,
+        stripeAccountId: accountId,
+        payoutsEnabled,
+        chargesEnabled,
+        detailsSubmitted
+      });
+    } catch (error: any) {
+      console.error("Stripe Account Status Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // 3. Create Login Link to Stripe Express Dashboard
+  app.post("/api/stripe/create-login-link", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      if (!db) throw new BadRequestError("Database not connected");
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      const userData = userDoc.data() || {};
+      const accountId = userData.stripeAccountId;
+
+      if (!accountId) {
+        throw new BadRequestError("No connected Stripe account found for this user");
+      }
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+        return res.json({ url: `${appUrl}/billing?dashboard=mock_express` });
+      }
+
+      if (accountId.startsWith("acct_mock_")) {
+        const appUrl = process.env.APP_URL || (req.headers.origin as string) || "http://localhost:3000";
+        return res.json({ url: `${appUrl}/billing?dashboard=mock_express` });
+      }
+
+      const loginLink = await stripe.accounts.createLoginLink(accountId);
+      res.json({ url: loginLink.url });
+    } catch (error: any) {
+      console.error("Create Login Link Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // 4. Unified Provider Balance (Traders & Drivers)
+  app.get("/api/stripe/balance", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      if (!db) return res.json({ available: 0, pending: 0, currency: 'gbp', mock: true });
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+
+      const stripeAccountId = userDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) return res.status(400).json({ error: "No Stripe account connected" });
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ available: 0, pending: 0, currency: 'gbp', mock: true });
+      }
+
+      if (stripeAccountId.startsWith("acct_mock_")) {
+        return res.json({ available: 150.00, pending: 45.00, currency: 'gbp', mock: true });
+      }
+
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: stripeAccountId,
+      });
+
+      const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
+      const pending = balance.pending.find(b => b.currency === 'gbp')?.amount || 0;
+
+      res.json({
+        available: available / 100,
+        pending: pending / 100,
+        currency: 'gbp'
+      });
+    } catch (error: any) {
+      console.error("Stripe Balance Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // 5. Unified Provider Payout Request (Traders & Drivers)
+  app.post("/api/stripe/request-payout", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const { amount } = req.body; // Optional amount in GBP
+      if (!db) throw new BadRequestError("Database not connected");
+
+      const userDoc = await db.collection("users").doc(authUid).get();
+      if (!userDoc.exists) throw new NotFoundError("User not found");
+
+      const stripeAccountId = userDoc.data()?.stripeAccountId;
+      if (!stripeAccountId) throw new BadRequestError("No Stripe account connected");
+
+      let stripe;
+      try {
+        stripe = getStripe();
+      } catch (e) {
+        return res.json({ success: true, mock: true, payout: { id: `po_mock_${Date.now()}`, amount: (amount || 50) * 100 } });
+      }
+
+      if (stripeAccountId.startsWith("acct_mock_")) {
+        return res.json({ success: true, mock: true, payout: { id: `po_mock_${Date.now()}`, amount: (amount || 50) * 100 } });
+      }
+
+      const balance = await stripe.balance.retrieve({
+        stripeAccount: stripeAccountId,
+      });
+
+      const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
+      if (available <= 0) {
+        throw new BadRequestError("No available balance for payout");
+      }
+
+      const payoutAmount = amount ? Math.round(Number(amount) * 100) : available;
+      if (payoutAmount > available) {
+        throw new BadRequestError(`Requested payout (${(payoutAmount / 100).toFixed(2)}) exceeds available balance (${(available / 100).toFixed(2)})`);
+      }
+
+      const payout = await stripe.payouts.create({
+        amount: payoutAmount,
+        currency: 'gbp',
+      }, {
+        stripeAccount: stripeAccountId,
+      });
+
+      await domainEvents.dispatch("PROVIDER_PAYOUT_INITIATED", payout.id, authUid, {
+        amount: payoutAmount,
+        currency: 'gbp'
+      }, undefined, db);
+
+      res.json({ success: true, payout });
+    } catch (error: any) {
+      console.error("Provider Payout Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
   // Manual Driver Payouts Trigger (Admin)
   app.post("/api/admin/trigger-payouts", requireAdmin, async (req, res) => {
     try {
@@ -2574,6 +2914,12 @@ async function startServer() {
           let releasedAmount = 0;
           let targetMilestoneTitle = "Work Stage";
 
+          const targetMilestone = currentMilestones.find((m: any, idx: number) => m.id === milestoneId || (isQrHandshake && idx === 0));
+          if (!targetMilestone) throw new BadRequestError("Milestone not found");
+          
+          // Wire BusinessLogicDefense to prevent macro-sequence and terminal state exploits
+          BusinessLogicDefense.validateEscrowReleaseEligibility(targetMilestone, jobData as any);
+
           const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
             if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
               // Mathematical state machine validation
@@ -2609,10 +2955,47 @@ async function startServer() {
 
           await quoteRef.update(quoteUpdatePayload);
 
-          // Record ledger entry
+          // Record ledger entry with Stripe Connect Direct Routing
           const ledgerEntryId = `ledg_rel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
           const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
           const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
+
+          let traderStripeAccountId: string | undefined;
+          let transferStatus = "completed";
+          let stripeTransferId: string | undefined;
+
+          if (quoteData?.tradespersonId) {
+            try {
+              const traderDoc = await firestoreDb.collection("users").doc(quoteData.tradespersonId).get();
+              traderStripeAccountId = traderDoc.data()?.stripeAccountId;
+              
+              let stripe;
+              try { stripe = getStripe(); } catch (e) {}
+
+              // If Stripe is configured and trader has a live connected account
+              if (stripe && traderStripeAccountId && !traderStripeAccountId.startsWith("acct_mock_")) {
+                // If the milestone stored a separate payment intent needing manual transfer:
+                if (targetMilestone.stripePaymentIntentId && !targetMilestone.isDestinationCharge) {
+                  const transfer = await stripe.transfers.create({
+                    amount: netPayoutPence,
+                    currency: "gbp",
+                    destination: traderStripeAccountId,
+                    description: `Milestone release for Job #${jobData?.jobNo || jobId} (${targetMilestoneTitle})`,
+                    metadata: {
+                      jobId,
+                      quoteId,
+                      milestoneId: milestoneId || "m0",
+                      traderId: quoteData.tradespersonId
+                    }
+                  });
+                  stripeTransferId = transfer.id;
+                }
+              }
+            } catch (stripeErr: any) {
+              console.warn("Stripe transfer execution warning during milestone release:", stripeErr.message);
+              transferStatus = "pending_reconciliation";
+            }
+          }
 
           await firestoreDb.collection("payment_ledger").doc(ledgerEntryId).set({
             entryId: ledgerEntryId,
@@ -2620,6 +3003,9 @@ async function startServer() {
             idempotencyKey,
             payerId: jobData?.homeownerId || authUid,
             payeeId: quoteData?.tradespersonId || "trader",
+            destinationAccountId: traderStripeAccountId || null,
+            stripeTransferId: stripeTransferId || null,
+            transferStatus,
             amount: Math.round(releasedAmount * 100),
             platformFee: platformFeePence,
             netPayout: netPayoutPence,

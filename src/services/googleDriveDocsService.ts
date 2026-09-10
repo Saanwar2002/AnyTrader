@@ -1,31 +1,30 @@
 // Google Drive & Google Docs Service for AnyTrader Contract & Certificate Generation
 // Uses OAuth 2.0 GIS token acquisition with drive.file and documents scopes.
 
-const STORAGE_KEY_TOKEN = "anytrader_gdocs_access_token";
-const STORAGE_KEY_EXPIRY = "anytrader_gdocs_token_expiry";
+// In-memory token store for security (H-02: Never persist OAuth bearer tokens in localStorage)
+let inMemoryDocsAccessToken: string | null = null;
+let inMemoryDocsTokenExpiry: number | null = null;
 
 export function getStoredDocsAccessToken(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-  const expiry = localStorage.getItem(STORAGE_KEY_EXPIRY);
-  if (!token || !expiry) return null;
+  if (!inMemoryDocsAccessToken || !inMemoryDocsTokenExpiry) return null;
 
-  if (Date.now() >= parseInt(expiry, 10)) {
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_EXPIRY);
+  if (Date.now() >= inMemoryDocsTokenExpiry) {
+    inMemoryDocsAccessToken = null;
+    inMemoryDocsTokenExpiry = null;
     return null;
   }
-  return token;
+  return inMemoryDocsAccessToken;
 }
 
 export function setStoredDocsAccessToken(token: string, expiresInSeconds: number = 3600) {
   const expiryTime = Date.now() + (expiresInSeconds - 60) * 1000;
-  localStorage.setItem(STORAGE_KEY_TOKEN, token);
-  localStorage.setItem(STORAGE_KEY_EXPIRY, expiryTime.toString());
+  inMemoryDocsAccessToken = token;
+  inMemoryDocsTokenExpiry = expiryTime;
 }
 
 export function disconnectGoogleDriveDocs(): void {
-  localStorage.removeItem(STORAGE_KEY_TOKEN);
-  localStorage.removeItem(STORAGE_KEY_EXPIRY);
+  inMemoryDocsAccessToken = null;
+  inMemoryDocsTokenExpiry = null;
 }
 
 export async function requestDriveDocsAccessToken(): Promise<string> {

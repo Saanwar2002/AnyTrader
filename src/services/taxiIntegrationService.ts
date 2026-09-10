@@ -1,5 +1,5 @@
 import { collection, query, where, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/src/firebase';
+import { db, auth } from '@/src/firebase';
 import ngeohash from 'ngeohash';
 
 // Higher precision = smaller area (precision 5 is ~4.9km x 4.9km)
@@ -18,20 +18,22 @@ export function getEmergencyRideRequestsQuery() {
  * Assigns a driver to a ride request.
  */
 export async function assignDriverToRide(rideId: string, driverId: string) {
-  const rideRef = doc(db, 'ride_requests', rideId);
-  const driverRef = doc(db, 'driver_status', driverId);
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error("Not authenticated");
 
-  await updateDoc(rideRef, {
-    driverId,
-    status: 'accepted',
-    assignedAt: serverTimestamp(),
+  const response = await fetch('/api/rides/accept', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ rideId })
   });
 
-  await updateDoc(driverRef, {
-    status: 'busy',
-    currentRideId: rideId,
-    lastActiveAt: serverTimestamp(),
-  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to accept ride");
+  }
 }
 
 /**

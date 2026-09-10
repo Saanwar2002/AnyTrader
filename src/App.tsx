@@ -21,6 +21,8 @@ import { ShareViewModal } from "./components/ShareViewModal";
 import { ShareType } from "./utils/shareUtils";
 import { Capacitor } from '@capacitor/core';
 import { initCapacitorKeyboard } from './lib/capacitor';
+import ReferralTracker, { RefRedirect } from "./components/shared/ReferralTracker";
+import { RecurringJobManager } from "./components/RecurringJobManager";
 
 // Lazy loading helper with auto-retry for resilient chunk fetching
 function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () => Promise<{ default: T } | any>) {
@@ -30,13 +32,13 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
     } catch (error) {
       console.warn("Failed to load component dynamically, retrying once...", error);
       try {
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 600));
         return await componentImport();
       } catch (retryError) {
         console.error("Second dynamic import attempt failed:", retryError);
         const key = "vite_lazy_reload";
         const lastReload = sessionStorage.getItem(key);
-        if (!lastReload || Date.now() - parseInt(lastReload, 10) > 10000) {
+        if (!lastReload || Date.now() - parseInt(lastReload, 10) > 30000) {
           sessionStorage.setItem(key, Date.now().toString());
           window.location.reload();
           return new Promise<{ default: T }>(() => {});
@@ -78,8 +80,6 @@ const CorporatePortal = lazyWithRetry(() => import("./components/anyroller/Corpo
 const GothamHousingPortal = lazyWithRetry(() => import("./components/anytrader/GothamHousingPortal"));
 const EcosystemAdmin = lazyWithRetry(() => import("./components/EcosystemAdmin"));
 const MasterAdminLayout = lazyWithRetry(() => import("./components/MasterAdminLayout"));
-const ReferralTracker = lazyWithRetry(() => import("./components/shared/ReferralTracker"));
-const RefRedirect = lazyWithRetry(() => import("./components/shared/ReferralTracker").then(m => ({ default: m.RefRedirect })));
 const JobTimeline = lazyWithRetry(() => import("./components/JobTimeline"));
 const PublicProfile = lazyWithRetry(() => import("./components/PublicProfile"));
 const Analytics = lazyWithRetry(() => import("./components/Analytics"));
@@ -89,7 +89,6 @@ const TradesBannerAdStudio = lazyWithRetry(() => import("./components/TradesBann
 const BusinessTeamManagement = lazyWithRetry(() => import("./components/BusinessTeamManagement"));
 const BillingManager = lazyWithRetry(() => import("./components/BillingManager"));
 const SavedJourneys = lazyWithRetry(() => import("./components/SavedJourneys"));
-const RecurringJobManager = lazyWithRetry(() => import("./components/RecurringJobManager").then(m => ({ default: m.RecurringJobManager })));
 const AdReport = lazyWithRetry(() => import("./components/AdReport"));
 const TraderAdStudio = lazyWithRetry(() => import("./components/TraderAdStudio"));
 const TraderOutreachAgent = lazyWithRetry(() => import("./components/TraderOutreachAgent"));
@@ -319,17 +318,17 @@ export default function App() {
         style={{ marginTop: 'max(env(safe-area-inset-top), 48px)' }}
       />
       <BrowserRouter>
-        <SplashScreen />
-        <AppUpdateModal platformConfig={platformConfig} />
-        <DeepLinkListener />
-        <ShareGlobalContainer />
-        <ReferralTracker />
-        <PortalProvider>
-          <PlatformSwitcher />
-          <RecurringJobManager />
-          <ReviewReminder />
-          <Suspense fallback={<PageSkeleton />}>
-          <Routes>
+        <Suspense fallback={<PageSkeleton />}>
+          <SplashScreen />
+          <AppUpdateModal platformConfig={platformConfig} />
+          <DeepLinkListener />
+          <ShareGlobalContainer />
+          <ReferralTracker />
+          <PortalProvider>
+            <PlatformSwitcher />
+            <RecurringJobManager />
+            <ReviewReminder />
+            <Routes>
             <Route path="/ref/:code" element={<RefRedirect />} />
             <Route path="/ad-report/:id" element={<AdReport />} />
             <Route path="/ad-studio" element={<TraderAdStudio />} />
@@ -398,8 +397,8 @@ export default function App() {
             </>
           )}
         </Routes>
+          </PortalProvider>
         </Suspense>
-        </PortalProvider>
       </BrowserRouter>
     </CategoryProvider>
   );

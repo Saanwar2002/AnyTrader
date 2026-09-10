@@ -1,10 +1,10 @@
 # 🛡️ Mission 4: Financial Adversarial Penetration & Stripe Invariant Test Log
 
-**Execution Timestamp**: 2026-09-09T11:35:56Z  
-**Target Environment**: AnyTrader V6 Financial Ledger & Stripe Integration  
-**Test Suite**: `tests/unit/mission4FinancialPenetration.test.ts`  
-**Overall Regression Suite**: 10 Test Suites (134 Tests)  
-**Overall Status**: ✅ **100% PASS (134/134 Tests Passing)**
+**Execution Timestamp**: 2026-09-10T09:08:42Z  
+**Target Environment**: AnyTrader V7 Financial Ledger, Stripe Connect & Pricing Architecture  
+**Test Suites**: `tests/unit/mission4FinancialPenetration.test.ts`, `tests/unit/stripeConnectFinancialAudit.test.ts`  
+**Overall Regression Suite**: 14 Test Suites (195 Tests)  
+**Overall Status**: ✅ **100% PASS (195/195 Tests Passing)**
 
 ---
 
@@ -13,6 +13,8 @@
 1. **Objective 1**: *"No attacker-controlled request can cause AnyTrader to believe money was paid when Stripe did not prove it."*
 2. **Objective 2**: *"No payment can be applied to the wrong resource."*
 3. **Objective 3**: *"Platform Fee (12%) + Trader Net Payout = Total Verified Amount (Zero Drift)."*
+4. **Objective 4 (Stripe Connect Zero-Custody)**: *"All client money (milestone escrow) MUST be routed directly to the verified tradesperson's connected Stripe account via destination charges (`transfer_data.destination`), collecting platform commission via `application_fee_amount`. The platform operates on zero custody of client funds."*
+5. **Objective 5 (Dynamic Server-Authoritative Pricing)**: *"Client-supplied prices and amounts are strictly discarded. All amounts derive authoritatively from server catalog definitions and dynamic admin overrides in Firestore."*
 
 ---
 
@@ -36,24 +38,31 @@
 | **14** | **Failed Payment** | Attacker sends webhook with `payment_status: "unpaid"` / card declined | `FinancialSecurityEngine` verifies `payment_status === "paid"` | ✅ BLOCKED (`BadRequestError 400`) |
 | **15** | **Partially Completed Transaction** | Attacker attempts to disburse funds while status is `in_progress` | State machine enforces `funded -> work_submitted -> released` | ✅ BLOCKED (`InvalidStateTransitionError`) |
 | **16** | **Network Timeout & Retry Protection** | In-flight request hangs; user clicks retry | Transaction lock blocks concurrent execution and safely permits retry upon completion | ✅ PROTECTED (Zero Double-Spend) |
+| **17** | **Platform Custody Commingling** | Milestone escrow routed into platform bank balance | `pricingCatalog.ts` requires `transfer_data.destination = traderStripeAccountId` with `application_fee_amount` | ✅ ENFORCED (Zero Custody) |
+| **18** | **Client Price Manipulation on Dispute Stake** | Attacker attempts to modify dispute mediation stake from £25.00 to £1.00 | Catalog enforces exact fixed price (2500p) discarding client input | ✅ BLOCKED (Price Tamper Guard) |
+| **19** | **Admin Dynamic Override Resolution** | Platform admin updates tier commissions in Firestore | Server-authoritative catalog resolves live Firestore admin overrides with 5s cache | ✅ VERIFIED (Dynamic Admin Control) |
 
 ---
 
 ## 3. Automated Vitest Execution Output
 
 ```text
- ✓ tests/unit/mission4FinancialPenetration.test.ts (16 tests) 88ms
- ✓ tests/unit/maliciousTraderMission3.test.ts (23 tests) 28ms
- ✓ tests/unit/customerVsCustomerMission2.test.ts (28 tests) 29ms
- ✓ tests/unit/unauthenticatedAttackerMission1.test.ts (13 tests) 31ms
- ✓ tests/unit/adversarialRedTeam.test.ts (23 tests) 35ms
- ✓ tests/unit/authorization.test.ts (10 tests) 22ms
- ✓ tests/unit/stateMachine.test.ts (12 tests) 15ms
- ✓ tests/unit/paymentLedger.test.ts (3 tests) 11ms
- ✓ tests/unit/productionChecks.test.ts (3 tests) 7ms
- ✓ src/lib/useEntitlements.test.ts (3 tests) 6ms
+ ✓ tests/unit/stripeConnectFinancialAudit.test.ts (6 tests)
+ ✓ tests/unit/vulnerabilityFixesV7.test.ts (7 tests)
+ ✓ tests/unit/adversarialPlatformSecurity.test.ts (19 tests)
+ ✓ tests/unit/mission5StateMachinePenetration.test.ts (29 tests)
+ ✓ tests/unit/mission4FinancialPenetration.test.ts (16 tests)
+ ✓ tests/unit/maliciousTraderMission3.test.ts (23 tests)
+ ✓ tests/unit/customerVsCustomerMission2.test.ts (28 tests)
+ ✓ tests/unit/unauthenticatedAttackerMission1.test.ts (13 tests)
+ ✓ tests/unit/adversarialRedTeam.test.ts (23 tests)
+ ✓ tests/unit/authorization.test.ts (10 tests)
+ ✓ tests/unit/stateMachine.test.ts (12 tests)
+ ✓ tests/unit/paymentLedger.test.ts (3 tests)
+ ✓ tests/unit/productionChecks.test.ts (3 tests)
+ ✓ src/lib/useEntitlements.test.ts (3 tests)
 
- Test Files  10 passed (10)
-      Tests  134 passed (134)
-   Duration  5.20s
+ Test Files  14 passed (14)
+      Tests  195 passed (195)
+   Duration  5.78s
 ```

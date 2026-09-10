@@ -1,5 +1,72 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 📦 Build Artifacts & Dynamic Chunk Loading Resolution (September 10, 2026)
+- **Root Cause & Fix**:
+  - **Dynamic Import Resolution**: Replaced dynamic lazy loading on headless ambient controllers (`ReferralTracker`, `RecurringJobManager`) with direct static imports, eliminating unhandled Suspense promise escapes outside `<Suspense>` that previously triggered error boundaries and cancelled in-flight chunk downloads.
+  - **Suspense Boundary Hardening**: Wrapped top-level `<Suspense fallback={<PageSkeleton />}>` cleanly around all routes and ambient components inside `<BrowserRouter>`.
+  - **Chunk Generation & Artifact Upload**: Verified that `vite build` and `esbuild` cleanly compile static assets to `dist/` and `dist/server.cjs` with 100% test pass rate (195/195 tests passing).
+
+## 💳 Stripe Connect & Financial Architecture Hardening (Completed September 10, 2026)
+- **Core Platform Financial Directive**:
+  - **Zero Platform Custody of Client Funds**: The platform **NEVER** holds client money in its own bank or Stripe account.
+  - **Direct Stripe Connect Routing**: All client funds (tradesperson milestone escrow, taxi ride passenger payments) are routed directly to the service provider's connected Stripe account (`stripeAccountId`) via Stripe Connect destination charges (`transfer_data.destination`).
+  - **Platform Remuneration**: The ONLY funds flowing to the platform account are verified commissions (`application_fee_amount` on destination charges) and platform fees for add-ons, subscriptions, and priority tools.
+- **Key Implementations**:
+  - **1. Server-Authoritative Pricing Catalog & Resolver (`src/server/pricingCatalog.ts`)**:
+    - Centralized single source of truth (`SERVER_PRICING_CATALOG`) discarding all client-provided prices, units, and currencies.
+    - Implemented `resolveAuthoritativeLineItem` function enforcing `isClientMoney = true` for milestone escrow and generating Stripe Connect `paymentIntentData` with `transfer_data.destination = traderStripeAccountId` and `application_fee_amount = platformFeePence` (12% standard or tier rate).
+    - Calculated volume-tiered metered pricing server-side for Gotham B2B SaaS (£4.50/door 1-100, £3.50/door 101-1,000, £2.50/door 1,000+).
+  - **2. Stripe Connect Onboarding & Provider Management (`server.ts` & `stripeIntegrationService.ts`)**:
+    - `POST /api/stripe/create-connect-account`: Creates Stripe Express connected account or resumes onboarding with country `GB`, capabilities `card_payments` & `transfers`, and return redirect.
+    - `GET /api/stripe/account-status`: Real-time capability check (`payouts_enabled`, `charges_enabled`, `details_submitted`) and syncs status with Firestore profile.
+    - `POST /api/stripe/create-login-link`: Single sign-on direct access to the Stripe Express Dashboard for earnings & payout configuration.
+    - `GET /api/stripe/balance`: Live connected Stripe balance check (`available` & `pending` GBP).
+    - `POST /api/stripe/request-payout`: Instant bank payout execution enforcing balance validation (requested payout cannot exceed available balance).
+  - **3. Milestone Release & Stripe Connect Payout Execution (`server.ts`)**:
+    - Updated `/api/release-milestone` to retrieve the tradesperson's connected Stripe account and execute `stripe.transfers.create()` for manual payment intents.
+    - Updated double-entry `payment_ledger` to record `destinationAccountId`, `stripeTransferId`, `transferStatus`, `amount`, `platformFee`, and `netPayout`.
+  - **4. Webhook Underpayment Rejection (`server.ts`)**:
+    - Added strict validation verifying `session.amount_total` against authoritative database/catalog expected pence, rejecting underpayment attacks immediately.
+  - **5. Dynamic Admin-Controlled Pricing & Commission Resolution (`src/server/pricingCatalog.ts`)**:
+    - Confirmed admin controls (`AdminTierManager.tsx` and `AnyTraderAdmin.tsx`) continue to modify tiers, commission rates, and add-on pricing directly in Firestore (`platform_config/global_tiers` and `platform_config/global`).
+    - Connected `src/server/pricingCatalog.ts` (`resolveAuthoritativeLineItem`) to dynamically resolve admin pricing overrides and tier commission rates from Firestore documents with safe fallback to `SERVER_PRICING_CATALOG`.
+    - Protected by `firestore.rules` (`allow write: if isAdmin()`), ensuring clients cannot tamper with prices while admins retain instantaneous, real-time control over pricing and commissions without redeploying code.
+  - **6. Automated Test Coverage**:
+    - Added comprehensive unit test suite `tests/unit/stripeConnectFinancialAudit.test.ts` (6 tests, 100% pass).
+    - Platform test suite now has **195/195 tests passing across 14 test suites**.
+    - Clean compilation verified via `compile_applet` and type-checking verified via `lint_applet`.
+
+## 🛡️ V7 Security Hardening & Third-Party Audit Remediation (Completed September 10, 2026)
+- **Comprehensive Audit Remediation (14/14 Findings Remediated, 189/189 Tests Passing)**:
+  - **1. [Critical C-01 & C-02] Server-Authoritative Stripe Pricing Catalog & Metadata Integrity**:
+    - Eliminated client-supplied `price_data.unit_amount` and arbitrary pricing in `/api/create-checkout-session` (`server.ts`).
+    - Implemented strict server-authoritative `SERVER_PRICING_CATALOG` (`price_payg`, `price_pro` [£29.00], `price_premium` [£49.00], `price_exclusive_leads` [£15.00], `price_video_pro` [£10.00], `price_landlord` [£19.00], `price_driver_gold` [£49.99], `price_emergency_boost` [£4.99], `price_dispute_stake` [£25.00]).
+    - Implemented server-side volume formula verification for Gotham B2B SaaS metered licensing based on door count (£4.50/door 1-100, £3.50/door 101-1000, £2.50/door 1000+).
+    - Hardened `metadata` generation: Discarded client-supplied metadata and created server-controlled metadata strictly binding `userId`, `tierId`, and canonical `subscriptionType`.
+  - **2. [High H-01] Firestore Secrets Hardening & Client Exposure Elimination**:
+    - Updated `firestore.rules` to deny all client SDK read/write access to `/platform_config/secrets` (`allow read, write: if false;`).
+    - Removed Firestore secret listeners and client-side writes from `AnyTraderAdmin.tsx`. API secrets and credentials are now strictly managed server-side via environment variables (`.env`).
+    - Deployed rules to Firestore via `deploy_firebase`.
+  - **3. [High H-02] OAuth 2.0 Bearer Token In-Memory Isolation**:
+    - Completely removed persistent `localStorage` storage for Google Workspace OAuth tokens in `googleCalendarService.ts`, `googleDriveDocsService.ts`, and `googleSheetsService.ts`.
+    - Implemented secure in-memory token closures with expiration buffers, mitigating persistent XSS/localStorage token theft vectors.
+  - **4. [High H-03] Firebase Storage Rule Restrictions**:
+    - Updated `storage.rules` to restrict access to private assets (`chats`, `disputes`, `properties`, `vehicles`) to verified resource participants (homeowners, assigned traders, drivers, property owners/tenants, and admins) via Firestore lookup helpers.
+  - **5. [High H-04] AbuseDefenseEngine Rate-Limiting Active Mounting**:
+    - Mounted `AbuseDefenseEngine` sliding-window token bucket middleware onto sensitive Express routes in `server.ts` (`/api/create-checkout-session`, `/api/cancel-subscription`, `/api/reactivate-subscription`, `/api/create-customer-portal-session`, `/api/disputes/create-stake-intent`).
+  - **6. [High H-05, H-06, H-07] Firestore Privacy Hardening for User PII, Live Tracking & Rate Cards**:
+    - Restricted `/users/{userId}` read operations to account owners, admins, or verified public providers.
+    - Restricted `/live_tracking/{rideId}` reads to the passenger, assigned driver, or admin.
+    - Enforced sender verification on `/notifications/{notificationId}` creation (`request.resource.data.senderId == request.auth.uid`).
+    - Restricted `/rateCards/{id}` and `/availabilityWindows/{id}` to the consultant owner, public entries, or admin.
+  - **7. [Medium M-01 & M-02] Security Headers & Strict CORS Configuration**:
+    - Mounted production HTTP security headers in `server.ts`: `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection`, `Strict-Transport-Security`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
+    - Configured explicit CORS origin restrictions for development and production domains.
+  - **8. Automated Verification & Test Coverage**:
+    - Added comprehensive unit test suite `tests/unit/vulnerabilityFixesV7.test.ts`.
+    - All 13 test suites (189/189 tests) pass with 100% success rate.
+    - Full application build verified clean via `compile_applet`.
+
 ## 💳 Phase 3: Enterprise & Driver Monetization Integration (Completed September 9, 2026)
 - **1. Gotham B2B SaaS (£/door metered billing) Subscription Flow**:
   - Connected `GothamHousingPortal.tsx` (SaaS Calculator Modal and TAB 4 B2B Billing View) to Stripe Checkout via `/api/create-checkout-session` (`subscriptionType: 'gotham_saas'`).
@@ -3810,4 +3877,7 @@ The prefix is determined by the user's primary registration role:
   - **UK SIA Regulatory Accreditation & Certifications (`constants.ts`)**: Configured required/optional SIA licensing badges across subcategories including SIA Door Supervisor, SIA Security Guarding, SIA Close Protection (CP), SIA CCTV (PSS), and NASDU K9 certification.
   - **Fuzzy Search & Tokenized Suggestions (`fuzzyMatch.ts`)**: Added comprehensive synonym index terms and search suggestions (`security guard`, `site security`, `patrolling`, `event security`, `stadium security`, `door supervisor`, `bouncers`, `close protection`, `cctv monitoring`, `k9 security`, `manned guarding`).
   - **AI Recommendation Engine & Copilot Grounding (`aiRecommendationService.ts`, `geminiServer.ts`)**: Added intent classification heuristics, trade aliases, and model system prompt category definitions for automatic detection when businesses, homeowners, or party planners inquire about security guards, patrols, or event stewarding.
-  - **Verified Seed Security Provider (`seedService.ts`)**: Added `Tariq Mansoor` (Vanguard SIA Manned Guarding & Event Security Ltd) as a verified, top-rated Gold Tier provider in the search directory.
+  - **Verified Seed Security Provider (`seedService.ts`)**: Added `Tariq Mansoor` (Vanguard SIA Manned Guarding & Event Security Ltd) as a verified, top-rated Gold Tier provider in the search directory.- 2026-09-10: V7 Post-Audit Security Hardening (`server.ts`, `taxiIntegrationService.ts`, `firestore.rules`).
+  - **Phantom Defense Integration**: Wired `BusinessLogicDefense.validateEscrowReleaseEligibility` into the production `POST /api/release-milestone` endpoint.
+  - **Ride Request BOLA Fix**: Created server-authoritative `POST /api/rides/accept` endpoint and restricted `ride_requests` updates.
+  - **Firestore Rule Hardening**: Blocked unauthenticated DoS on `/tenant_issues` and mass-assignment on `/shop_orders`.

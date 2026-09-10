@@ -1,32 +1,31 @@
 // Google Sheets Integration Service for AnyTrader & AnyRoller
 // Handles Google OAuth 2.0 GIS token acquisition, Spreadsheet creation, and appending bookkeeping rows.
 
-const STORAGE_KEY_TOKEN = "anytrader_gsheets_access_token";
-const STORAGE_KEY_EXPIRY = "anytrader_gsheets_token_expiry";
+// In-memory token store for security (H-02: Never persist OAuth bearer tokens in localStorage)
+let inMemorySheetsAccessToken: string | null = null;
+let inMemorySheetsTokenExpiry: number | null = null;
 const STORAGE_KEY_SPREADSHEET_ID = "anytrader_gsheets_spreadsheet_id";
 
 export function getStoredAccessToken(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-  const expiry = localStorage.getItem(STORAGE_KEY_EXPIRY);
-  if (!token || !expiry) return null;
+  if (!inMemorySheetsAccessToken || !inMemorySheetsTokenExpiry) return null;
 
-  if (Date.now() >= parseInt(expiry, 10)) {
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_EXPIRY);
+  if (Date.now() >= inMemorySheetsTokenExpiry) {
+    inMemorySheetsAccessToken = null;
+    inMemorySheetsTokenExpiry = null;
     return null;
   }
-  return token;
+  return inMemorySheetsAccessToken;
 }
 
 export function setStoredAccessToken(token: string, expiresInSeconds: number = 3600) {
   const expiryTime = Date.now() + (expiresInSeconds - 60) * 1000;
-  localStorage.setItem(STORAGE_KEY_TOKEN, token);
-  localStorage.setItem(STORAGE_KEY_EXPIRY, expiryTime.toString());
+  inMemorySheetsAccessToken = token;
+  inMemorySheetsTokenExpiry = expiryTime;
 }
 
 export function disconnectGoogleSheets(): void {
-  localStorage.removeItem(STORAGE_KEY_TOKEN);
-  localStorage.removeItem(STORAGE_KEY_EXPIRY);
+  inMemorySheetsAccessToken = null;
+  inMemorySheetsTokenExpiry = null;
   localStorage.removeItem(STORAGE_KEY_SPREADSHEET_ID);
 }
 

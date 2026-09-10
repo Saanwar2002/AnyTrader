@@ -11,8 +11,9 @@ export interface CalendarEventParams {
   remindersMinutesBefore?: number[]; // e.g. [15, 60]
 }
 
-const STORAGE_KEY_TOKEN = "anytrader_gcal_access_token";
-const STORAGE_KEY_EXPIRY = "anytrader_gcal_token_expiry";
+// In-memory token store for security (H-02: Never persist OAuth bearer tokens in localStorage)
+let inMemoryAccessToken: string | null = null;
+let inMemoryTokenExpiry: number | null = null;
 
 /**
  * Dynamically loads the Google Identity Services (GIS) client script if not already present.
@@ -43,39 +44,37 @@ export function ensureGsiLoaded(): Promise<boolean> {
 }
 
 /**
- * Retrieves a non-expired stored Google Calendar access token from localStorage.
+ * Retrieves a non-expired stored Google Calendar access token from memory.
  */
 export function getStoredAccessToken(): string | null {
-  const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-  const expiry = localStorage.getItem(STORAGE_KEY_EXPIRY);
-  if (!token || !expiry) return null;
+  if (!inMemoryAccessToken || !inMemoryTokenExpiry) return null;
 
   const now = Date.now();
-  if (now >= parseInt(expiry, 10)) {
+  if (now >= inMemoryTokenExpiry) {
     // Token expired
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_EXPIRY);
+    inMemoryAccessToken = null;
+    inMemoryTokenExpiry = null;
     return null;
   }
 
-  return token;
+  return inMemoryAccessToken;
 }
 
 /**
- * Saves access token and calculates expiration timestamp.
+ * Saves access token in memory with expiration timestamp.
  */
 export function setStoredAccessToken(token: string, expiresInSeconds: number = 3600) {
   const expiryTime = Date.now() + (expiresInSeconds - 60) * 1000; // 1 min buffer
-  localStorage.setItem(STORAGE_KEY_TOKEN, token);
-  localStorage.setItem(STORAGE_KEY_EXPIRY, expiryTime.toString());
+  inMemoryAccessToken = token;
+  inMemoryTokenExpiry = expiryTime;
 }
 
 /**
- * Clears stored Google Calendar access credentials.
+ * Clears in-memory Google Calendar access credentials.
  */
 export function disconnectGoogleCalendar(): void {
-  localStorage.removeItem(STORAGE_KEY_TOKEN);
-  localStorage.removeItem(STORAGE_KEY_EXPIRY);
+  inMemoryAccessToken = null;
+  inMemoryTokenExpiry = null;
 }
 
 /**

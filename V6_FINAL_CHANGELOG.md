@@ -59,7 +59,13 @@ AnyTrader V6 formalizes enterprise-grade reliability, defensive security, formal
 - **Dispute Mediation Stake (£25.00)**: Replaced mock state updates with server-side Stripe PaymentIntent (`/api/disputes/create-stake-intent`), Stripe webhook fulfillment (`payment_intent.succeeded`), and atomic state machine transition (`funded_and_locked`).
 - **Unified Self-Service Subscription Management**: Full support for `cancel_at_period_end` scheduling (`/api/cancel-subscription`), reactivation (`/api/reactivate-subscription`), and Stripe Customer Portal access (`/api/create-customer-portal-session`) across all 4 subscription types (`exclusive_leads`, `video_pro`, `gotham_saas`, `driver_gold`).
 
-#### 7. Comprehensive Testing & Platform Integrity Verification
-- **182/182 Automated Unit Tests Passing**: 100% test pass rate across 12 test suites (Mission 1 Security, Mission 2 Customer BOLA/IDOR, Mission 3 Malicious Trader, Mission 4 Financial Penetration, Mission 5 State Machine Penetration, Mission 6 Adversarial Platform Security, Adversarial Red-Team, Authorization, State Machine, Payment Ledger, Production Checks, and Entitlements).
+#### 7. V7 Stripe Connect Direct Routing, Zero Custody & Dynamic Pricing Overrides
+- **Stripe Connect Direct Destination Routing**: Strictly routes 100% of homeowner milestone escrow to the verified tradesperson's connected Stripe account (`transfer_data.destination = traderStripeAccountId`) with platform application fee deduction (`application_fee_amount`). Platform operates on zero custody of client funds.
+- **Dynamic Admin-Controlled Pricing & Commissions (`src/server/pricingCatalog.ts`)**: Server-authoritative line item resolver dynamically integrates with Firestore (`platform_config/global_tiers` and `platform_config/global`), applying real-time admin pricing overrides and tier commissions with safe catalog fallbacks and 5-second in-memory caching.
+- **Fail-Closed Webhook Underpayment Defense**: Validates incoming Stripe session amounts against authoritative expected pence, rejecting underpayment manipulation.
+- **V7 Vulnerability Fixes (`vulnerabilityFixesV7.test.ts`)**: Remediated escrow bypass vulnerabilities, hardened BOLA checks on milestones and jobs, mounted rate limiting on financial endpoints, sanitized production errors, and stripped server-owned properties from client payloads.
+
+#### 8. Comprehensive Testing & Platform Integrity Verification
+- **195/195 Automated Unit Tests Passing**: 100% test pass rate across 14 test suites (Stripe Connect Financial Audit, V7 Vulnerability Fixes, Mission 1 Unauthenticated Security, Mission 2 Customer BOLA/IDOR, Mission 3 Malicious Trader, Mission 4 Financial Penetration, Mission 5 State Machine Penetration, Mission 6 Adversarial Platform Security, Adversarial Red-Team, Authorization, State Machine, Payment Ledger, Production Checks, and Entitlements).
 - **0 Compilation Errors**: Verified via `compile_applet` and production build pipeline.
 

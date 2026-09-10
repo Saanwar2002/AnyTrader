@@ -294,13 +294,13 @@ export default function AnyTraderAdmin() {
       setActiveBreachToasts(prev => [breach, ...prev.filter(b => b.id !== breach.id)]);
     });
 
-    const unsubSecrets = onSnapshot(doc(db, "platform_config", "secrets"), (doc) => {
-      if (doc.exists()) {
-        setPlatformSecrets(doc.data());
-      } else {
-        setPlatformSecrets({});
-      }
-    }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "platform_config/secrets"));
+    // H-01: API secrets are managed server-side in .env; do not read or write secrets to Firestore
+    setPlatformSecrets({
+      geminiApiKey: "env_configured",
+      stripeSecretKey: "env_configured",
+      sendgridApiKey: "env_configured",
+      twilioApiKey: "env_configured"
+    });
 
     const unsubConfig = onSnapshot(doc(db, "platform_config", "global"), (doc) => {
       if (doc.exists()) {
@@ -380,7 +380,6 @@ export default function AnyTraderAdmin() {
       unsubSearchLogs();
       unsubSecurityAlerts();
       unsubThresholdBreaches();
-      unsubSecrets();
       unsubConfig();
     };
   }, [profile]);
@@ -536,19 +535,13 @@ export default function AnyTraderAdmin() {
     if (!editingKey) return;
     setIsSavingSecrets(true);
     try {
-      await setDoc(doc(db, "platform_config", "secrets"), {
-        ...platformSecrets,
-        [editingKey.id]: editingKey.value,
-        updatedAt: serverTimestamp(),
-        updatedBy: user?.uid
-      });
-      await createAuditLog("update_api_key", editingKey.id, "config", `Updated API key for ${editingKey.label}`);
-      showToast("Success", `${editingKey.label} updated successfully.`);
+      // H-01: API keys are securely managed server-side via environment variables
+      showToast("Security Notice", "API keys are strictly managed server-side via environment variables (.env). Direct browser edits are disabled for H-01 security compliance.", "success");
       setShowKeyModal(false);
       setEditingKey(null);
     } catch (err) {
       console.error(err);
-      showToast("Error", "Failed to save API key.", "error");
+      showToast("Error", "Action not permitted.", "error");
     } finally {
       setIsSavingSecrets(false);
     }
@@ -2824,23 +2817,16 @@ export default function AnyTraderAdmin() {
                           <h4 className="font-bold text-slate-900 text-sm">{key.label}</h4>
                           <p className="text-[10px] text-slate-500">{key.description}</p>
                         </div>
-                        <button 
-                          onClick={() => {
-                            setEditingKey({ id: key.id, label: key.label, value: platformSecrets?.[key.id] || "" });
-                            setShowKeyModal(true);
-                          }}
-                          className="p-2 hover:bg-slate-50 rounded-xl text-blue-600 transition-colors"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Server-Side (.env)
+                        </span>
                       </div>
                       <div className="bg-slate-50 p-3 rounded-xl border border-black flex items-center justify-between">
-                        <code className="text-[10px] font-mono text-slate-400">
-                          {platformSecrets?.[key.id] ? "••••••••••••••••" : "Not Configured"}
+                        <code className="text-[10px] font-mono text-slate-500">
+                          Managed securely via Cloud Environment Variables
                         </code>
-                        {platformSecrets?.[key.id] && (
-                          <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        )}
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                       </div>
                     </div>
                   ))}

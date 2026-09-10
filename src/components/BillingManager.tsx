@@ -179,6 +179,105 @@ export default function BillingManager() {
     }
   };
 
+  const formatPeriodDate = (isoString?: string) => {
+    if (!isoString) return "End of current period";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "End of current period";
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return "End of current period";
+    }
+  };
+
+  const handleOpenCustomerPortal = async () => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/create-customer-portal-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          returnUrl: `${window.location.origin}/billing`
+        })
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to open billing portal");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCancelSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro' | 'driver_gold' | 'landlord' | string) => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/cancel-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType })
+      });
+      const data = await response.json();
+      if (data.success) {
+        const formattedDate = formatPeriodDate(data.currentPeriodEnd);
+        toast.success("Subscription scheduled to cancel", {
+          description: `Your subscription will cancel on ${formattedDate}. You will keep all benefits until then with no further charges.`
+        });
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to cancel subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReactivateSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro' | 'driver_gold' | 'landlord' | string) => {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const response = await fetch("/api/reactivate-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ subscriptionType })
+      });
+      const data = await response.json();
+      if (data.success) {
+        toast.success("Subscription reactivated!", {
+          description: "Your subscription has been renewed and will continue auto-renewing normally."
+        });
+      } else if (data.error) {
+        toast.error(data.error);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to reactivate subscription");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
       <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -420,105 +519,6 @@ export default function BillingManager() {
     const currentCanonical = normalizeTraderTier(profile?.tierId || profile?.tier);
     const tierCanonical = normalizeTraderTier(tier.rawKey || tier.name);
     return currentCanonical === tierCanonical;
-  };
-
-  const formatPeriodDate = (isoString?: string) => {
-    if (!isoString) return "End of current period";
-    try {
-      const d = new Date(isoString);
-      if (isNaN(d.getTime())) return "End of current period";
-      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    } catch {
-      return "End of current period";
-    }
-  };
-
-  const handleOpenCustomerPortal = async () => {
-    if (!user) return;
-    setIsProcessing(true);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const response = await fetch("/api/create-customer-portal-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/billing`
-        })
-      });
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else if (data.error) {
-        toast.error(data.error);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to open billing portal");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleCancelSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro') => {
-    if (!user) return;
-    setIsProcessing(true);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const response = await fetch("/api/cancel-subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ subscriptionType })
-      });
-      const data = await response.json();
-      if (data.success) {
-        const formattedDate = formatPeriodDate(data.currentPeriodEnd);
-        toast.success("Subscription scheduled to cancel", {
-          description: `Your subscription will cancel on ${formattedDate}. You will keep all benefits until then with no further charges.`
-        });
-      } else if (data.error) {
-        toast.error(data.error);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to cancel subscription");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleReactivateSubscription = async (subscriptionType: 'tier' | 'exclusive_leads' | 'video_pro') => {
-    if (!user) return;
-    setIsProcessing(true);
-    try {
-      const token = await auth.currentUser?.getIdToken();
-      const response = await fetch("/api/reactivate-subscription", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ subscriptionType })
-      });
-      const data = await response.json();
-      if (data.success) {
-        toast.success("Subscription reactivated!", {
-          description: "Your subscription has been renewed and will continue auto-renewing normally."
-        });
-      } else if (data.error) {
-        toast.error(data.error);
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to reactivate subscription");
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   const handleToggleExclusiveLeads = async () => {

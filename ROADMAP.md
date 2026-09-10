@@ -37,6 +37,9 @@ This roadmap outlines the planned AI-powered enhancements to make the platform m
 ## Phase 7: Payment Integration (COMPLETED)
 - [x] **Stripe Subscription Checkout**: Implement frontend integration to call `/api/create-checkout-session` and redirect users to Stripe.
 - [x] **Stripe Webhook Handler**: Implement server-side webhook listener to update user subscription status in Firestore upon successful payment.
+- [x] **Stripe Connect Destination Routing & Zero Platform Custody**: Milestone escrow payments route directly to verified trader connected accounts (`transfer_data.destination`) with automatic application fee collection.
+- [x] **Dynamic Admin-Controlled Pricing & Commissions**: Server-authoritative catalog dynamically resolves tier prices and commissions configured by platform administrators in Firestore (`platform_config/global_tiers`).
+- [x] **Fail-Closed Webhook Underpayment Protection**: Webhook recalculates authoritative expected pence, rejecting underpayment manipulation.
 
 ## Phase 8: AI Smart Shop Integration (In Progress)
 - [x] **Phase 8.1: The Foundation (UI & Basic Routing)**: Add a distinct shopping cart icon to the main navigation for Trades/Business roles, linking to an external shop with basic query parameters.

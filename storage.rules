@@ -22,6 +22,53 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
     }
 
+    function isChatParticipant(conversationId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
+        (
+          firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.get('participants', []).hasAny([request.auth.uid]) ||
+          firestore.get(/databases/(default)/documents/conversations/$(conversationId)).data.get('participantIds', []).hasAny([request.auth.uid]) ||
+          isAdmin()
+        )
+      );
+    }
+
+    function isDisputeParticipant(jobId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/jobs/$(jobId)) &&
+        (
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('homeownerId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('customerUid', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('assignedTraderId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('traderId', '') == request.auth.uid ||
+          isAdmin()
+        )
+      );
+    }
+
+    function isPropertyParticipant(propertyId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/properties/$(propertyId)) &&
+        (
+          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('ownerId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('landlordId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('tenantId', '') == request.auth.uid ||
+          isAdmin()
+        )
+      );
+    }
+
+    function isVehicleParticipant(vehicleId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/vehicles/$(vehicleId)) &&
+        (
+          firestore.get(/databases/(default)/documents/vehicles/$(vehicleId)).data.get('driverId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/vehicles/$(vehicleId)).data.get('ownerId', '') == request.auth.uid ||
+          isAdmin()
+        )
+      );
+    }
+
     // Public avatars, portfolio showcase items, and badges
     match /users/{uid}/public/{fileName} {
       allow read: if true;
@@ -40,28 +87,28 @@ service firebase.storage {
       allow write: if isSignedIn() && isValidMedia();
     }
 
-    // Chat attachments (images, voice notes)
+    // Chat attachments (images, voice notes) - restricted to conversation participants
     match /chats/{conversationId}/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidMedia();
+      allow read: if isChatParticipant(conversationId) || isAdmin();
+      allow write: if isChatParticipant(conversationId) && isValidMedia();
     }
 
-    // Disputes and resolution evidence
+    // Disputes and resolution evidence - restricted to involved parties
     match /disputes/{jobId}/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidMedia();
+      allow read: if isDisputeParticipant(jobId) || isAdmin();
+      allow write: if isDisputeParticipant(jobId) && isValidMedia();
     }
 
-    // Property Passport documents, EPC certificates, CP12/EICR compliance
+    // Property Passport documents, EPC certificates, CP12/EICR compliance - restricted to property owners/tenants
     match /properties/{propertyId}/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidMedia();
+      allow read: if isPropertyParticipant(propertyId) || isAdmin();
+      allow write: if isPropertyParticipant(propertyId) && isValidMedia();
     }
 
-    // Vehicle and driver compliance documents
+    // Vehicle and driver compliance documents - restricted to vehicle driver/owner
     match /vehicles/{vehicleId}/{fileName} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && isValidMedia();
+      allow read: if isVehicleParticipant(vehicleId) || isAdmin();
+      allow write: if isVehicleParticipant(vehicleId) && isValidMedia();
     }
 
     // Default Deny on all other paths
