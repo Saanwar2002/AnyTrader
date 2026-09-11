@@ -11,7 +11,7 @@
     "recover": "git checkout -- src/components/shared/PlatformSwitcher.tsx src/App.tsx src/components/Layout.tsx",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "firebase emulators:exec --project demo-anytrader --only firestore,storage 'vitest run'",
     "test:security-rules": "firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorSecurityRules.test.ts'",
     "audit:release": "tsx scripts/final-release-audit.mjs"
   },
