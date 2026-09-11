@@ -1,5 +1,5 @@
 /**
- * Automated Release Candidate Audit Script for AnyTrader V6
+ * Automated Release Candidate Audit Script for AnyTrader V8.0
  * Runs pre-flight verification across Environment, Security Rules, Invariants, and Build.
  */
 import fs from "fs";
@@ -7,7 +7,7 @@ import path from "path";
 import { runProductionChecks } from "../src/server/productionChecks.ts";
 
 console.log("==========================================================");
-console.log("🛡️  ANYTRADER V6 — PRE-FLIGHT RELEASE CANDIDATE AUDIT");
+console.log("🛡️  ANYTRADER V8.0 — PRE-FLIGHT RELEASE CANDIDATE AUDIT");
 console.log("==========================================================\n");
 
 let criticalFailures = 0;

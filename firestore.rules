@@ -509,14 +509,15 @@ service cloud.firestore {
     // --- Public Properties: Sanitized projection for Anonymous & Public Property Discovery / Verification ---
     match /public_properties/{propertyId} {
       allow get, list: if true;
-      allow create, update, delete: if isAdmin() && (
+      allow create, update: if isAdmin() && (
         !request.resource.data.keys().hasAny([
           'ownerId', 'userId', 'landlordId', 'tenantId', 'tenantEmail', 'tenantName', 'tenantPhone',
           'fullAddress', 'line1', 'houseNumber', 'street', 'contactPhone', 'contactEmail',
           'componentRegistry', 'transferHistory', 'transferCode', 'pendingTransferToUid', 'transferClaimedByUid',
           'insuranceProvider', 'policyNumber', 'privateNotes', 'financialInfo'
-        ]) || true
+        ])
       );
+      allow delete: if isAdmin();
     }
 
     // --- Tenant Issues (Hardened: Protected from public data extraction) ---
@@ -688,7 +689,7 @@ service cloud.firestore {
     // --- Public Job Cards: Sanitized projection for Anonymous & Public Marketplace Discovery ---
     match /public_job_cards/{cardId} {
       allow get, list: if true;
-      allow create, update, delete: if isAdmin() && (
+      allow create, update: if isAdmin() && (
         !request.resource.data.keys().hasAny([
           'homeownerId', 'userId', 'customerId', 'ownerId', 'posterId',
           'fullAddress', 'houseNumber', 'locationInstructions', 'accessInstructions',
@@ -696,8 +697,9 @@ service cloud.firestore {
           'quotes', 'dispute', 'payoutStatus', 'payoutTransferred',
           'stripeCustomerId', 'stripeAccountId',
           'targetTradespersonId', 'targetTradespersonName', 'targetTraderId', 'directTraderId', 'propertyId'
-        ]) || true
+        ])
       );
+      allow delete: if isAdmin();
     }
 
     match /jobs/{jobId}/quotes/{quoteId} {

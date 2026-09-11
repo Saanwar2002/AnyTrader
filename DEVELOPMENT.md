@@ -36,6 +36,7 @@ PASS / FAIL
 ## 🏆 V8.0 FINAL VERIFICATION — SECURITY BOUNDARY & RELEASE GATE (September 11, 2026)
 - **Status**: **PASSED (100% PASS)**
 - **Firebase Local Emulator Executed**: Yes — 44/44 Live Firebase Security Rules Tests Executed & Passed under OpenJDK Java 21 JRE & project-local `firebase-tools`.
+- **Public Projection Deletion Hardening**: Hardened `/public_properties` and `/public_job_cards` firestore rules by splitting write checks into separate `create, update` and `delete` sections. This guarantees that `delete` operations never crash with a `Null value error` when the security rule engine attempts to evaluate `request.resource.data` (which is null on document deletion).
 - **Full Automated Test Suite**: **261/261 Tests Passed** across 19 Test Suites.
 - **Key Task Deliverables**:
   1. **Firebase Tooling**: Pinned `firebase-tools` (v13.33.0) as a project-local `devDependency` in `package.json`. Invocation via `npm run test:security-rules` uses `npx firebase emulators:exec`.
