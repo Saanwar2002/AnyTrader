@@ -375,6 +375,11 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
     });
 
     it("24. Authorized tradesperson can read permitted media", async () => {
+      // Seed media as job owner first
+      const ownerStorage = testEnv.authenticatedContext("user_alice").storage();
+      const ownerRef = ref(ownerStorage, "jobs/job_media_100/photos/damage.png");
+      await assertSucceeds(uploadBytes(ownerRef, mockFileBytes, { contentType: "image/png" }));
+
       const traderStorage = testEnv.authenticatedContext("trader_tom").storage();
       const storageRef = ref(traderStorage, "jobs/job_media_100/photos/damage.png");
       await assertSucceeds(getBytes(storageRef));
@@ -504,6 +509,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         await setDoc(doc(context.firestore(), "properties/prop_alice_public"), {
           ownerId: "user_alice",
           nickname: "Alice Cottage",
+          isPublicPassport: true,
         });
         await setDoc(doc(context.firestore(), "public_properties/prop_alice_public"), {
           nickname: "Public Alice Cottage",
@@ -815,6 +821,42 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         ownerId: "user_claim_buyer",
         userId: "user_claim_buyer",
         transferStatus: "claimed",
+      }));
+    });
+
+    it("43. Direct/targeted job card cannot be pushed to public_job_cards with target trader PII", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "jobs/direct_job_sec_1"), {
+          homeownerId: "user_alice",
+          targetTradespersonId: "trader_tom",
+          status: "posted",
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+
+      // Alice cannot create a public job card for a direct/targeted job
+      await assertFails(setDoc(doc(aliceDb, "public_job_cards/direct_job_sec_1"), {
+        title: "Leaky Pipe Repair",
+        category: "Plumbing",
+        targetTradespersonId: "trader_tom",
+      }));
+    });
+
+    it("44. Non-public property passport cannot be published to public_properties", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "properties/prop_private_sec_1"), {
+          ownerId: "user_alice",
+          isPublicPassport: false,
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
+
+      // Alice cannot publish a non-public property to public_properties
+      await assertFails(setDoc(doc(aliceDb, "public_properties/prop_private_sec_1"), {
+        name: "Private Residence",
+        postcodeArea: "SW1A",
       }));
     });
   });

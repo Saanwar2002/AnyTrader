@@ -509,6 +509,7 @@ service cloud.firestore {
         (
           exists(/databases/$(database)/documents/properties/$(propertyId)) &&
           isPropertyOwner(get(/databases/$(database)/documents/properties/$(propertyId)).data) &&
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.get('isPublicPassport', false) == true &&
           // Client sync allowed only if strictly stripping private and sensitive property attributes
           !request.resource.data.keys().hasAny([
             'ownerId', 'userId', 'landlordId', 'tenantId', 'tenantEmail', 'tenantName', 'tenantPhone',
@@ -701,12 +702,16 @@ service cloud.firestore {
         (
           exists(/databases/$(database)/documents/jobs/$(cardId)) &&
           isJobOwner(get(/databases/$(database)/documents/jobs/$(cardId)).data) &&
+          get(/databases/$(database)/documents/jobs/$(cardId)).data.get('targetTradespersonId', '') == '' &&
+          get(/databases/$(database)/documents/jobs/$(cardId)).data.get('targetTraderId', '') == '' &&
+          get(/databases/$(database)/documents/jobs/$(cardId)).data.get('isDirectQuote', false) == false &&
           !request.resource.data.keys().hasAny([
             'homeownerId', 'userId', 'customerId', 'ownerId', 'posterId',
             'fullAddress', 'houseNumber', 'locationInstructions', 'accessInstructions',
             'postcode', 'photos', 'videos', 'documents', 'drawings', 'voiceNotes',
             'quotes', 'dispute', 'payoutStatus', 'payoutTransferred',
-            'stripeCustomerId', 'stripeAccountId'
+            'stripeCustomerId', 'stripeAccountId',
+            'targetTradespersonId', 'targetTradespersonName', 'targetTraderId', 'directTraderId', 'propertyId'
           ])
         )
       );

@@ -28,13 +28,10 @@ export interface PublicJobCard {
   isBoosted?: boolean;
   boostTier?: string | null;
   isInstantMatch?: boolean;
-  targetTradespersonId?: string | null;
-  targetTradespersonName?: string | null;
   exclusiveUntil?: any;
   photosCount?: number;
   videosCount?: number;
   documentsCount?: number;
-  propertyId?: string | null;
   [key: string]: any;
 }
 
@@ -103,6 +100,19 @@ export function sanitizePublicDescription(rawDescription?: string): string {
 }
 
 /**
+ * Checks if a job is a 1-to-1 direct / targeted quote request meant for a specific tradesperson
+ */
+export function isDirectJob(jobData: Record<string, any>): boolean {
+  return Boolean(
+    jobData.targetTradespersonId ||
+    jobData.targetTraderId ||
+    jobData.directTraderId ||
+    jobData.isDirectQuote ||
+    jobData.isTargeted
+  );
+}
+
+/**
  * Transforms a private /jobs document into a public-safe /public_job_cards projection
  */
 export function sanitizeJobToPublicCard(jobId: string, jobData: Record<string, any>): PublicJobCard {
@@ -129,13 +139,10 @@ export function sanitizeJobToPublicCard(jobId: string, jobData: Record<string, a
     isBoosted: Boolean(jobData.isBoosted),
     boostTier: jobData.boostTier || null,
     isInstantMatch: Boolean(jobData.isInstantMatch),
-    targetTradespersonId: jobData.targetTradespersonId || null,
-    targetTradespersonName: jobData.targetTradespersonName || null,
     exclusiveUntil: jobData.exclusiveUntil || null,
     photosCount: Array.isArray(jobData.photos) ? jobData.photos.length : (jobData.photosCount || 0),
     videosCount: Array.isArray(jobData.videos) ? jobData.videos.length : (jobData.videosCount || 0),
-    documentsCount: Array.isArray(jobData.documents) ? jobData.documents.length : (jobData.documentsCount || 0),
-    propertyId: jobData.propertyId || jobData.linkedPropertyId || null
+    documentsCount: Array.isArray(jobData.documents) ? jobData.documents.length : (jobData.documentsCount || 0)
   };
 }
 
@@ -159,8 +166,9 @@ export function startPublicJobCardsSync(firestoreDb: admin.firestore.Firestore):
             batch.delete(publicRef);
             operationsCount++;
           } else {
-            // If active and open for marketplace quoting/discovery
-            const isActive = ["posted", "quoting", "in_bidding", "open"].includes(data.status) && !data.clientDeleted;
+            // If active, open for marketplace quoting/discovery, AND NOT a direct/targeted job
+            const isDirect = isDirectJob(data);
+            const isActive = ["posted", "quoting", "in_bidding", "open"].includes(data.status) && !data.clientDeleted && !isDirect;
 
             if (isActive) {
               const publicData = sanitizeJobToPublicCard(docId, data);
@@ -168,7 +176,7 @@ export function startPublicJobCardsSync(firestoreDb: admin.firestore.Firestore):
               batch.set(publicRef, publicData, { merge: true });
               operationsCount++;
             } else {
-              // If status moved to completed, cancelled, disputed, or accepted, remove or mark closed
+              // If status moved to completed, cancelled, disputed, or accepted OR if direct job, remove from public projection
               const publicRef = firestoreDb.collection("public_job_cards").doc(docId);
               batch.delete(publicRef);
               operationsCount++;
@@ -199,7 +207,7 @@ export function startPublicJobCardsSync(firestoreDb: admin.firestore.Firestore):
 }
 
 /**
- * Manual backfill migration helper to sync all active jobs to /public_job_cards
+ * Manual backfill migration helper to sync all active public marketplace jobs to /public_job_cards
  */
 export async function backfillPublicJobCards(firestoreDb: admin.firestore.Firestore): Promise<{ total: number; synced: number }> {
   const jobsSnap = await firestoreDb.collection("jobs").get();
@@ -208,7 +216,8 @@ export async function backfillPublicJobCards(firestoreDb: admin.firestore.Firest
 
   jobsSnap.docs.forEach((doc) => {
     const data = doc.data();
-    const isActive = ["posted", "quoting", "in_bidding", "open"].includes(data.status) && !data.clientDeleted;
+    const isDirect = isDirectJob(data);
+    const isActive = ["posted", "quoting", "in_bidding", "open"].includes(data.status) && !data.clientDeleted && !isDirect;
     if (isActive) {
       const publicCard = sanitizeJobToPublicCard(doc.id, data);
       batch.set(firestoreDb.collection("public_job_cards").doc(doc.id), publicCard, { merge: true });
@@ -253,7 +262,7 @@ export function sanitizePropertyToPublicPassport(propertyId: string, propertyDat
     } : undefined,
     gasSafetyExpiry: propertyData.gasSafetyExpiry || undefined,
     eicrExpiry: propertyData.eicrExpiry || undefined,
-    isPublicPassport: propertyData.isPublicPassport ?? true,
+    isPublicPassport: propertyData.isPublicPassport ?? false,
     status: propertyData.status || "active",
     createdAt: propertyData.createdAt || undefined,
     updatedAt: propertyData.updatedAt || undefined,
@@ -279,7 +288,7 @@ export function startPublicPropertiesSync(firestoreDb: admin.firestore.Firestore
           const docId = change.doc.id;
           const data = change.doc.data();
 
-          if (change.type === "removed" || data.isPublicPassport === false || data.status === "archived") {
+          if (change.type === "removed" || data.isPublicPassport !== true || data.status === "archived") {
             const publicRef = firestoreDb.collection("public_properties").doc(docId);
             batch.delete(publicRef);
             operationsCount++;
@@ -322,7 +331,7 @@ export async function backfillPublicProperties(firestoreDb: admin.firestore.Fire
 
   propSnap.docs.forEach((doc) => {
     const data = doc.data();
-    if (data.isPublicPassport !== false && data.status !== "archived") {
+    if (data.isPublicPassport === true && data.status !== "archived") {
       const publicPassport = sanitizePropertyToPublicPassport(doc.id, data);
       batch.set(firestoreDb.collection("public_properties").doc(doc.id), publicPassport, { merge: true });
       synced++;

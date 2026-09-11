@@ -1,5 +1,51 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🔄 Automated CI/CD & Security Gate Pipeline Flow
+For future deployment, automated pull requests, and continuous integration releases, the platform enforces the following strict automated gate pipeline (`.github/workflows/ci.yml`):
+
+```
+GitHub
+   ↓
+push / PR
+   ↓
+Node 22
+   ↓
+Java 21
+   ↓
+Firebase CLI
+   ↓
+Firestore Emulator
+   ↓
+Storage Emulator
+   ↓
+44 security tests
+   ↓
+all other unit & pen-test suites (261 tests)
+   ↓
+build (npm run build)
+   ↓
+PASS / FAIL
+```
+
+- **Node 22 Runtime**: Executes modern ESM type stripping, `vitest`, and `esbuild` bundling.
+- **Java 21 Runtime**: Executes local `cloud-firestore-emulator` and `cloud-storage-rules-runtime`.
+- **Firebase CLI**: Starts local emulators (`npx firebase emulators:exec`) without requiring cloud deployment.
+- **Security Rules Gate**: Must pass all 44 live emulator tests before proceeding to general unit suites.
+- **Build Release Gate**: Final step compiles bundle to `dist/server.cjs` and `dist/index.html`. Any failure blocks merging or deployment.
+
+## 🏆 V8.0 FINAL VERIFICATION — SECURITY BOUNDARY & RELEASE GATE (September 11, 2026)
+- **Status**: **PASSED (100% PASS)**
+- **Firebase Local Emulator Executed**: Yes — 44/44 Live Firebase Security Rules Tests Executed & Passed under OpenJDK Java 21 JRE & project-local `firebase-tools`.
+- **Full Automated Test Suite**: **261/261 Tests Passed** across 19 Test Suites.
+- **Key Task Deliverables**:
+  1. **Firebase Tooling**: Pinned `firebase-tools` (v13.33.0) as a project-local `devDependency` in `package.json`. Invocation via `npm run test:security-rules` uses `npx firebase emulators:exec`.
+  2. **Java 21 Environment**: Resolved OpenJDK Java 21 JRE (`java.security` configuration and Debian dpkg symlinks repaired).
+  3. **Firebase Emulator Suite Execution**: Ran `npm run test:security-rules` executing all 44 live Firestore & Storage emulator security tests. Fixed Storage media seeding in Test 24. 44/44 tests passed 100%.
+  4. **Direct Job Public Projection Isolation**: Updated `src/server/projectionSync.ts` (`isDirectJob` helper) and `firestore.rules` (`/public_job_cards/{cardId}`) to strictly exclude targeted 1-to-1 direct quote request jobs from public job card projections, scrubbing `targetTradespersonId`, `targetTradespersonName`, and `propertyId`. Added emulator Test 43.
+  5. **Public Projection Write Integrity**: Enforced strict rules on `/public_job_cards` and `/public_properties` requiring existing private document alignment and stripping all PII and target trader fields.
+  6. **Property Public Passport Default**: Changed default `isPublicPassport` in `sanitizePropertyToPublicPassport()` to `false`. Added emulator Test 44.
+  7. **Full Test Matrix**: 261/261 unit tests passing across 19 suites + 44/44 live emulator tests passing. Clean production build via `compile_applet`.
+
 ## 🛠️ Unmatched API Route 404 & JSON Parsing Error Defense (September 11, 2026)
 - **Root Cause Fix**:
   - Addressed client-side `SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON` caused by unmatched `/api/*` endpoints falling through Express routes into Vite/SPA `index.html` fallback.
