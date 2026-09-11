@@ -30,8 +30,13 @@ export function TenantReportPortal() {
     if (!propertyId) return;
     async function fetchProperty() {
       try {
-        const docRef = doc(db, "properties", propertyId);
-        const snap = await getDoc(docRef);
+        // Query public projection first (publicly readable for tenant link access)
+        const pubRef = doc(db, "public_properties", propertyId);
+        let snap = await getDoc(pubRef);
+        if (!snap.exists()) {
+          const docRef = doc(db, "properties", propertyId);
+          snap = await getDoc(docRef);
+        }
         if (snap.exists()) {
           setProperty({ id: snap.id, ...snap.data() });
         }

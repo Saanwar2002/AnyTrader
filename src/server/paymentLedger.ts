@@ -49,14 +49,14 @@ export class PaymentLedgerEngine {
 
     const idempotencyRef = db.collection("payment_idempotency").doc(idempotencyKey);
     
-    // Attempt transaction to claim the lock
-    return await db.runTransaction(async (transaction: any) => {
+    // 1. Attempt transaction to claim the lock
+    const claimResult = await db.runTransaction(async (transaction: any) => {
       const doc = await transaction.get(idempotencyRef);
       if (doc.exists) {
         const data = doc.data();
         if (data.status === "completed") {
           console.log(`[Idempotency Hit] Operation '${operationName}' already executed for key: ${idempotencyKey}`);
-          return { result: data.response as T, wasReplayed: true };
+          return { shouldExecute: false, result: data.response as T, wasReplayed: true };
         }
         if (data.status === "in_progress") {
           throw new ConflictError("A concurrent request with the same idempotency key is already processing.");
@@ -69,31 +69,45 @@ export class PaymentLedgerEngine {
         status: "in_progress",
         startedAt: new Date().toISOString(),
       });
-
-      try {
-        const result = await executor();
-        if (typeof transaction.update === "function") {
-          transaction.update(idempotencyRef, {
-            status: "completed",
-            completedAt: new Date().toISOString(),
-            response: result ?? null,
-          });
-        } else {
-          transaction.set(idempotencyRef, {
-            operationName,
-            status: "completed",
-            completedAt: new Date().toISOString(),
-            response: result ?? null,
-          });
-        }
-        return { result, wasReplayed: false };
-      } catch (err) {
-        if (typeof transaction.delete === "function") {
-          transaction.delete(idempotencyRef);
-        }
-        throw err;
-      }
+      return { shouldExecute: true };
     });
+
+    if (!claimResult.shouldExecute) {
+      return { result: claimResult.result as T, wasReplayed: true };
+    }
+
+    // 2. Execute side effect outside transaction
+    try {
+      const result = await executor();
+      
+      // 3. Record completed result
+      if (typeof idempotencyRef.update === "function") {
+        await idempotencyRef.update({
+          status: "completed",
+          completedAt: new Date().toISOString(),
+          response: result ?? null,
+        });
+      } else if (typeof idempotencyRef.set === "function") {
+        await idempotencyRef.set({
+          operationName,
+          status: "completed",
+          completedAt: new Date().toISOString(),
+          response: result ?? null,
+        }, { merge: true });
+      }
+
+      return { result, wasReplayed: false };
+    } catch (err) {
+      // Release lock on failure
+      if (typeof idempotencyRef.delete === "function") {
+        await idempotencyRef.delete().catch((e: any) => console.error("Failed to release idempotency lock:", e));
+      } else if (typeof idempotencyRef.update === "function") {
+        await idempotencyRef.update({ status: "failed" }).catch(() => {});
+      } else if (typeof idempotencyRef.set === "function") {
+        await idempotencyRef.set({ status: "failed" }, { merge: true }).catch(() => {});
+      }
+      throw err;
+    }
   }
 
   /**

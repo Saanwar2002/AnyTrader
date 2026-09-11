@@ -783,6 +783,46 @@
         "createdAt"
       ]
     },
+    "PublicJobCard": {
+      "title": "PublicJobCard",
+      "description": "Sanitized public projection of a job for anonymous marketplace discovery without PII.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobNo": { "type": "string" },
+        "category": { "type": "string" },
+        "subCategory": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "postcodeArea": { "type": "string" },
+        "city": { "type": "string" },
+        "area": { "type": "string" },
+        "urgency": { "type": "string" },
+        "status": { "type": "string" },
+        "estimateMin": { "type": "number" },
+        "estimateMax": { "type": "number" },
+        "postedDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "quoteCount": { "type": "integer" },
+        "isBoosted": { "type": "boolean" },
+        "boostTier": { "type": "string" },
+        "isInstantMatch": { "type": "boolean" },
+        "targetTradespersonId": { "type": "string" },
+        "targetTradespersonName": { "type": "string" },
+        "photosCount": { "type": "integer" },
+        "videosCount": { "type": "integer" },
+        "documentsCount": { "type": "integer" },
+        "propertyId": { "type": "string" }
+      },
+      "required": [
+        "id",
+        "category",
+        "title",
+        "description",
+        "status"
+      ]
+    },
     "Quote": {
       "title": "Quote",
       "description": "A quote submitted by a tradesperson for a job.",
@@ -3822,6 +3862,39 @@
         "suggestedTrade": { "type": "string" }
       },
       "required": ["query", "normalizedQuery", "searchCount", "status"]
+    },
+    "PublicProperty": {
+      "title": "PublicProperty",
+      "description": "Public sanitized property passport projection for external verification and discovery without exposing private addresses, homeowner IDs, or internal components.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "propertyType": { "type": "string" },
+        "postcodeArea": { "type": "string" },
+        "address": {
+          "type": "object",
+          "properties": {
+            "city": { "type": "string" },
+            "postcode": { "type": "string" },
+            "country": { "type": "string" }
+          }
+        },
+        "epcRating": { "type": "string" },
+        "bedrooms": { "type": "integer" },
+        "bathrooms": { "type": "integer" },
+        "photos": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "boilerInfo": { "type": "object" },
+        "roofCondition": { "type": "string" },
+        "gasSafetyExpiry": { "type": "string" },
+        "eicrExpiry": { "type": "string" },
+        "isPublicPassport": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "postcodeArea", "isPublicPassport"]
     }
   },
   "firestore": {
@@ -4184,6 +4257,18 @@
         "$ref": "#/entities/PlatformCategory"
       },
       "description": "Dynamic searchable platform categories registry with synonyms and related terms."
+    },
+    "/public_job_cards/{id}": {
+      "schema": {
+        "$ref": "#/entities/PublicJobCard"
+      },
+      "description": "Public sanitized job projections for marketplace discovery without PII."
+    },
+    "/public_properties/{id}": {
+      "schema": {
+        "$ref": "#/entities/PublicProperty"
+      },
+      "description": "Public sanitized property passport projections for external verification without PII or internal components."
     }
   }
 }

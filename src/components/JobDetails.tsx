@@ -330,9 +330,18 @@ const libraries: any[] = ['places', 'geometry'];
       } finally {
         setLoading(false);
       }
-    }, (err) => {
-      console.error("Failed to subscribe to job snapshot:", err);
-      setLoading(false);
+    }, async (err) => {
+      // If private job permission error (e.g. unassigned discovery tradesperson or guest), load sanitized public card
+      try {
+        const publicDoc = await getDoc(doc(db, "public_job_cards", id));
+        if (publicDoc.exists()) {
+          setJob({ id: publicDoc.id, ...publicDoc.data(), isPublicDiscovery: true });
+        }
+      } catch (pubErr) {
+        console.warn("Public job card discovery fallback error:", pubErr);
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => {

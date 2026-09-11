@@ -21,8 +21,9 @@ describe("Production Invariant Checks", () => {
       STRIPE_WEBHOOK_SECRET: "whsec_verylongsecurekey123456789",
       GEMINI_API_KEY: "AIzaSy_verylongsecurekey123456789",
       ALLOW_MOCK_PAYMENTS: "true", // Malicious / dangerous in prod
+      APP_URL: "https://anytrader.com",
+      ALLOWED_ORIGINS: "https://anytrader.com"
     };
-
     const report = runProductionChecks(fakeEnv as any, {});
     expect(report.overallStatus).toBe("NO_GO");
     const mockPaymentCheck = report.checks.find((c) => c.name === "Mock Payment Gate");
@@ -37,6 +38,8 @@ describe("Production Invariant Checks", () => {
       GEMINI_API_KEY: "AIzaSy_verylongsecurekey123456789",
       JWT_SECRET: "very_long_secure_jwt_secret_key_123456789",
       ALLOW_MOCK_PAYMENTS: "false",
+      APP_URL: "https://anytrader.com",
+      ALLOWED_ORIGINS: "https://anytrader.com"
     };
 
     const report = runProductionChecks(healthyEnv as any, { collection: () => {} });

@@ -27,6 +27,8 @@ export function runProductionChecks(env = process.env, dbInstance?: any): Produc
     { key: "STRIPE_WEBHOOK_SECRET", category: "FINANCIAL" as const, requiredInProd: true },
     { key: "GEMINI_API_KEY", category: "SECURITY" as const, requiredInProd: true },
     { key: "JWT_SECRET", category: "SECURITY" as const, requiredInProd: false },
+    { key: "APP_URL", category: "CONFIG" as const, requiredInProd: true },
+    { key: "ALLOWED_ORIGINS", category: "CONFIG" as const, requiredInProd: true },
   ];
 
   for (const { key, category, requiredInProd } of sensitiveKeys) {
@@ -79,6 +81,33 @@ export function runProductionChecks(env = process.env, dbInstance?: any): Produc
       status: "PASS",
       message: "Mock payments are correctly disabled or restricted to non-production environments.",
     });
+  }
+
+  // 2.5 HTTPS & CORS Check
+  if (isProd) {
+     if (env.APP_URL && !env.APP_URL.startsWith("https://")) {
+        checks.push({
+          name: "HTTPS Protocol Enforced",
+          category: "SECURITY",
+          status: "FAIL",
+          message: "APP_URL must use https:// in production.",
+        });
+     }
+     if (!env.ALLOWED_ORIGINS || env.ALLOWED_ORIGINS === "*" || env.ALLOWED_ORIGINS.includes("localhost")) {
+        checks.push({
+          name: "Strict CORS Configuration",
+          category: "SECURITY",
+          status: "FAIL",
+          message: "ALLOWED_ORIGINS must be strictly defined (no wildcards or localhost) in production.",
+        });
+     } else {
+        checks.push({
+          name: "Strict CORS Configuration",
+          category: "SECURITY",
+          status: "PASS",
+          message: "CORS strictly configured for production.",
+        });
+     }
   }
 
   // 3. Database Connectivity Check

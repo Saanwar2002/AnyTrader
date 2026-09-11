@@ -2071,10 +2071,66 @@ export default function PostJobWizard() {
         
         if (editJob) {
           await updateDoc(currentJobRef, cleanData);
+          try {
+            const publicRef = doc(db, "public_job_cards", currentJobRef.id);
+            await setDoc(publicRef, {
+              id: currentJobRef.id,
+              jobNo: cleanData.jobNo || undefined,
+              category: cleanData.category || "General",
+              subCategory: cleanData.subCategory || undefined,
+              title: cleanData.title || "Trade Job",
+              description: cleanData.description || "",
+              postcodeArea: cleanData.postcode?.trim().split(/\s+/)[0] || cleanData.area || "Local Area",
+              city: cleanData.city || undefined,
+              area: cleanData.area || undefined,
+              urgency: cleanData.urgency || "standard",
+              status: cleanData.status || "posted",
+              estimateMin: cleanData.estimateMin || undefined,
+              estimateMax: cleanData.estimateMax || undefined,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (projErr) {
+            console.warn("Public job projection update note:", projErr);
+          }
         } else {
           // Time-Gate leads logic for new jobs
           cleanData.exclusiveUntil = new Date(Date.now() + ((formData.urgency === 'emergency' || formData.isEmergencyBoost) ? 5 : 15) * 60000);
           await setDoc(currentJobRef, cleanData);
+
+          try {
+            const publicRef = doc(db, "public_job_cards", currentJobRef.id);
+            await setDoc(publicRef, {
+              id: currentJobRef.id,
+              jobNo: cleanData.jobNo || undefined,
+              category: cleanData.category || "General",
+              subCategory: cleanData.subCategory || undefined,
+              title: cleanData.title || "Trade Job",
+              description: cleanData.description || "",
+              postcodeArea: cleanData.postcode?.trim().split(/\s+/)[0] || cleanData.area || "Local Area",
+              city: cleanData.city || undefined,
+              area: cleanData.area || undefined,
+              urgency: cleanData.urgency || "standard",
+              status: cleanData.status || "posted",
+              estimateMin: cleanData.estimateMin || undefined,
+              estimateMax: cleanData.estimateMax || undefined,
+              postedDate: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              quoteCount: 0,
+              isBoosted: Boolean(cleanData.isBoosted),
+              boostTier: cleanData.boostTier || null,
+              isInstantMatch: Boolean(cleanData.isInstantMatch),
+              targetTradespersonId: cleanData.targetTradespersonId || null,
+              targetTradespersonName: cleanData.targetTradespersonName || null,
+              exclusiveUntil: cleanData.exclusiveUntil || null,
+              photosCount: Array.isArray(cleanData.photos) ? cleanData.photos.length : 0,
+              videosCount: Array.isArray(cleanData.videos) ? cleanData.videos.length : 0,
+              documentsCount: Array.isArray(cleanData.documents) ? cleanData.documents.length : 0,
+              propertyId: cleanData.propertyId || cleanData.linkedPropertyId || null
+            }, { merge: true });
+          } catch (projErr) {
+            console.warn("Public job projection create note:", projErr);
+          }
         
           // Handle specific tradesperson invitation (only for first job if bulk)
           if (targetTradespersonId && asset === assetsToPost[0]) {
@@ -2166,6 +2222,7 @@ export default function PostJobWizard() {
             // Dispatch standard email notification queue
             const emailRef = doc(collection(db, "email_queue"));
             await setDoc(emailRef, {
+              requestedBy: user.uid,
               toRole: "tradesperson",
               category: formData.category,
               jobId: currentJobRef.id,

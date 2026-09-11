@@ -150,9 +150,13 @@ export default function Layout() {
   const enterShop = async (category?: string) => {
     try {
       setIsLoadingShop(true);
+      const idToken = user ? await user.getIdToken() : "";
       const res = await fetch("/api/sso-token", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(idToken ? { "Authorization": `Bearer ${idToken}` } : {})
+        },
         body: JSON.stringify({
           uid: user?.uid,
           role: profile?.role,
@@ -160,9 +164,9 @@ export default function Layout() {
           category: profile?.category || profile?.businessCategory
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       
-      let shopUrl = `https://shop.tradequote.uk/?token=${data.token}`;
+      let shopUrl = `https://shop.tradequote.uk/?token=${data?.token || ''}`;
       if (category) shopUrl += `&category=${encodeURIComponent(category)}`;
       
       window.open(shopUrl, "_blank");

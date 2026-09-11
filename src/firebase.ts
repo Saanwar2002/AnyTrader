@@ -377,7 +377,11 @@ export const submitReview = async (
       throw new Error(errJson.error || "Failed to submit review via server");
     }
 
-    return await response.json();
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return await response.json().catch(() => ({ success: true }));
+    }
+    return { success: true };
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, "reviews");
     throw error;

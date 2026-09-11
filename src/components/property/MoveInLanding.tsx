@@ -40,8 +40,12 @@ export default function MoveInLanding() {
 
       setLoading(true);
       try {
-        const docRef = doc(db, "properties", passportId);
-        const snapshot = await getDoc(docRef);
+        const publicDocRef = doc(db, "public_properties", passportId);
+        let snapshot = await getDoc(publicDocRef);
+        if (!snapshot.exists()) {
+          const privateDocRef = doc(db, "properties", passportId);
+          snapshot = await getDoc(privateDocRef);
+        }
         if (snapshot.exists()) {
           setProperty({ id: snapshot.id, ...snapshot.data() });
         }

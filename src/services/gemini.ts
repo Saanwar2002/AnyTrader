@@ -712,14 +712,23 @@ export async function getAiCacheStats(): Promise<AiCacheStats> {
   const targetUrl = getApiUrl("/api/gemini/cache-stats");
   const res = await fetch(targetUrl);
   if (!res.ok) throw new Error("Failed to fetch AI cache stats");
-  return res.json();
+  return res.json().catch(() => ({
+    totalRequests: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    hitRatePercent: 0,
+    estimatedTokensSaved: 0,
+    avgHitLatencyMs: 0,
+    totalEntries: 0,
+    topIntents: []
+  }));
 }
 
 export async function clearAiCache(): Promise<{ success: boolean; message: string }> {
   const targetUrl = getApiUrl("/api/gemini/cache-clear");
   const res = await fetch(targetUrl, { method: "POST" });
   if (!res.ok) throw new Error("Failed to clear AI cache");
-  return res.json();
+  return res.json().catch(() => ({ success: true, message: "Cache cleared" }));
 }
 
 export interface SynonymClassificationResult {

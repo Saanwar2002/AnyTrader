@@ -22,6 +22,14 @@ import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload } 
 import { BusinessLogicDefense } from "./src/server/businessLogicDefense.ts";
 import { domainEvents } from "./src/server/domainEvents.ts";
 import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
+import { 
+  startPublicJobCardsSync, 
+  backfillPublicJobCards, 
+  sanitizeJobToPublicCard,
+  startPublicPropertiesSync,
+  backfillPublicProperties,
+  sanitizePropertyToPublicPassport
+} from "./src/server/projectionSync.ts";
 
 dotenv.config();
 
@@ -95,6 +103,8 @@ const initFirebase = () => {
              if (db) {
                startInstantMatchEngine(db);
                startCategoryRegistrySyncWorker(db);
+               startPublicJobCardsSync(db);
+               startPublicPropertiesSync(db);
              }
           })
           .catch(err => {
@@ -985,16 +995,12 @@ async function startServer() {
     const origin = req.headers.origin;
     if (origin) {
       const isAllowed = allowedOriginsSet.has(origin) ||
-        process.env.NODE_ENV !== "production" ||
-        origin.endsWith(".run.app") ||
-        origin.includes("localhost");
+        (process.env.NODE_ENV !== "production" && (origin.endsWith(".run.app") || origin.includes("localhost")));
 
       if (isAllowed) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Credentials", "true");
       }
-    } else {
-      res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.setHeader(
       "Access-Control-Allow-Methods",
@@ -1084,118 +1090,159 @@ async function startServer() {
          return res.json({received: true});
       }
 
+      // Idempotency: Use a transaction to atomically claim 'processing' state
       const eventRef = db.collection("processed_stripe_events").doc(event.id);
-      const existing = await eventRef.get();
-      if (existing.exists) return res.status(200).send("Already processed");
-      await eventRef.set({ processedAt: admin.firestore.FieldValue.serverTimestamp() });
+      try {
+        const claimSuccess = await db.runTransaction(async (t: admin.firestore.Transaction) => {
+          const existing = await t.get(eventRef);
+          if (existing.exists) {
+            const data = existing.data();
+            if (data?.status === 'completed') {
+               return false; // Already processed
+            }
+            if (data?.status === 'processing') {
+               // Check if it's a stale processing claim (e.g., > 5 minutes old)
+               const ageMs = Date.now() - (data.claimedAt?.toMillis ? data.claimedAt.toMillis() : Date.now());
+               if (ageMs < 5 * 60 * 1000) {
+                 return false; // Still processing by another worker
+               }
+            }
+          }
+          t.set(eventRef, {
+            status: 'processing',
+            claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+            workerId: `worker_${Math.random().toString(36).substring(7)}`
+          });
+          return true;
+        });
+
+        if (!claimSuccess) {
+           return res.status(200).send("Already processed or currently processing");
+        }
+      } catch (txErr) {
+        console.error("Webhook idempotency transaction error:", txErr);
+        return res.status(500).send("Internal Error");
+      }
 
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object as Stripe.Checkout.Session;
-        const userId = session.client_reference_id;
-        
-        if ((session.metadata?.isVideoPro === 'true' || session.metadata?.type === 'video_pro_subscription') && userId && db) {
-          await db.collection("users").doc(userId).update({
-             hasVerifiedVideoProSubscription: true,
-             videoProSubscribedAt: new Date().toISOString(),
-             videoVerificationStatus: "verified",
-             videoProSubscriptionId: session.subscription as string || session.id,
-             updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        }
-        else if ((session.metadata?.isExclusiveAddon === 'true' || session.metadata?.type === 'exclusive_leads') && userId && db) {
-          await db.collection("users").doc(userId).update({
-             hasExclusiveAddon: true,
-             isExclusiveActive: true,
-             exclusiveSubscribedAt: new Date().toISOString(),
-             exclusiveSubscriptionId: session.subscription as string || session.id, // Depending on mode
-             updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          });
-        }
-        else if (session.mode === 'subscription') {
-          const subscriptionId = session.subscription as string;
-          if (userId && db) {
-            const rawTier = session.metadata?.tierName || "Pro";
-            const lowerTier = rawTier.toLowerCase();
-            let canonicalTier = 'pro';
-            let isLandlord = false;
-            if (lowerTier.includes('landlord') || session.metadata?.tier === 'landlord' || session.metadata?.subscriptionType === 'landlord') {
-              canonicalTier = 'landlord';
-              isLandlord = true;
+          const userId = session.client_reference_id;
+          
+          let meta = session.metadata || {};
+          if (session.metadata?.intentId && db) {
+            const intentDoc = await db.collection("payment_intents").doc(session.metadata.intentId).get();
+            if (intentDoc.exists) {
+               meta = intentDoc.data()?.metadata || {};
+               // Mark intent as fulfilled
+               await intentDoc.ref.update({ status: 'completed', completedAt: admin.firestore.FieldValue.serverTimestamp(), paymentIntentId: session.payment_intent });
+            } else {
+               console.error("Payment intent not found for intentId:", session.metadata.intentId);
             }
-            else if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
-            else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
-            else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
-            else canonicalTier = 'payg';
-
+          }
+          
+          if ((meta?.isVideoPro === 'true' || meta?.type === 'video_pro_subscription') && userId && db) {
             await db.collection("users").doc(userId).update({
-              subscriptionStatus: "active",
-              subscriptionId: subscriptionId,
-              tierId: rawTier,
-              tier: canonicalTier,
-              isLandlord: isLandlord || canonicalTier === 'landlord',
-              subscriptionType: isLandlord ? 'landlord' : (canonicalTier !== 'payg' ? 'tier' : 'standard'),
-              isPro: canonicalTier !== 'payg',
-              isProInvoiceSubscriber: canonicalTier !== 'payg',
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+               hasVerifiedVideoProSubscription: true,
+               videoProSubscribedAt: new Date().toISOString(),
+               videoVerificationStatus: "verified",
+               videoProSubscriptionId: session.subscription as string || session.id,
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
-        } else if (session.mode === 'payment') {
-          if (session.metadata?.type === 'ad_wallet_topup' && userId && db) {
-            const topupAmount = Number(session.metadata?.topupAmount) || (session.amount_total ? session.amount_total / 100 : 0);
-            if (topupAmount > 0) {
-              await db.collection("users").doc(userId).set({
-                adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-              }, { merge: true });
-            }
-          } else if (session.metadata?.type === 'mediation_stake' && session.metadata?.jobId && db) {
-            await db.collection("jobs").doc(session.metadata.jobId).update({
-              status: "disputed",
-              "dispute.status": "pending_arbitration",
-              "dispute.mediationStakePaid": true,
-              "dispute.mediationStakeAmount": 25.00,
-              "dispute.stakePaymentId": session.id,
-              "dispute.paidAt": admin.firestore.FieldValue.serverTimestamp(),
-              disputeReason: session.metadata.disputeReason || "Unspecified",
-              technicalFaultReport: session.metadata.technicalFaultReport || "Unspecified",
-              disputedAt: admin.firestore.FieldValue.serverTimestamp()
+          else if ((meta?.isExclusiveAddon === 'true' || meta?.type === 'exclusive_leads') && userId && db) {
+            await db.collection("users").doc(userId).update({
+               hasExclusiveAddon: true,
+               isExclusiveActive: true,
+               exclusiveSubscribedAt: new Date().toISOString(),
+               exclusiveSubscriptionId: session.subscription as string || session.id, // Depending on mode
+               updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
-          if (session.metadata?.type === 'boost' && session.metadata?.jobId && db) {
-            const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-            const isIM = session.metadata.tier === 'instant_match';
-            await db.collection("jobs").doc(session.metadata.jobId).update({
-              isBoosted: true,
-              boostTier: session.metadata.tier || 'emergency_boost',
-              boostExpiresAt,
-              postedDate: admin.firestore.FieldValue.serverTimestamp(),
-              isInstantMatch: isIM,
-              isEmergencyBoost: session.metadata.tier === 'emergency_boost',
-              retryCount: 0
-            });
+          else if (session.mode === 'subscription') {
+            const subscriptionId = session.subscription as string;
+            if (userId && db) {
+              const rawTier = meta?.tierName || "Pro";
+              const lowerTier = rawTier.toLowerCase();
+              let canonicalTier = 'pro';
+              let isLandlord = false;
+              if (lowerTier.includes('landlord') || meta?.tier === 'landlord' || meta?.subscriptionType === 'landlord') {
+                canonicalTier = 'landlord';
+                isLandlord = true;
+              }
+              else if (lowerTier.includes('platinum') || lowerTier.includes('enterprise powerhouse')) canonicalTier = 'platinum';
+              else if (lowerTier.includes('gold') || lowerTier.includes('elite') || lowerTier.includes('premium') || lowerTier.includes('business professional')) canonicalTier = 'premium';
+              else if (lowerTier.includes('silver') || lowerTier.includes('pro') || lowerTier.includes('professional')) canonicalTier = 'pro';
+              else canonicalTier = 'payg';
 
-            if (isIM) {
-               const matchRef = db.collection("instant_matches").doc();
-               await matchRef.set({
-                 id: matchRef.id,
-                 jobId: session.metadata.jobId,
-                 customerId: userId || "",
-                 chargeAmountPence: session.amount_total || 299,
-                 chargeTier: "instant_match",
-                 feeWaived: false,
-                 status: "searching",
-                 currentAttempt: 0,
-                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                 searchingAt: admin.firestore.FieldValue.serverTimestamp()
-               });
-               await db.collection("jobs").doc(session.metadata.jobId).set({
-                  instantMatchId: matchRef.id,
-                  matchedViaInstantMatch: true
-               }, { merge: true });
+              await db.collection("users").doc(userId).update({
+                subscriptionStatus: "active",
+                subscriptionId: subscriptionId,
+                tierId: rawTier,
+                tier: canonicalTier,
+                isLandlord: isLandlord || canonicalTier === 'landlord',
+                subscriptionType: isLandlord ? 'landlord' : (canonicalTier !== 'payg' ? 'tier' : 'standard'),
+                isPro: canonicalTier !== 'payg',
+                isProInvoiceSubscriber: canonicalTier !== 'payg',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
             }
-          } else if (session.metadata?.type === 'milestone_funding' && session.metadata?.jobId && session.metadata?.quoteId && session.metadata?.milestoneId && db) {
-            // Log successful funding of a milestone with V6 Payment Ledger & State Machine
-            const { jobId, quoteId, milestoneId } = session.metadata;
+          } else if (session.mode === 'payment') {
+            if (meta?.type === 'ad_wallet_topup' && userId && db) {
+              const topupAmount = Number(meta?.topupAmount) || (session.amount_total ? session.amount_total / 100 : 0);
+              if (topupAmount > 0) {
+                await db.collection("users").doc(userId).set({
+                  adWalletBalance: admin.firestore.FieldValue.increment(topupAmount),
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+              }
+            } else if (meta?.type === 'mediation_stake' && meta?.jobId && db) {
+              await db.collection("jobs").doc(meta.jobId).update({
+                status: "disputed",
+                "dispute.status": "pending_arbitration",
+                "dispute.mediationStakePaid": true,
+                "dispute.mediationStakeAmount": 25.00,
+                "dispute.stakePaymentId": session.id,
+                "dispute.paidAt": admin.firestore.FieldValue.serverTimestamp(),
+                disputeReason: meta.disputeReason || "Unspecified",
+                technicalFaultReport: meta.technicalFaultReport || "Unspecified",
+                disputedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+            if (meta?.type === 'boost' && meta?.jobId && db) {
+              const boostExpiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+              const isIM = meta.tier === 'instant_match';
+              await db.collection("jobs").doc(meta.jobId).update({
+                isBoosted: true,
+                boostTier: meta.tier || 'emergency_boost',
+                boostExpiresAt,
+                postedDate: admin.firestore.FieldValue.serverTimestamp(),
+                isInstantMatch: isIM,
+                isEmergencyBoost: meta.tier === 'emergency_boost',
+                retryCount: 0
+              });
+
+              if (isIM) {
+                 const matchRef = db.collection("instant_matches").doc();
+                 await matchRef.set({
+                   id: matchRef.id,
+                   jobId: meta.jobId,
+                   customerId: userId || "",
+                   chargeAmountPence: session.amount_total || 299,
+                   chargeTier: "instant_match",
+                   feeWaived: false,
+                   status: "searching",
+                   currentAttempt: 0,
+                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                   searchingAt: admin.firestore.FieldValue.serverTimestamp()
+                 });
+                 await db.collection("jobs").doc(meta.jobId).set({
+                    instantMatchId: matchRef.id,
+                    matchedViaInstantMatch: true
+                 }, { merge: true });
+              }
+            } else if (meta?.type === 'milestone_funding' && meta?.jobId && meta?.quoteId && meta?.milestoneId && db) {
+              // Log successful funding of a milestone with V6 Payment Ledger & State Machine
+              const { jobId, quoteId, milestoneId } = meta;
             const quoteRef = db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
             const quoteDoc = await quoteRef.get();
             
@@ -1259,18 +1306,18 @@ async function startServer() {
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
               });
             }
-          } else if (session.metadata?.type === 'fee_settlement' && session.metadata?.driverId && db) {
-            const driverId = session.metadata.driverId;
-            const amount = session.amount_total ? session.amount_total / 100 : 0;
-            
-            // Clear the driver's pending platform fees safely
-            await db.collection("users").doc(driverId).update({
-              pendingPlatformFees: 0 // Assume it settles the full accumulated amount for now
-            });
-            console.log(`Driver ${driverId} settled £${amount} in platform fees`);
-          } else if (session.metadata?.type === 'taxi_trip' && session.metadata?.rideId && db) {
-            const rideId = session.metadata.rideId;
-            const driverId = session.metadata.driverId;
+            } else if (meta?.type === 'fee_settlement' && meta?.driverId && db) {
+              const driverId = meta.driverId;
+              const amount = session.amount_total ? session.amount_total / 100 : 0;
+              
+              // Clear the driver's pending platform fees safely
+              await db.collection("users").doc(driverId).update({
+                pendingPlatformFees: 0 // Assume it settles the full accumulated amount for now
+              });
+              console.log(`Driver ${driverId} settled £${amount} in platform fees`);
+            } else if (meta?.type === 'taxi_trip' && meta?.rideId && db) {
+              const rideId = meta.rideId;
+              const driverId = meta.driverId;
             const amount = session.amount_total ? session.amount_total / 100 : 0;
 
             const rideRef = db.collection("ride_requests").doc(rideId);
@@ -1399,10 +1446,19 @@ async function startServer() {
            }
          }
       }
-
+      
+      // Mark as completed idempotently
+      await eventRef.update({ status: 'completed' });
       res.status(200).json({ received: true });
     } catch (err: any) {
       console.error("Webhook processing error:", err.message);
+      // Mark as failed so it can be retried or debugged
+      if (db) {
+        await db.collection("processed_stripe_events").doc(req.body.id || 'unknown').update({ 
+           status: 'failed',
+           error: err.message
+        }).catch(e => console.error("Could not update failed status", e));
+      }
       res.status(500).json({ error: 'Webhook processing failed' });
     }
   });
@@ -1468,6 +1524,20 @@ async function startServer() {
       // 1. Resolve strictly server-authoritative pricing and Stripe Connect routing
       // Completely bypasses and ignores client-provided price_data to prevent price manipulation
       const authoritativeResult = await resolveAuthoritativeLineItem(req.body, authUid, db);
+      
+      // CREATE PRE-CHECKOUT INTENT (Fixes C-01 and C-03 by never trusting Stripe metadata)
+      const intentId = `chk_intent_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      if (db) {
+         await db.collection("payment_intents").doc(intentId).set({
+            intentId,
+            userId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            metadata: authoritativeResult.metadata,
+            mode: authoritativeResult.mode,
+            amount: authoritativeResult.authoritativeAmountPence || 0,
+            status: "pending"
+         });
+      }
 
       let stripe;
       try {
@@ -1672,7 +1742,8 @@ async function startServer() {
         success_url: finalSuccessUrl,
         cancel_url: finalCancelUrl,
         client_reference_id: userId,
-        metadata: authoritativeResult.metadata,
+        // C-03: Pass ONLY the intent ID to Stripe. Do not expose or trust free-form metadata.
+        metadata: { intentId },
       };
 
       // Direct Stripe Connect destination charge for client funds:
@@ -2466,6 +2537,117 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Stripe Balance Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // =========================================================================
+  // PUBLIC JOB CARD PROJECTION SYNCHRONIZATION
+  // =========================================================================
+  app.post("/api/admin/sync-public-job-cards", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin' && !user.isAdmin) {
+        throw new ForbiddenError("Only platform administrators can trigger full public job card synchronization.");
+      }
+
+      if (!db) {
+        return res.json({ success: true, message: "In-memory mock sync completed", total: 0, synced: 0 });
+      }
+
+      const result = await backfillPublicJobCards(db);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Sync Public Job Cards Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  app.post("/api/jobs/:id/sync-public-card", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user;
+
+      if (!db) {
+        return res.json({ success: true, id });
+      }
+
+      const jobDoc = await db.collection("jobs").doc(id).get();
+      if (!jobDoc.exists) {
+        throw new NotFoundError("Job not found");
+      }
+
+      const data = jobDoc.data()!;
+      if (data.homeownerId !== user.uid && data.userId !== user.uid && user.role !== 'admin' && !user.isAdmin) {
+        throw new ForbiddenError("Unauthorized to sync this job projection.");
+      }
+
+      const isActive = ["posted", "quoting", "in_bidding", "open"].includes(data.status) && !data.clientDeleted;
+      if (isActive) {
+        const publicCard = sanitizeJobToPublicCard(id, data);
+        await db.collection("public_job_cards").doc(id).set(publicCard, { merge: true });
+      } else {
+        await db.collection("public_job_cards").doc(id).delete();
+      }
+
+      res.json({ success: true, id, status: data.status });
+    } catch (error: any) {
+      console.error("Sync Single Public Job Card Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // =========================================================================
+  // PUBLIC PROPERTY PROJECTION SYNCHRONIZATION
+  // =========================================================================
+  app.post("/api/admin/sync-public-properties", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'admin' && !user.isAdmin) {
+        throw new ForbiddenError("Only platform administrators can trigger full public property synchronization.");
+      }
+
+      if (!db) {
+        return res.json({ success: true, message: "In-memory mock sync completed", total: 0, synced: 0 });
+      }
+
+      const result = await backfillPublicProperties(db);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Sync Public Properties Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  app.post("/api/properties/:id/sync-public-passport", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user;
+
+      if (!db) {
+        return res.json({ success: true, id });
+      }
+
+      const propDoc = await db.collection("properties").doc(id).get();
+      if (!propDoc.exists) {
+        throw new NotFoundError("Property not found");
+      }
+
+      const data = propDoc.data()!;
+      if (data.ownerId !== user.uid && data.userId !== user.uid && data.landlordId !== user.uid && user.role !== 'admin' && !user.isAdmin) {
+        throw new ForbiddenError("Unauthorized to sync this property passport projection.");
+      }
+
+      if (data.isPublicPassport !== false && data.status !== "archived") {
+        const publicPassport = sanitizePropertyToPublicPassport(id, data);
+        await db.collection("public_properties").doc(id).set(publicPassport, { merge: true });
+      } else {
+        await db.collection("public_properties").doc(id).delete();
+      }
+
+      res.json({ success: true, id, status: data.status });
+    } catch (error: any) {
+      console.error("Sync Single Public Property Passport Error:", error);
       sendHttpError(res, error, req);
     }
   });
@@ -4287,6 +4469,11 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     } catch (err: any) {
       sendHttpError(res, err, req);
     }
+  });
+
+  // Fallback 404 JSON handler for unmatched /api/* routes to prevent HTML index.html responses
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.path}` });
   });
 
   // Vite middleware for development

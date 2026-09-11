@@ -339,7 +339,7 @@ export function TraderVideoVerificationCard({ profile, onUpdateProfile, isReadOn
 
     setIsUploading(true);
     try {
-      const fileName = `users/${profile.uid}/video_verification_${Date.now()}.mp4`;
+      const fileName = `users/${profile.uid}/video_verification/${Date.now()}.mp4`;
       const downloadUrl = await uploadStorageFile(recordedBlob, fileName, { contentType: "video/mp4" });
 
       const updates = {

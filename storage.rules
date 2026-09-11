@@ -1,6 +1,7 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // --- Global Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -9,8 +10,9 @@ service firebase.storage {
     }
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.admin == true ||
-        (request.auth.token.role != null && (request.auth.token.role == 'admin' || request.auth.token.role == 'ecosystem_manager'))
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        ('role' in request.auth.token && (request.auth.token.role == 'admin' || request.auth.token.role == 'ecosystem_manager')) ||
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
       );
     }
     function isValidImage() {
@@ -21,7 +23,64 @@ service firebase.storage {
       return request.resource.size <= 25 * 1024 * 1024
         && request.resource.contentType.matches('image/.*|audio/.*|video/.*|application/pdf');
     }
+    function isValidVideo() {
+      return request.resource.size <= 50 * 1024 * 1024
+        && request.resource.contentType.matches('video/.*');
+    }
 
+    // --- Job Ownership & Participation Helpers ---
+    function isJobOwnerById(jobId) {
+      return isSignedIn() && (
+        request.auth.uid == jobId ||
+        (
+          firestore.exists(/databases/(default)/documents/jobs/$(jobId)) &&
+          (
+            firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('homeownerId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('userId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('ownerId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('posterId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('customerId', '') == request.auth.uid
+          )
+        )
+      );
+    }
+
+    function isJobTradespersonById(jobId) {
+      return isSignedIn() && (
+        firestore.exists(/databases/(default)/documents/jobs/$(jobId)) &&
+        (
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('acceptedTradespersonId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('acceptedTraderId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('assignedTraderId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('tradespersonId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('traderId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('targetTradespersonId', '') == request.auth.uid
+        )
+      );
+    }
+
+    function isJobParticipant(jobId) {
+      return isJobOwnerById(jobId) || isJobTradespersonById(jobId) || isAdmin();
+    }
+
+    // --- Property Participant Helper ---
+    function isPropertyParticipant(propertyId) {
+      return isSignedIn() && (
+        request.auth.uid == propertyId ||
+        (
+          firestore.exists(/databases/(default)/documents/properties/$(propertyId)) &&
+          (
+            firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('ownerId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('landlordId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('tenantId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('userId', '') == request.auth.uid ||
+            isAdmin()
+          )
+        )
+      );
+    }
+
+    // --- Chat Participant Helper ---
     function isChatParticipant(conversationId) {
       return isSignedIn() && (
         firestore.exists(/databases/(default)/documents/conversations/$(conversationId)) &&
@@ -33,31 +92,48 @@ service firebase.storage {
       );
     }
 
+    // --- Dispute Participant Helper ---
     function isDisputeParticipant(jobId) {
       return isSignedIn() && (
         firestore.exists(/databases/(default)/documents/jobs/$(jobId)) &&
         (
           firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('homeownerId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('userId', '') == request.auth.uid ||
           firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('customerUid', '') == request.auth.uid ||
           firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('assignedTraderId', '') == request.auth.uid ||
+          firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('acceptedTradespersonId', '') == request.auth.uid ||
           firestore.get(/databases/(default)/documents/jobs/$(jobId)).data.get('traderId', '') == request.auth.uid ||
           isAdmin()
         )
       );
     }
 
-    function isPropertyParticipant(propertyId) {
+    // --- Ride Participant Helper ---
+    function isRideParticipant(rideId) {
       return isSignedIn() && (
-        firestore.exists(/databases/(default)/documents/properties/$(propertyId)) &&
+        isAdmin() ||
         (
-          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('ownerId', '') == request.auth.uid ||
-          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('landlordId', '') == request.auth.uid ||
-          firestore.get(/databases/(default)/documents/properties/$(propertyId)).data.get('tenantId', '') == request.auth.uid ||
-          isAdmin()
+          firestore.exists(/databases/(default)/documents/rides/$(rideId)) &&
+          (
+            firestore.get(/databases/(default)/documents/rides/$(rideId)).data.get('passengerId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/rides/$(rideId)).data.get('riderId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/rides/$(rideId)).data.get('driverId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/rides/$(rideId)).data.get('assignedDriverId', '') == request.auth.uid
+          )
+        ) ||
+        (
+          firestore.exists(/databases/(default)/documents/ride_requests/$(rideId)) &&
+          (
+            firestore.get(/databases/(default)/documents/ride_requests/$(rideId)).data.get('passengerId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/ride_requests/$(rideId)).data.get('riderId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/ride_requests/$(rideId)).data.get('driverId', '') == request.auth.uid ||
+            firestore.get(/databases/(default)/documents/ride_requests/$(rideId)).data.get('assignedDriverId', '') == request.auth.uid
+          )
         )
       );
     }
 
+    // --- Vehicle Participant Helper ---
     function isVehicleParticipant(vehicleId) {
       return isSignedIn() && (
         firestore.exists(/databases/(default)/documents/vehicles/$(vehicleId)) &&
@@ -69,51 +145,85 @@ service firebase.storage {
       );
     }
 
-    // Public avatars, portfolio showcase items, and badges
-    match /users/{uid}/public/{fileName} {
+    // ==========================================
+    // STORAGE PATH MATCHING RULES
+    // ==========================================
+
+    // 1. Private Job Media (Before/After photos, specs, drawings, voice notes, PDFs, attachments)
+    // Recursive matching {allPaths=**} protects all nested subdirectories
+    match /jobs/{jobId}/{allPaths=**} {
+      allow read: if isJobParticipant(jobId);
+      allow write: if isJobParticipant(jobId) && isValidMedia();
+    }
+
+    // 2. Public Job Media: Explicit separate derivative area for published marketplace showcases
+    match /public_job_media/{jobId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isSignedIn() && (isJobOwnerById(jobId) || isAdmin()) && isValidMedia();
+    }
+
+    // 3. Property Media (Passport documents, EPC certificates, CP12/EICR compliance, condition photos)
+    match /properties/{propertyId}/{allPaths=**} {
+      allow read: if isPropertyParticipant(propertyId);
+      allow write: if (isPropertyParticipant(propertyId) || isAdmin()) && isValidMedia();
+    }
+
+    // 4. Public User Profiles (Public Avatars, Portfolio showcase items)
+    match /users/{uid}/public/{allPaths=**} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
+    }
+    match /avatars/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if (isOwner(uid) || isAdmin()) && isValidImage();
+    }
+    match /portfolio/{uid}/{allPaths=**} {
       allow read: if true;
       allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
     }
 
-    // Private KYC, passport verification, insurance certificates & driver licenses
-    match /users/{uid}/private/{fileName} {
+    // 5. Private User Verification (KYC documents, ID cards, insurance policies, video verification)
+    match /users/{uid}/private/{allPaths=**} {
       allow read: if isOwner(uid) || isAdmin();
       allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
     }
-
-    // Job media and photos (before/after, specs, attachments)
-    match /jobs/{jobId}/{fileName} {
-      allow read: if true;
-      allow write: if isSignedIn() && isValidMedia();
+    match /verifications/{uid}/{allPaths=**} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if (isOwner(uid) || isAdmin()) && isValidMedia();
+    }
+    match /users/{uid}/video_verification/{fileName} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if (isOwner(uid) || isAdmin()) && isValidVideo();
     }
 
-    // Chat attachments (images, voice notes) - restricted to conversation participants
-    match /chats/{conversationId}/{fileName} {
-      allow read: if isChatParticipant(conversationId) || isAdmin();
+    // 6. Chat Attachments (Images, voice notes, files)
+    match /chats/{conversationId}/{allPaths=**} {
+      allow read: if isChatParticipant(conversationId);
       allow write: if isChatParticipant(conversationId) && isValidMedia();
     }
 
-    // Disputes and resolution evidence - restricted to involved parties
-    match /disputes/{jobId}/{fileName} {
-      allow read: if isDisputeParticipant(jobId) || isAdmin();
+    // 7. Disputes and Resolution Evidence
+    match /disputes/{jobId}/{allPaths=**} {
+      allow read: if isDisputeParticipant(jobId);
       allow write: if isDisputeParticipant(jobId) && isValidMedia();
     }
 
-    // Property Passport documents, EPC certificates, CP12/EICR compliance - restricted to property owners/tenants
-    match /properties/{propertyId}/{fileName} {
-      allow read: if isPropertyParticipant(propertyId) || isAdmin();
-      allow write: if isPropertyParticipant(propertyId) && isValidMedia();
+    // 8. Rides Portal (Chat attachments & trip receipts)
+    match /rides/{rideId}/{allPaths=**} {
+      allow read: if isRideParticipant(rideId);
+      allow write: if isRideParticipant(rideId) && isValidMedia();
     }
 
-    // Vehicle and driver compliance documents - restricted to vehicle driver/owner
-    match /vehicles/{vehicleId}/{fileName} {
-      allow read: if isVehicleParticipant(vehicleId) || isAdmin();
+    // 9. Vehicles and Driver Compliance Documents
+    match /vehicles/{vehicleId}/{allPaths=**} {
+      allow read: if isVehicleParticipant(vehicleId);
       allow write: if isVehicleParticipant(vehicleId) && isValidMedia();
     }
 
-    // Default Deny on all other paths
+    // 10. Default Deny on all other paths
     match /{allPaths=**} {
       allow read, write: if false;
     }
   }
 }
+

@@ -41,8 +41,15 @@ export default function PublicPropertyPassportView() {
       setLoading(true);
       setError(null);
       try {
-        const docRef = doc(db, "properties", activeId);
-        const snapshot = await getDoc(docRef);
+        // Fetch from sanitized public projection collection first
+        const publicDocRef = doc(db, "public_properties", activeId);
+        let snapshot = await getDoc(publicDocRef);
+
+        // Fallback to private properties collection if accessible by authenticated owner
+        if (!snapshot.exists()) {
+          const privateDocRef = doc(db, "properties", activeId);
+          snapshot = await getDoc(privateDocRef);
+        }
 
         if (!snapshot.exists()) {
           setError("Property passport record not found or link is private.");
@@ -55,7 +62,7 @@ export default function PublicPropertyPassportView() {
 
         // Load public completed jobs for this property
         try {
-          const jobsQ = query(collection(db, "jobs"), where("propertyId", "==", activeId));
+          const jobsQ = query(collection(db, "public_job_cards"), where("propertyId", "==", activeId));
           const jobsSnapshot = await getDocs(jobsQ);
           const j = jobsSnapshot.docs
             .map(d => ({ id: d.id, ...d.data() }))

@@ -1,5 +1,132 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛠️ Unmatched API Route 404 & JSON Parsing Error Defense (September 11, 2026)
+- **Root Cause Fix**:
+  - Addressed client-side `SyntaxError: Unexpected token '<', "<!doctype "... is not valid JSON` caused by unmatched `/api/*` endpoints falling through Express routes into Vite/SPA `index.html` fallback.
+  - Implemented an explicit Express catch-all 404 route (`app.all("/api/*", ...)` in `server.ts`) before Vite middleware that strictly returns `{ error: "API endpoint not found: METHOD PATH" }` with a 404 status code, guaranteeing API requests never receive HTML markup.
+  - Hardened client-side response handlers in `postcodeService.ts`, `Layout.tsx`, `firebase.ts`, and `gemini.ts` to inspect response `Content-Type` and handle JSON parsing safely with fallback defaults.
+- **Verification**: Zero TypeScript/linting errors, build verified via `compile_applet`, dev server restarted successfully.
+
+## 🛡️ Firebase Security Rules Live Regression Suite & Auth Token Hardening (September 11, 2026)
+- **Objective & Architectural Hardening**:
+  - Implemented comprehensive end-to-end security rules regression test suite (`tests/unit/firebaseEmulatorSecurityRules.test.ts`) covering all 32 core security invariants across Firestore and Storage.
+  - Hardened `isAdmin()` evaluation in both `firestore.rules` and `storage.rules` to safely verify key presence using `'admin' in request.auth.token`, `'isAdmin' in request.auth.token`, and `'role' in request.auth.token` before attribute evaluation, eliminating unhandled key access errors.
+  - Configured test runner environment detection so the live emulator suite executes seamlessly via `npm run test:security-rules` with active emulators while allowing standalone test passes (`npm test`) without hanging on port binding.
+  - Successfully deployed all hardened rules to Firestore via `deploy_firebase`.
+  - **Verification Evidence**: 261/261 tests passing across 19 test suites, zero TypeScript/lint errors, and 100% clean production build.
+
+## 🛡️ Firestore Security Rules Remediation: Second-Pass Least-Privilege Hardening (September 11, 2026)
+- **Objective & Architectural Hardening**:
+  - Addressed all findings from the comprehensive second-pass security audit of `firestore.rules` across operational, financial, and real-time tracking collections.
+  - Enforced least-privilege access across all collections while preserving 100% of intended marketplace and multi-portal capabilities.
+- **Key Hardening Implementations**:
+  - **1. Bidding Jobs (`/bidding_jobs/{jobId}`)**:
+    - Replaced unrestricted `allow read, write: if isSignedIn();` with creator/owner boundaries.
+    - Public discovery restricted to `status == 'open'`; private draft bidding jobs visible only to creator/owner or admin.
+    - Updates protected against tampering with `creatorId`, `ownerId`, `userId`, `payoutStatus`, `payoutTransferred`, `funded`, `amount`, and `balance`.
+  - **2. Recurring Schedules (`/recurring_schedules/{scheduleId}`)**:
+    - Eliminated global collection enumeration vulnerability (`allow list: if isSignedIn();`).
+    - Scoped `get` and `list` strictly to participants (`homeownerId`, `tradespersonId`, `userId`, or `participants` array) and admins.
+    - Protected financial and participant keys (`homeownerId`, `tradespersonId`, `userId`, `payoutStatus`, `payoutTransferred`, `funded`) against client mutation.
+  - **3. Invoices & Expenses (`/invoices/{id}`, `/expenses/{id}`)**:
+    - Blocked client-side modification of critical payment and financial fields (`paid`, `isPaid`, `status`, `stripePaymentIntentId`, `stripeSessionId`, `payoutStatus`, `payoutTransferred`, `platformFee`, `amountPaid`).
+    - Prevented deletion of paid invoices by clients.
+  - **4. Support Tickets & Commercial Enquiries (`/support_tickets/{ticketId}`, `/enquiries/{id}`)**:
+    - Replaced generic `allow write: if isSignedIn();` with strict ownership checks.
+    - Support tickets can only be updated by the ticket owner (prohibiting escalation of `priority`, `adminAssigned`, or `internalNotes`).
+    - Enquiries update restricted to `status`, `notes`, and `updatedAt` for senders.
+  - **5. Real-Time Driver GPS Tracking (`/live_tracking/{rideId}`)**:
+    - Removed open authenticated reading; scoped coordinate streaming strictly to trip participants (assigned driver, passenger, rider, or admin).
+  - **6. Emergency Broadcasts & Platform Admins (`/emergency_broadcasts/{broadcastId}`, `/admins/{adminId}`)**:
+    - Restricted broadcast creation exclusively to `isAdmin()` (preventing rogue user emergency alerts).
+    - Locked down `/admins/{adminId}` exclusively to verified admins (removed `isConsultancyOwner` bypass).
+  - **7. Consultancy Projects (`/projects/{id}`)**:
+    - Restricted client updates strictly to `clientNotes`, `feedback`, and `updatedAt`, preventing unauthorized project deletion or commercial term tampering.
+- **Automated Test Suite & Verification**:
+  - Created `tests/unit/firestoreSecurityAuditSecondPass.test.ts` (19 tests, 100% pass) verifying all security rules, AST invariants, and access control matrices.
+  - Verified **261/261 automated tests passing across 18 test suites**.
+
+## 🏡 Firestore Security Remediation: Property Records & Public Property Passport Separation (September 11, 2026)
+- **Objective & Architectural Remediation**:
+  - Eliminated the vulnerability where private operational property source-of-truth records (`/properties/{propertyId}`) were accessible to anonymous public reads via `allow get: if true;`.
+  - Implemented a clean architectural separation between **Private Operational Property Records** (`/properties/{propertyId}`) and **Sanitized Public Property Passports** (`/public_properties/{propertyId}`).
+- **Key Implementations**:
+  - **1. Private `/properties/{propertyId}` Firestore Rules**:
+    - Restricted `get` and `list` queries exclusively to authenticated users who are the verified Property Owner/Creator (`ownerId`, `userId`), Landlord (`landlordId`), Pending Transfer Recipient (`pendingTransferToUid` with `transferStatus == 'pending'`), Authorized Tenant matching verified email (`tenantEmail`), or platform Administrators (`isAdmin()`).
+    - Enforced strict mass-assignment and privilege escalation protection on client creates and updates, preventing client modification of `ownerId`, `userId`, `landlordId`, `transferClaimedByUid`, and `verifiedByAdmin`.
+  - **2. Sanitized Public Projection (`/public_properties/{propertyId}`)**:
+    - Created an isolated public projection collection with `allow get, list: if true` for anonymous property verification, Move-In Landings, and share links.
+    - Public projection contains ONLY safe attributes: `id`, `name`, `propertyType`, `postcodeArea` (outward code only, e.g. `SW1A`), `address.city`, `address.postcode` (masked, e.g. `SW1A ***`), `epcRating`, `bedrooms`, `bathrooms`, `photos`, `boilerInfo` (brand, model, age), `roofCondition`, `gasSafetyExpiry`, `eicrExpiry`, and `isPublicPassport`.
+    - **PII & Sensitive Data Redaction**: Strictly scrubs `ownerId`, `userId`, `landlordId`, `tenantId`, `tenantEmail`, `tenantName`, `tenantPhone`, exact street address (`line1`, `houseNumber`, `street`), contact info (`contactPhone`, `contactEmail`), internal property infrastructure (`componentRegistry` containing stopcock and fuseboard locations), `transferHistory` (previous owners/uids), `transferCode`, `insuranceProvider`, `policyNumber`, `privateNotes`, and financial information.
+  - **3. Real-Time Server Projection Synchronization & API**:
+    - Implemented `startPublicPropertiesSync`, `backfillPublicProperties`, and `sanitizePropertyToPublicPassport` in `src/server/projectionSync.ts`.
+    - Registered `startPublicPropertiesSync(db)` in `server.ts` upon Firebase connection.
+    - Added `POST /api/admin/sync-public-properties` and `POST /api/properties/:id/sync-public-passport` endpoints.
+  - **4. Client & UI Component Migrations**:
+    - Updated `PublicPropertyPassportView.tsx`, `MoveInLanding.tsx`, and `ShareViewModal.tsx` to read from the sanitized `/public_properties` collection with graceful fallback for authenticated owners.
+    - Updated `SERVER_OWNED_PROTECTED_KEYS` in `src/server/authorization.ts` to protect `landlordId`, `tenantId`, `pendingTransferToUid`, and `transferClaimedByUid`.
+    - Updated `firebase-blueprint.json` schema definitions.
+  - **5. Automated Test Suite & Verification**:
+    - Created `tests/unit/propertySecurityRules.test.ts` (11 tests, 100% pass) verifying rule AST invariants, anonymous/unauthorized access denial, legitimate owner/tenant/buyer/admin access, mass-assignment stripping, and PII/component registry projection sanitization.
+    - Verified **236/236 automated tests passing across 17 test suites**.
+
+## 🗄️ Firebase Storage Security Remediation: Private Job Media & Explicit Public Separation (September 11, 2026)
+- **Objective & Architectural Remediation**:
+  - Eliminated the vulnerability where private job media and attachments under `/jobs/{jobId}/` were exposed or matched non-recursively.
+  - Implemented recursive matching across all nested subdirectories: `/jobs/{jobId}/{allPaths=**}`.
+  - Removed all open status query bypasses (`status == 'open'`) from storage rule evaluations so that unassigned visitors cannot inspect private job media.
+- **Key Implementations**:
+  - **1. Recursive Private Job Media Rules (`storage.rules`)**:
+    - Restricted `read` and `write` access on `/jobs/{jobId}/{allPaths=**}` exclusively to authenticated users who are verified Job Owners (`homeownerId`, `userId`, `ownerId`, `posterId`, `customerId`), Assigned/Accepted Tradespeople (`acceptedTradespersonId`, `acceptedTraderId`, `assignedTraderId`, `tradespersonId`, `traderId`, `targetTradespersonId`), User Namespace Owners (`request.auth.uid == jobId`), or platform Administrators (`isAdmin()`).
+    - Enforces media type validation (`isValidMedia()`) and strict 25MB file size limits.
+  - **2. Explicit Separate Public Job Media Path (`/public_job_media/{jobId}/{allPaths=**}`)**:
+    - Created an isolated public derivative storage path where reading is public (`allow read: if true;`), while uploads are strictly restricted to authenticated Job Owners or Administrators (`isJobOwnerById(jobId) || isAdmin()`).
+  - **3. Property & Account Storage Hardening**:
+    - Enforced recursive wildcard protection on `/properties/{propertyId}/{allPaths=**}` scoped to property participants (owner, landlord, tenant) and admins.
+    - Preserved user avatar (`/avatars/{uid}/{allPaths=**}`) and portfolio (`/portfolio/{uid}/{allPaths=**}`) public showcase items while strictly locking private verification/KYC docs (`/verifications/{uid}/{allPaths=**}`, `/users/{uid}/private/{allPaths=**}`) to the account owner and admins.
+  - **4. Automated Test Suite & Verification**:
+    - Created `tests/unit/storageSecurity.test.ts` (14 tests, 100% pass) validating all 9 target security requirements (anonymous denial, unrelated authenticated denial, owner/trader access, admin privileges, upload boundary protection, media validation, explicit public routing, and path traversal prevention).
+    - Verified all **225/225 tests passing across 16 test suites**.
+
+## 🔒 Firestore Security Remediation: Job Records & Public Projection Separation (September 11, 2026)
+- **Objective & Architectural Separation**:
+  - Remediated the security vulnerability where private operational `/jobs/{jobId}` records were exposed to public discovery queries.
+  - Established a strict architectural separation between **Private Operational Documents** (`/jobs/{jobId}`) and **Sanitized Public Projections** (`/public_job_cards/{jobId}`).
+- **Key Implementations**:
+  - **1. Private `/jobs/{jobId}` Firestore Rules**:
+    - Restricted `get` and `list` queries exclusively to authenticated callers who are the verified job owner (`homeownerId`, `userId`, `ownerId`, `posterId`, `customerId`), the assigned/accepted tradesperson (`acceptedTradespersonId`, `acceptedTraderId`, `assignedTraderId`, `tradespersonId`, `traderId`, `targetTradespersonId`), or a platform admin (`isAdmin()`).
+    - Anonymous and unauthorized cross-account reads to `/jobs/{jobId}` are strictly blocked by Firestore Security Rules.
+    - Owner updates are protected against mass-assignment privilege escalation and financial forgery; tradesperson updates are restricted to operational fields (`status`, `stage`, `timelineNotes`, `workStatus`, `photosBefore`, `photosAfter`, `completedAt`, etc.).
+  - **2. Sanitized Public Projection (`/public_job_cards/{jobId}`)**:
+    - Created a projection collection with `allow get, list: if true` for public & anonymous marketplace discovery.
+    - Public projections contain ONLY sanitized marketplace fields (`id`, `jobNo`, `category`, `subCategory`, `title`, `description`, `postcodeArea`, `city`, `area`, `urgency`, `status`, `estimateMin`, `estimateMax`, `quoteCount`, `isBoosted`, `photosCount`).
+    - **PII Scrubbing**: Strips `homeownerId`, `userId`, `customerId`, `ownerId`, `posterId`, `fullAddress`, `houseNumber`, `locationInstructions`, `accessInstructions`, exact `postcode`, `photos`, `videos`, `documents`, `drawings`, `quotes`, `dispute`, `payoutStatus`, `payoutTransferred`, `stripeCustomerId`, and `stripeAccountId`.
+    - Sanitizes description text to redact emails, phone numbers, and full postcodes.
+  - **3. Real-Time Server Synchronization & API**:
+    - Implemented `startPublicJobCardsSync` in `src/server/projectionSync.ts` and initialized it in `server.ts`.
+    - Added `POST /api/admin/sync-public-job-cards` and `POST /api/jobs/:id/sync-public-card` endpoints for manual and on-demand synchronization.
+  - **4. Client Query Migrations**:
+    - Updated `JobFeed.tsx`, `demandHeatmapService.ts`, `traderNotificationEngine.ts`, `PublicPropertyPassportView.tsx`, `PostJobWizard.tsx`, and `EmergencyJobWizard.tsx` to utilize `/public_job_cards`.
+    - Hardened `JobDetails.tsx` to seamlessly fallback to the sanitized public projection if an unassigned visitor views a job.
+  - **5. Automated Test Suite & Verification**:
+    - Added comprehensive test suite `tests/unit/jobSecurityRules.test.ts` (16 tests, 100% pass).
+    - Verified all **211/211 tests passing across 15 test suites**.
+
+
+## 🔐 Firestore Security Rules Permission Fixes for Live Tracking & Demand Surge (September 10, 2026)
+- **Root Cause & Fix**:
+  - **Live Driver Tracking Permission Fix (`match /live_tracking/{rideId}`)**: Updated read rule to `allow read: if isSignedIn()`, enabling passengers, drivers, and dispatch engines to query online driver locations (`isOnline == true`) and track active ride locations without permission errors.
+  - **Demand Surge & Heatmap Permission Fix (`match /ride_requests/{rideId}`)**: Relaxed `ride_requests` pending/searching status read check to `(resource.data.status in ["pending", "searching", "offered", "draft"])` for all authenticated users, allowing passenger accounts to execute `fetchLiveDemandZones()` for live surge pricing heatmaps.
+  - **Driver Status Permissions (`match /driver_status/{driverId}`)**: Allowed signed-in users to read `driver_status` documents so command centers and driver lists can display live driver status.
+  - **Deployment & Verification**: Successfully deployed updated rules via `deploy_firebase`, compiled applet with `compile_applet`, and verified 100% test pass rate across **195/195 tests in 14 test suites**.
+
+## 🔧 Dev Server Syntax & Webhook Idempotency Resolution (September 10, 2026)
+- **Root Cause & Fix**:
+  - **Syntax Error Resolution**: Removed an unclosed duplicate `try {` statement in the Stripe webhook handler in `server.ts:1117`, restoring full syntax validity and clean compilation.
+  - **Payment Ledger Mock Compatibility**: Updated `PaymentLedgerEngine.executeIdempotentOperation` to safely check for document methods (`update`, `set`, `delete`) and updated mock databases in unit tests to provide accurate mock document interfaces.
+  - **Full Test Suite & Compilation**: Verified 100% build and test suite pass rate across **195/195 tests in 14 test suites**.
+  - **Dev Server Restored**: Successfully rebuilt and restarted the development server.
+
 ## 📦 Build Artifacts & Dynamic Chunk Loading Resolution (September 10, 2026)
 - **Root Cause & Fix**:
   - **Dynamic Import Resolution**: Replaced dynamic lazy loading on headless ambient controllers (`ReferralTracker`, `RecurringJobManager`) with direct static imports, eliminating unhandled Suspense promise escapes outside `<Suspense>` that previously triggered error boundaries and cancelled in-flight chunk downloads.

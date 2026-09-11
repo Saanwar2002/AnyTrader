@@ -598,11 +598,9 @@ export default function JobFeed() {
   }, [user?.uid, profile?.role]);
 
   useEffect(() => {
-    if (!user) return;
-
-    // Fetch up to current limitCount posted jobs with optimized composite ordering and fallback
+    // Fetch up to current limitCount posted public job cards with optimized composite ordering and fallback
     let q = query(
-      collection(db, "jobs"),
+      collection(db, "public_job_cards"),
       where("status", "==", "posted"),
       orderBy("postedDate", "desc"),
       limit(limitCount)
@@ -616,10 +614,10 @@ export default function JobFeed() {
       setJobs(Array.from(uniqueJobsMap.values()));
       setLoading(false);
     }, (error) => {
-      console.warn("Ordered job feed query error or indexing in progress, running resilient fallback query:", error);
+      console.warn("Ordered public job card query error or indexing in progress, running resilient fallback query:", error);
       // Resilient fallback query without explicit orderBy in case composite index is building
       const fallbackQ = query(
-        collection(db, "jobs"),
+        collection(db, "public_job_cards"),
         where("status", "==", "posted"),
         limit(limitCount)
       );
@@ -633,8 +631,8 @@ export default function JobFeed() {
         setJobs(jobsData);
         setLoading(false);
       }, (fallbackErr) => {
-        console.error("Error fetching job feed fallback:", fallbackErr);
-        handleFirestoreError(fallbackErr, OperationType.LIST, "jobs");
+        console.error("Error fetching public job cards fallback:", fallbackErr);
+        handleFirestoreError(fallbackErr, OperationType.LIST, "public_job_cards");
         setLoading(false);
       });
     });
@@ -645,7 +643,7 @@ export default function JobFeed() {
   const handleManualRefresh = async () => {
     try {
       const q = query(
-        collection(db, "jobs"),
+        collection(db, "public_job_cards"),
         where("status", "==", "posted"),
         orderBy("postedDate", "desc"),
         limit(limitCount)

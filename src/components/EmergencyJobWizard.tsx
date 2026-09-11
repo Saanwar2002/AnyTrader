@@ -422,6 +422,31 @@ export default function EmergencyJobWizard() {
         boostExpiresAt,
         retryCount: 0
       });
+
+      try {
+        const publicRef = doc(db, "public_job_cards", jobRef.id);
+        await setDoc(publicRef, {
+          id: jobRef.id,
+          jobNo: newJobNo,
+          category: formData.category,
+          title: `Emergency ${formData.category} Job`,
+          description: formData.description || "",
+          postcodeArea: finalPostcode?.trim().split(/\s+/)[0] || finalArea || "Local Area",
+          city: finalCity || undefined,
+          area: finalArea || undefined,
+          urgency: "emergency",
+          status: jobStatus,
+          postedDate: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          quoteCount: 0,
+          isBoosted: isPaidOption,
+          boostTier: currentBoostTier,
+          photosCount: Array.isArray(formData.photos) ? formData.photos.length : 0
+        }, { merge: true });
+      } catch (projErr) {
+        console.warn("Public projection note for emergency job:", projErr);
+      }
       
       // Simulate auto-picking and notifying traders
       console.log("Notifying relevant traders for job:", jobRef.id);

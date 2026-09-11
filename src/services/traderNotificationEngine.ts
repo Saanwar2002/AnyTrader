@@ -190,7 +190,7 @@ export async function checkAndNotifyTraderMatches(
   try {
     // Query recently posted jobs
     const q = query(
-      collection(db, "jobs"),
+      collection(db, "public_job_cards"),
       where("status", "in", ["posted", "open"])
     );
 

@@ -431,7 +431,7 @@ export async function resolveAuthoritativeLineItem(
   // 3. AD WALLET TOPUP (Bounded Advertising Balance)
   // =========================================================================
   if (metadata.type === "ad_wallet_topup") {
-    const rawTopup = Number(metadata.topupAmount || body.price_data?.unit_amount / 100 || 25);
+    const rawTopup = Number(metadata.topupAmount || 25);
     // Sanitize to valid integer bounds: min £10, max £5,000
     const sanitizedPounds = Math.max(10, Math.min(5000, Math.round(rawTopup)));
     const topupPence = sanitizedPounds * 100;

@@ -22,13 +22,26 @@ export function ShareViewModal({ shareType, shareId, onClose, onOpenChat }: Shar
       setLoading(true);
       setError(null);
       try {
-        let collectionName = "jobs";
-        if (shareType === "quote") collectionName = "quotes";
-        else if (shareType === "invoice") collectionName = "invoices";
-        else if (shareType === "passport") collectionName = "properties";
-
-        const docRef = doc(db, collectionName, shareId);
-        const snapshot = await getDoc(docRef);
+        let snapshot;
+        if (shareType === "passport") {
+          const publicRef = doc(db, "public_properties", shareId);
+          snapshot = await getDoc(publicRef);
+          if (!snapshot.exists()) {
+            const privateRef = doc(db, "properties", shareId);
+            snapshot = await getDoc(privateRef);
+          }
+        } else if (shareType === "job") {
+          const publicRef = doc(db, "public_job_cards", shareId);
+          snapshot = await getDoc(publicRef);
+          if (!snapshot.exists()) {
+            const privateRef = doc(db, "jobs", shareId);
+            snapshot = await getDoc(privateRef);
+          }
+        } else {
+          const collectionName = shareType === "quote" ? "quotes" : "invoices";
+          const docRef = doc(db, collectionName, shareId);
+          snapshot = await getDoc(docRef);
+        }
 
         if (snapshot.exists()) {
           setData({ id: snapshot.id, ...snapshot.data() });

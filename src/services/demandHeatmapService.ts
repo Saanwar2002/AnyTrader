@@ -11,7 +11,7 @@ export interface RegionalDemand {
 
 export async function getRegionalDemandData(category?: string): Promise<RegionalDemand[]> {
   try {
-    const jobsRef = collection(db, "jobs");
+    const jobsRef = collection(db, "public_job_cards");
     let q = query(jobsRef, where("status", "==", "posted"));
     
     if (category) {
@@ -23,7 +23,7 @@ export async function getRegionalDemandData(category?: string): Promise<Regional
 
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      const area = getOutwardPostcode(data.postcode);
+      const area = data.postcodeArea || getOutwardPostcode(data.postcode) || data.area || "Local Area";
       const cat = data.category || "General";
       const value = (data.estimateMax || 0) + (data.estimateMin || 0) / 2;
 

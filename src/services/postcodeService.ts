@@ -36,15 +36,18 @@ export const lookupPostcode = async (postcode: string): Promise<PostcodeData | n
   try {
     // Attempt cached proxy fetch via server first
     let response = await fetch(getApiUrl(`/api/postcode/${encodeURIComponent(postcode)}`));
-    if (!response.ok) {
-      // Fallback to direct API if backend is unreachable or returns an error
+    let contentType = response.headers.get("content-type") || "";
+
+    if (!response.ok || !contentType.includes("application/json")) {
+      // Fallback to direct API if backend is unreachable or returns an error/non-JSON
       response = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
+      contentType = response.headers.get("content-type") || "";
     }
     
-    if (!response.ok) return null;
+    if (!response.ok || !contentType.includes("application/json")) return null;
 
-    const data = await response.json();
-    if (data.status === 200 && data.result) {
+    const data = await response.json().catch(() => null);
+    if (data && data.status === 200 && data.result) {
       const result = formatPostcodeData(data.result);
       try {
         sessionStorage.setItem(key, JSON.stringify(result));
@@ -57,9 +60,10 @@ export const lookupPostcode = async (postcode: string): Promise<PostcodeData | n
     console.warn("Proxy postcode lookup failed, falling back to direct flight:", error);
     try {
       const fallbackResponse = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`);
-      if (fallbackResponse.ok) {
-        const data = await fallbackResponse.json();
-        if (data.status === 200 && data.result) {
+      const fallbackType = fallbackResponse.headers.get("content-type") || "";
+      if (fallbackResponse.ok && fallbackType.includes("application/json")) {
+        const data = await fallbackResponse.json().catch(() => null);
+        if (data && data.status === 200 && data.result) {
           const result = formatPostcodeData(data.result);
           try {
             sessionStorage.setItem(key, JSON.stringify(result));

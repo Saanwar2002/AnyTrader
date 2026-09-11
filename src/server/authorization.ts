@@ -396,6 +396,10 @@ export const SERVER_OWNED_PROTECTED_KEYS = new Set([
   "userId",
   "posterId",
   "customerId",
+  "landlordId",
+  "tenantId",
+  "pendingTransferToUid",
+  "transferClaimedByUid",
 
   // Financial & Payment status
   "amount",

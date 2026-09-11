@@ -61,6 +61,21 @@ describe("Payment Ledger & Invariants", () => {
             exists: memoryStore.has(docId),
             data: () => memoryStore.get(docId),
           }),
+          set: async (data: any, options?: any) => {
+            if (options?.merge) {
+              const prev = memoryStore.get(docId) || {};
+              memoryStore.set(docId, { ...prev, ...data });
+            } else {
+              memoryStore.set(docId, data);
+            }
+          },
+          update: async (data: any) => {
+            const prev = memoryStore.get(docId) || {};
+            memoryStore.set(docId, { ...prev, ...data });
+          },
+          delete: async () => {
+            memoryStore.delete(docId);
+          }
         }),
       }),
       runTransaction: async (fn: any) => {
