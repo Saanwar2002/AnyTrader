@@ -13,7 +13,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:security-rules": "firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorSecurityRules.test.ts'",
-    "audit:release": "node scripts/final-release-audit.mjs"
+    "audit:release": "tsx scripts/final-release-audit.mjs"
   },
   "dependencies": {
     "@capacitor-community/native-market": "^8.0.0",
