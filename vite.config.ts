@@ -146,7 +146,6 @@ export default defineConfig(({mode}) => {
       exclude: [
         'node_modules/**',
         'dist/**',
-        'tests/unit/firebaseEmulatorSecurityRules.test.ts',
       ],
     },
     server: {
