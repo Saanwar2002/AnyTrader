@@ -27,7 +27,7 @@ jobs:
           java-version: '21'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Run Firebase Security Rules Emulator Tests
         run: npm run test:security-rules

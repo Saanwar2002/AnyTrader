@@ -27,7 +27,6 @@ import * as path from "path";
 
 describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & Storage)", () => {
   let testEnv: RulesTestEnvironment;
-  let isEmulatorAvailable = false;
   const PROJECT_ID = "demo-anytrader";
   const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf-8");
   const storageRules = fs.readFileSync(path.resolve(process.cwd(), "storage.rules"), "utf-8");
@@ -47,9 +46,9 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
           port: 9199,
         },
       });
-      isEmulatorAvailable = true;
-    } catch {
-      console.warn("[SKIP] Firebase emulators not running; skipping emulator test suite. Run with npm run test:security-rules.");
+    } catch (err) {
+      console.error("FATAL ERROR: Failed to initialize Firebase emulator test environment!", err);
+      throw err; // Fail the process
     }
   });
 
@@ -59,10 +58,9 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
     }
   });
 
-  beforeEach(async (context) => {
-    if (!isEmulatorAvailable || !testEnv) {
-      context.skip();
-      return;
+  beforeEach(async () => {
+    if (!testEnv) {
+      throw new Error("FATAL ERROR: Firebase testEnv not initialized!");
     }
     await testEnv.clearFirestore();
     await testEnv.clearStorage();
