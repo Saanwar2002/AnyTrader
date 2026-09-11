@@ -525,9 +525,14 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       await assertFails(updateDoc(doc(attackerDb, "public_properties/prop_alice_public"), { nickname: "Defaced Property" }));
       await assertFails(deleteDoc(doc(attackerDb, "public_properties/prop_alice_public")));
 
-      // Alice (legitimate owner) can update her public projections
-      await assertSucceeds(updateDoc(doc(aliceDb, "public_job_cards/job_alice_public"), { title: "Updated Leak Fix" }));
-      await assertSucceeds(updateDoc(doc(aliceDb, "public_properties/prop_alice_public"), { nickname: "Updated Alice Cottage" }));
+      // Under V8.0, normal clients CANNOT write directly to public projections
+      await assertFails(updateDoc(doc(aliceDb, "public_job_cards/job_alice_public"), { title: "Updated Leak Fix" }));
+      await assertFails(updateDoc(doc(aliceDb, "public_properties/prop_alice_public"), { nickname: "Updated Alice Cottage" }));
+
+      // Admins CAN update public projections
+      const adminDb = testEnv.authenticatedContext("admin_user", { role: "admin", isAdmin: true }).firestore();
+      await assertSucceeds(updateDoc(doc(adminDb, "public_job_cards/job_alice_public"), { title: "Admin Updated Leak Fix" }));
+      await assertSucceeds(updateDoc(doc(adminDb, "public_properties/prop_alice_public"), { nickname: "Admin Updated Alice Cottage" }));
     });
 
     it("34. FINDING 2: Unassigned driver cannot eavesdrop or write to ride chat or hijack in-progress rides", async () => {
@@ -856,6 +861,129 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         name: "Private Residence",
         postcodeArea: "SW1A",
       }));
+    });
+
+    it("45. REGRESSION A: Unauthenticated user cannot create public_job_cards", async () => {
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertFails(setDoc(doc(unauthDb, "public_job_cards", "reg_card_1"), {
+        title: "Test Job",
+        category: "Plumbing",
+      }));
+    });
+
+    it("46. REGRESSION B: Authenticated homeowner cannot create/update/delete public_job_cards", async () => {
+      const homeownerDb = testEnv.authenticatedContext("homeowner_alice", { role: "customer" }).firestore();
+      
+      await assertFails(setDoc(doc(homeownerDb, "public_job_cards", "reg_card_2"), {
+        title: "Test Job 2",
+        category: "Electrical",
+      }));
+
+      // Assuming doc exists from disabled security rules seeding
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_job_cards/reg_card_2_seed"), {
+          title: "Seeded Job",
+          category: "Electrical",
+        });
+      });
+
+      await assertFails(updateDoc(doc(homeownerDb, "public_job_cards", "reg_card_2_seed"), {
+        title: "Updated Job",
+      }));
+
+      await assertFails(deleteDoc(doc(homeownerDb, "public_job_cards", "reg_card_2_seed")));
+    });
+
+    it("47. REGRESSION C: Authenticated tradesperson cannot create/update/delete public_job_cards", async () => {
+      const traderDb = testEnv.authenticatedContext("trader_bob", { role: "tradesperson" }).firestore();
+
+      await assertFails(setDoc(doc(traderDb, "public_job_cards", "reg_card_3"), {
+        title: "Test Job 3",
+        category: "Carpentry",
+      }));
+
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_job_cards/reg_card_3_seed"), {
+          title: "Seeded Job 3",
+          category: "Carpentry",
+        });
+      });
+
+      await assertFails(updateDoc(doc(traderDb, "public_job_cards", "reg_card_3_seed"), {
+        title: "Updated Job 3",
+      }));
+
+      await assertFails(deleteDoc(doc(traderDb, "public_job_cards", "reg_card_3_seed")));
+    });
+
+    it("48. REGRESSION D: Unauthenticated user cannot create/update/delete public_properties", async () => {
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+      await assertFails(setDoc(doc(unauthDb, "public_properties", "reg_prop_1"), {
+        name: "Unauthenticated Prop",
+        postcodeArea: "SW1A",
+      }));
+
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_properties/reg_prop_1_seed"), {
+          name: "Seeded Prop",
+          postcodeArea: "SW1A",
+        });
+      });
+
+      await assertFails(updateDoc(doc(unauthDb, "public_properties", "reg_prop_1_seed"), {
+        name: "Updated Name",
+      }));
+
+      await assertFails(deleteDoc(doc(unauthDb, "public_properties", "reg_prop_1_seed")));
+    });
+
+    it("49. REGRESSION E: Authenticated property owner cannot create/update/delete public_properties", async () => {
+      const ownerDb = testEnv.authenticatedContext("owner_charlie", { role: "customer" }).firestore();
+
+      await assertFails(setDoc(doc(ownerDb, "public_properties", "reg_prop_2"), {
+        name: "Charlie Prop",
+        postcodeArea: "SW1A",
+      }));
+
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_properties/reg_prop_2_seed"), {
+          name: "Seeded Prop 2",
+          postcodeArea: "SW1A",
+        });
+      });
+
+      await assertFails(updateDoc(doc(ownerDb, "public_properties", "reg_prop_2_seed"), {
+        name: "Updated Name 2",
+      }));
+
+      await assertFails(deleteDoc(doc(ownerDb, "public_properties", "reg_prop_2_seed")));
+    });
+
+    it("50. REGRESSION F: Unauthenticated users CAN still read/list public_job_cards", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_job_cards/reg_card_f"), {
+          title: "Public Discovery",
+          category: "Plumbing",
+        });
+      });
+
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertSucceeds(getDoc(doc(unauthDb, "public_job_cards", "reg_card_f")));
+      await assertSucceeds(getDocs(collection(unauthDb, "public_job_cards")));
+    });
+
+    it("51. REGRESSION G: Unauthenticated users CAN still read/list public_properties when those documents exist", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), "public_properties/reg_prop_g"), {
+          name: "Public Property Discovery",
+          postcodeArea: "SW1A",
+        });
+      });
+
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertSucceeds(getDoc(doc(unauthDb, "public_properties", "reg_prop_g")));
+      await assertSucceeds(getDocs(collection(unauthDb, "public_properties")));
     });
   });
 });

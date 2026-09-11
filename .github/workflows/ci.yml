@@ -40,3 +40,6 @@ jobs:
 
       - name: Run Production Build
         run: npm run build
+
+      - name: Run Final Release Audit
+        run: npm run audit:release
