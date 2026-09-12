@@ -341,5 +341,32 @@ describe("Firebase Storage Security Rules Remediation Test Suite", () => {
       const aliceReq: StorageRequestContext = { auth: { uid: "user-alice" } };
       expect(evaluateCanReadPrivateJobMedia(aliceReq, "jobs/job-100/deep/nested/folder/secret.jpg")).toBe(true);
     });
+
+    // Requirement 10: V8.1 Tier B Intelligence Storage is restricted to Admin only
+    it("REQUIREMENT 10: RESTRICTS /intelligence_raw storage to Admin only and blocks regular users/attackers", () => {
+      expect(rulesContent).toContain("match /intelligence_raw/{aggregateId}/{allPaths=**}");
+      const intRawMatch = rulesContent.match(/match \/intelligence_raw\/\{aggregateId\}\/\{allPaths=\*\*\} \{([\s\S]*?)\}/);
+      expect(intRawMatch).toBeTruthy();
+      expect(intRawMatch![1]).toContain("allow read, write: if isAdmin();");
+
+      const evaluateCanAccessIntelligenceRaw = (req: StorageRequestContext): boolean => {
+        if (!req.auth) return false;
+        if (req.auth.token?.admin === true || req.auth.token?.role === "admin" || req.auth.token?.role === "ecosystem_manager") {
+          return true;
+        }
+        if (mockDb.admins[req.auth.uid]) return true;
+        return false;
+      };
+
+      const attackerReq: StorageRequestContext = { auth: { uid: "attacker-user" } };
+      const homeownerReq: StorageRequestContext = { auth: { uid: "user-alice" } };
+      const traderReq: StorageRequestContext = { auth: { uid: "trader-bob" } };
+      const adminReq: StorageRequestContext = { auth: { uid: "admin-super", token: { role: "admin" } } };
+
+      expect(evaluateCanAccessIntelligenceRaw(attackerReq)).toBe(false);
+      expect(evaluateCanAccessIntelligenceRaw(homeownerReq)).toBe(false);
+      expect(evaluateCanAccessIntelligenceRaw(traderReq)).toBe(false);
+      expect(evaluateCanAccessIntelligenceRaw(adminReq)).toBe(true);
+    });
   });
 });

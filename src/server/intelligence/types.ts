@@ -42,6 +42,22 @@ export type ConfidenceMethod =
   | 'model_validated'
   | 'human_verified';
 
+export type EvidenceIntegrityStatus =
+  | 'verified'
+  | 'unverified'
+  | 'reference_only'
+  | 'hash_pending';
+
+export interface EvidenceSourceReference {
+  storagePath?: string;
+  documentId?: string;
+  jobId?: string;
+  propertyId?: string;
+  sourceField?: string;
+  sourceVersion?: string | number;
+  uri?: string;
+}
+
 export interface ConfidenceScores {
   overall: number;              // 0.0 to 1.0
   extraction: number;           // 0.0 to 1.0
@@ -78,8 +94,10 @@ export interface IntelligenceEvidence {
   aggregateId: string;
   evidenceType: EvidenceType;
   sourceRef: string;
-  contentHash: string;       // SHA-256 of raw content
+  sourceReference?: EvidenceSourceReference;
+  contentHash: string;       // SHA-256 of raw content (or empty string if reference only)
   byteSize: number;
+  integrityStatus: EvidenceIntegrityStatus;
   metadata: Record<string, unknown>;
   createdAt: string;
   verified: boolean;
@@ -128,13 +146,29 @@ export interface IntelligenceTask {
   maxAttempts: number;
   createdAt: string;
   updatedAt: string;
-  nextRetryAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  nextAttemptAt?: string;
+  nextRetryAt?: string;       // Alias for backwards compatibility
+  lastError?: string;
+  errorCode?: string;
+  provider?: string;
+  modelVersion?: string;
+  pipelineVersion?: string;
+  workerId?: string;
+  leaseExpiresAt?: string;
   error?: {
     classification: string;
     message: string;
     timestamp: string;
   };
   processingDurationMs?: number;
+  tokenUsage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+  estimatedCostUsd?: number;
   providerMetrics?: {
     model: string;
     inputTokens?: number;

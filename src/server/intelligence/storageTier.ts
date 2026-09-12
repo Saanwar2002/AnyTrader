@@ -16,6 +16,28 @@ import { StorageManifest } from './types';
 
 export const FIRESTORE_DOC_MAX_BYTES = 100 * 1024; // 100 KiB safety budget
 
+const ALREADY_COMPRESSED_EXTENSIONS = new Set([
+  'jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'mp4', 'mov', 'avi', 'mkv', 'pdf', 'zip', 'gz', 'tar', 'bz2'
+]);
+
+const ALREADY_COMPRESSED_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif',
+  'video/mp4', 'video/quicktime', 'video/x-msvideo',
+  'application/pdf', 'application/zip', 'application/gzip'
+]);
+
+/**
+ * Determines whether a file type/mime should be gzipped or stored identity.
+ * Avoids wasting CPU and introducing storage overhead on already-compressed media formats.
+ */
+export function shouldCompressFormat(mimeOrExtension: string): boolean {
+  if (!mimeOrExtension) return true;
+  const clean = mimeOrExtension.toLowerCase().trim().replace(/^\./, '');
+  if (ALREADY_COMPRESSED_EXTENSIONS.has(clean)) return false;
+  if (ALREADY_COMPRESSED_MIME_TYPES.has(clean)) return false;
+  return true;
+}
+
 /**
  * Checks whether a document payload conforms to the Firestore 100 KiB safety budget
  */

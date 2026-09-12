@@ -19,12 +19,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   evidenceRegistry,
   computeSha256,
+  computeStructuredDataHash,
+  canonicalizeData,
   buildProvenance,
   buildIdempotencyKey,
   calculateConfidence,
   enforceFirestoreSafetyBudget,
   compressPayload,
   decompressPayload,
+  shouldCompressFormat,
   sanitizeUntrustedContent,
   buildSecuredPrompt,
   intelligenceTaskQueue,
@@ -80,6 +83,53 @@ describe('V8.1 Structured Intelligence Foundation', () => {
 
       expect(evidenceRegistry.verifyContentIntegrity(ev.evidenceId, content)).toBe(true);
       expect(evidenceRegistry.verifyContentIntegrity(ev.evidenceId, 'Tampered content')).toBe(false);
+    });
+
+    it('distinguishes actual content from reference-only pointers and rejects false verification', () => {
+      // Reference-only evidence (e.g. unverified photo URL)
+      const refEv = evidenceRegistry.registerReferenceOnly(
+        'job',
+        'job_103',
+        'image',
+        'https://storage.googleapis.com/bucket/photo.jpg',
+        { note: 'Photo uploaded by homeowner' },
+        { storagePath: 'jobs/job_103/photo.jpg', uri: 'https://storage.googleapis.com/bucket/photo.jpg' }
+      );
+
+      expect(refEv.verified).toBe(false);
+      expect(refEv.integrityStatus).toBe('reference_only');
+      expect(refEv.contentHash).toBe('');
+      expect(refEv.byteSize).toBe(0);
+      expect(refEv.sourceReference?.storagePath).toBe('jobs/job_103/photo.jpg');
+
+      // Attempting to verify content without actual bytes fails
+      expect(evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, 'test')).toBe(false);
+
+      // Updating with actual downloaded bytes transitions to verified
+      const actualPhotoBytes = Buffer.from('RAW_IMAGE_BINARY_MOCK_BYTES');
+      const verifiedEv = evidenceRegistry.verifyAndUpdateContent(refEv.evidenceId, actualPhotoBytes);
+      expect(verifiedEv.verified).toBe(true);
+      expect(verifiedEv.integrityStatus).toBe('verified');
+      expect(verifiedEv.contentHash).toBe(computeSha256(actualPhotoBytes));
+      expect(verifiedEv.byteSize).toBe(actualPhotoBytes.length);
+      expect(evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, actualPhotoBytes)).toBe(true);
+    });
+
+    it('produces deterministic identical hashes for canonical structured Firestore data regardless of key order', () => {
+      const obj1 = { category: 'Electrical', component: 'Consumer Unit', circuits: 8, rcdProtected: true };
+      const obj2 = { rcdProtected: true, circuits: 8, component: 'Consumer Unit', category: 'Electrical' };
+
+      const canon1 = canonicalizeData(obj1);
+      const canon2 = canonicalizeData(obj2);
+      expect(canon1).toBe(canon2);
+
+      const hash1 = computeStructuredDataHash(obj1);
+      const hash2 = computeStructuredDataHash(obj2);
+      expect(hash1).toBe(hash2);
+
+      // Single character modification changes hash
+      const obj3 = { ...obj1, circuits: 9 };
+      expect(computeStructuredDataHash(obj3)).not.toBe(hash1);
     });
   });
 
@@ -199,6 +249,30 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       const decompressed = decompressPayload<{ largeModelOutput: string }>(compressedBuffer, manifest);
       expect(decompressed).toEqual(JSON.parse(rawText));
     });
+
+    it('detects corrupted compressed payload via checksum mismatch', () => {
+      const rawPayload = { jobId: 'job_402', data: 'Secret diagnostic info' };
+      const { compressedBuffer, manifest } = compressPayload(rawPayload, 'intelligence_raw/job_402/data.json.gz');
+
+      // Tamper manifest expected hash
+      const corruptedManifest = { ...manifest, sha256: '0000000000000000000000000000000000000000000000000000000000000000' };
+
+      expect(() => {
+        decompressPayload(compressedBuffer, corruptedManifest);
+      }).toThrow(/SHA-256 mismatch/);
+    });
+
+    it('identifies already-compressed media formats to avoid redundant gzipping', () => {
+      expect(shouldCompressFormat('image/jpeg')).toBe(false);
+      expect(shouldCompressFormat('jpg')).toBe(false);
+      expect(shouldCompressFormat('png')).toBe(false);
+      expect(shouldCompressFormat('video/mp4')).toBe(false);
+      expect(shouldCompressFormat('pdf')).toBe(false);
+
+      expect(shouldCompressFormat('application/json')).toBe(true);
+      expect(shouldCompressFormat('text/plain')).toBe(true);
+      expect(shouldCompressFormat('json')).toBe(true);
+    });
   });
 
   describe('5. Prompt Injection & Data-Poisoning Containment', () => {
@@ -274,6 +348,44 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       );
 
       expect(task1.taskId).toBe(task2.taskId);
+    });
+
+    it('enforces atomic claiming and prevents duplicate concurrent worker processing', () => {
+      const task = intelligenceTaskQueue.enqueueTask(
+        'job_extraction',
+        'job',
+        'job_claim_501',
+        buildIdempotencyKey('job_claim_501', 'job_extraction', '1')
+      );
+
+      // Worker 1 claims task
+      const claimed1 = intelligenceTaskQueue.claimTask(task.taskId, 'worker_1', 60000);
+      expect(claimed1).toBe(true);
+      expect(intelligenceTaskQueue.getTask(task.taskId)?.status).toBe('processing');
+      expect(intelligenceTaskQueue.getTask(task.taskId)?.workerId).toBe('worker_1');
+
+      // Worker 2 attempts concurrent claim while lease active -> fails
+      const claimed2 = intelligenceTaskQueue.claimTask(task.taskId, 'worker_2', 60000);
+      expect(claimed2).toBe(false);
+      expect(intelligenceTaskQueue.getTask(task.taskId)?.workerId).toBe('worker_1');
+    });
+
+    it('recovers stale processing tasks whose lease has expired', () => {
+      const task = intelligenceTaskQueue.enqueueTask(
+        'job_extraction',
+        'job',
+        'job_stale_502',
+        buildIdempotencyKey('job_stale_502', 'job_extraction', '1')
+      );
+
+      // Worker claims with 0ms lease (instantly stale)
+      intelligenceTaskQueue.claimTask(task.taskId, 'worker_crashed', -1000);
+
+      // Scan and recover
+      const recovered = intelligenceTaskQueue.recoverStaleTasks(0);
+      expect(recovered.length).toBeGreaterThan(0);
+      expect(intelligenceTaskQueue.getTask(task.taskId)?.status).toBe('retrying');
+      expect(intelligenceTaskQueue.getTask(task.taskId)?.errorCode).toBe('STALE_LEASE_RECOVERED');
     });
 
     it('transitions to retrying and eventually dead_letter on repeated failure', async () => {

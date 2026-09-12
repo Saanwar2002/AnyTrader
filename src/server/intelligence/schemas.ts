@@ -41,15 +41,36 @@ export const StorageManifestSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
+export const EvidenceSourceReferenceSchema = z.object({
+  storagePath: z.string().optional(),
+  documentId: z.string().optional(),
+  jobId: z.string().optional(),
+  propertyId: z.string().optional(),
+  sourceField: z.string().optional(),
+  sourceVersion: z.union([z.string(), z.number()]).optional(),
+  uri: z.string().optional(),
+});
+
 export const EvidenceRegistrationSchema = z.object({
   aggregateType: z.enum(['job', 'property']),
   aggregateId: z.string().min(1),
   evidenceType: z.enum(['image', 'video', 'document', 'user_description', 'structured_spec', 'quote', 'review']),
   sourceRef: z.string().min(1),
-  contentHash: z.string().regex(/^[a-f0-9]{64}$/i),
-  byteSize: z.number().int().positive(),
+  sourceReference: EvidenceSourceReferenceSchema.optional(),
+  contentHash: z.string().default(''),
+  byteSize: z.number().int().nonnegative().default(0),
+  integrityStatus: z.enum(['verified', 'unverified', 'reference_only', 'hash_pending']).default('unverified'),
   metadata: z.record(z.unknown()).default({}),
   verified: z.boolean().default(false),
+}).refine((data) => {
+  // If verified is true, contentHash MUST be a valid 64-char hex SHA-256 and byteSize must be > 0
+  if (data.verified) {
+    return /^[a-f0-9]{64}$/i.test(data.contentHash) && data.byteSize > 0 && data.integrityStatus === 'verified';
+  }
+  return true;
+}, {
+  message: "Verified evidence must possess a valid 64-char SHA-256 contentHash, positive byteSize, and 'verified' integrityStatus.",
+  path: ['contentHash'],
 });
 
 /**
