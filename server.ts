@@ -104,7 +104,6 @@ const initFirebase = () => {
 
       try {
         db = getFirestore(app, dbId);
-        intelligenceTaskQueue.setFirestoreDb(db);
         
         // Immediate verification
         db.collection("users").limit(1).get()
@@ -120,19 +119,22 @@ const initFirebase = () => {
           })
           .catch(err => {
             // Code 7: Permission Denied indicates lack of Service Account credentials
-            if (err.code === 7) {
+            if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
               console.warn("Server-side Firestore disabled: Missing service account permissions in development sandbox.");
+              intelligenceTaskQueue.setFirestoreDb(null);
               db = null; // Disable DB functions gracefully
             } else if (err.code === 5 && dbId !== "(default)") {
               console.warn(`Firestore initialization error (${err.code}): ${err.message}. Triggering fallback...`);
               fallbackDb();
             } else {
               console.error("Firestore initialization error code:", err.code, err.message);
+              intelligenceTaskQueue.setFirestoreDb(null);
               db = null;
             }
           });
       } catch (e: any) {
         console.error("Critical Firestore Setup Error:", e.message);
+        intelligenceTaskQueue.setFirestoreDb(null);
         db = null;
       }
     }
@@ -4725,6 +4727,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     // Start background systems with distributed locking
     startBackgroundSchedulers();
     startMatchingSystem();
+    intelligenceTaskQueue.startWorker(5000);
   });
 }
 

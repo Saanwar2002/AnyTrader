@@ -94,6 +94,14 @@
       "collectionGroup": "intelligence_tasks",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextAttemptAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligence_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "aggregateId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
@@ -103,6 +111,14 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "aggregateId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "intelligence_backfill_runs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }

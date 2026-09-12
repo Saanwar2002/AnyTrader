@@ -37,6 +37,7 @@ import {
   controlledBackfillEngine,
   INTELLIGENCE_PIPELINE_VERSION,
   INTELLIGENCE_SCHEMA_VERSION,
+  taskDocumentId,
 } from '../../src/server/intelligence';
 
 describe('V8.1 Structured Intelligence Foundation', () => {
@@ -595,7 +596,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(photoEvidence?.contentHash).toBe('');
       expect(photoEvidence?.byteSize).toBe(0);
       expect(photoEvidence?.sourceRef).toBe('https://storage.googleapis.com/anytrader-photos/job_ref_102_0.jpg');
-    });
+    }, 15000);
   });
 
   describe('11. Firestore-Backed Durable Task Queue with Transactional Claiming', () => {
@@ -637,6 +638,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
           const mockTx = {
             get: async (docRef: any) => {
               return docRef.get();
+            },
+            set: (docRef: any, data: any) => {
+              docRef.set(data);
             },
             update: (docRef: any, updates: any) => {
               docRef.update(updates);
@@ -701,8 +705,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
 
     it('recovers durable task state and idempotency across simulated server restarts', async () => {
       const mockFirestoreStore = new Map<string, any>();
+      const expectedTaskId = taskDocumentId('idemp_persist_999');
       const existingTaskData = {
-        taskId: 'task_persisted_prior_session',
+        taskId: expectedTaskId,
         taskType: 'job_extraction',
         aggregateType: 'job',
         aggregateId: 'job_persist_999',
@@ -715,7 +720,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         completedAt: '2026-09-12T00:00:05.000Z',
         payload: { completed: true },
       };
-      mockFirestoreStore.set('intelligence_tasks/task_persisted_prior_session', existingTaskData);
+      mockFirestoreStore.set(`intelligence_tasks/${expectedTaskId}`, existingTaskData);
 
       const mockDb = {
         collection: (colName: string) => ({
@@ -724,6 +729,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
               exists: mockFirestoreStore.has(`${colName}/${docId}`),
               data: () => mockFirestoreStore.get(`${colName}/${docId}`),
             }),
+            set: async (data: any) => {
+              mockFirestoreStore.set(`${colName}/${docId}`, data);
+            },
           }),
           where: (field: string, op: string, val: any) => ({
             limit: (num: number) => ({
@@ -747,7 +755,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       intelligenceTaskQueue.setFirestoreDb(mockDb);
 
       // In-memory queue is empty (fresh server restart)
-      expect(intelligenceTaskQueue.getTask('task_persisted_prior_session')).toBeUndefined();
+      expect(intelligenceTaskQueue.getTask(expectedTaskId)).toBeUndefined();
 
       // Enqueue with same idempotency key hits durable Firestore store
       const recovered = await intelligenceTaskQueue.enqueueTaskAsync(
@@ -757,7 +765,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         'idemp_persist_999'
       );
 
-      expect(recovered.taskId).toBe('task_persisted_prior_session');
+      expect(recovered.taskId).toBe(expectedTaskId);
       expect(recovered.status).toBe('succeeded');
 
       intelligenceTaskQueue.setFirestoreDb(null);

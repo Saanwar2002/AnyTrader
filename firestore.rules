@@ -1110,5 +1110,10 @@ service cloud.firestore {
       allow create: if isAdmin() && isValidId(qualityId);
       allow update, delete: if false; // Immutable audit log of human quality corrections
     }
+    match /intelligence_backfill_runs/{runId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(runId);
+      allow delete: if false; // Durable backfill run history & checkpoint tracking
+    }
   }
 }
