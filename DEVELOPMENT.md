@@ -26,8 +26,8 @@
   - `firestore.indexes.json`: Composite query indexes defined for tasks and event timelines.
   - `server.ts`: Server-authoritative endpoints for async job analysis (`POST /api/intelligence/jobs/:jobId/analyze`), job intelligence query (`GET /api/intelligence/jobs/:jobId`), property roll-up (`POST /api/intelligence/properties/:propertyId/rollup`), quality review (`POST /api/intelligence/quality/review`), and controlled backfill (`POST /api/intelligence/backfill`).
 - **Test Results**:
-  - 19 test files passed, 292/292 tests passing (100% pass rate).
-  - 30/30 dedicated unit tests passing in `tests/unit/intelligenceDomain.test.ts`.
+  - 19 test files passed, 295/295 tests passing (100% pass rate).
+  - 33/33 dedicated unit tests passing in `tests/unit/intelligenceDomain.test.ts`.
   - 15/15 dedicated security tests passing in `tests/unit/storageSecurity.test.ts`.
   - Zero linter errors (`npm run lint`), successful production compile (`npm run build`).
 

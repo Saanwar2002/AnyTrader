@@ -104,12 +104,14 @@ const initFirebase = () => {
 
       try {
         db = getFirestore(app, dbId);
+        intelligenceTaskQueue.setFirestoreDb(db);
         
         // Immediate verification
         db.collection("users").limit(1).get()
           .then(() => {
              console.log(`Firestore connected to: ${dbId}`);
              if (db) {
+               intelligenceTaskQueue.setFirestoreDb(db);
                startInstantMatchEngine(db);
                startCategoryRegistrySyncWorker(db);
                startPublicJobCardsSync(db);
@@ -4533,7 +4535,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       }
 
       const idempotencyKey = buildIdempotencyKey(jobId, "JOB_ANALYSIS_COMPLETED", "v1");
-      const task = intelligenceTaskQueue.enqueueTask(
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         "job_extraction",
         "job",
         jobId,
@@ -4602,7 +4604,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       }
 
       const idempotencyKey = buildIdempotencyKey(propertyId, "PROPERTY_ROLLUP_COMPLETED", "v1");
-      const task = intelligenceTaskQueue.enqueueTask(
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         "property_rollup",
         "property",
         propertyId,
@@ -4658,18 +4660,22 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     try {
       const { batchSize = 50, dryRun = true, maxCostUsd = 5.0, cursor } = req.body;
 
-      let jobs: any[] = [];
+      let progress;
       if (db) {
-        const jobsSnap = await db.collection("jobs").limit(batchSize * 2).get();
-        jobs = jobsSnap.docs.map((d) => ({ jobId: d.id, ...d.data() }));
+        progress = await controlledBackfillEngine.executeFirestoreBackfill(db, {
+          batchSize,
+          dryRun,
+          maxCostUsd,
+          cursor,
+        });
+      } else {
+        progress = await controlledBackfillEngine.executeBackfill([], {
+          batchSize,
+          dryRun,
+          maxCostUsd,
+          cursor,
+        });
       }
-
-      const progress = await controlledBackfillEngine.executeBackfill(jobs, {
-        batchSize,
-        dryRun,
-        maxCostUsd,
-        cursor,
-      });
 
       res.json({
         success: true,

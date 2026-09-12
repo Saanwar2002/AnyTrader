@@ -1073,27 +1073,42 @@ service cloud.firestore {
     // V8.1 STRUCTURED INTELLIGENCE SECURITY BOUNDARY
     // Server-Authoritative / Admin Only
     // Public and ordinary client reads/writes strictly DENIED
+    // Historical immutability enforced for events, evidence, extractions, and quality reviews
     // ==========================================
     match /intelligence_events/{eventId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidId(eventId);
+      allow update, delete: if false; // Append-only immutable event store
     }
     match /intelligence_evidence/{evidenceId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidId(evidenceId);
+      allow update, delete: if false; // Append-only immutable evidence registry
     }
     match /intelligence_extractions/{extractionId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidId(extractionId);
+      allow update, delete: if false; // Append-only raw extraction manifests
     }
     match /intelligence_tasks/{taskId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(taskId);
+      allow delete: if false; // Tasks transition states; never deleted to maintain audit trail
     }
     match /intelligence_jobs/{jobId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(jobId);
+      allow delete: if false;
     }
     match /intelligence_properties/{propertyId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(propertyId);
+      allow delete: if false;
     }
     match /intelligence_quality/{qualityId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidId(qualityId);
+      allow update, delete: if false; // Immutable audit log of human quality corrections
     }
   }
 }

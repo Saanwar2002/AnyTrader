@@ -616,6 +616,22 @@ describe('V8.1 Structured Intelligence Foundation', () => {
               data: () => mockFirestoreStore.get(`${colName}/${docId}`),
             }),
           }),
+          where: (field: string, op: string, val: any) => ({
+            limit: (num: number) => ({
+              get: async () => {
+                const results: any[] = [];
+                for (const [key, value] of mockFirestoreStore.entries()) {
+                  if (key.startsWith(`${colName}/`) && value[field] === val) {
+                    results.push({ data: () => value, id: key.split('/')[1] });
+                  }
+                }
+                return {
+                  empty: results.length === 0,
+                  docs: results,
+                };
+              },
+            }),
+          }),
         }),
         runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
           const mockTx = {
@@ -655,6 +671,161 @@ describe('V8.1 Structured Intelligence Foundation', () => {
 
       // Reset db
       intelligenceTaskQueue.setFirestoreDb(null);
+    });
+
+    it('propagates errors and rejects false success when Firestore write fails', async () => {
+      const failingDb = {
+        collection: () => ({
+          doc: () => ({
+            set: async () => {
+              throw new Error('Firestore connection timeout / permission denied');
+            },
+            get: async () => ({ exists: false }),
+          }),
+          where: () => ({
+            limit: () => ({
+              get: async () => ({ empty: true, docs: [] }),
+            }),
+          }),
+        }),
+      };
+
+      intelligenceTaskQueue.setFirestoreDb(failingDb);
+
+      await expect(
+        intelligenceTaskQueue.enqueueTaskAsync('job_extraction', 'job', 'job_fail_1', 'idemp_fail_1')
+      ).rejects.toThrow(/Firestore connection timeout/);
+
+      intelligenceTaskQueue.setFirestoreDb(null);
+    });
+
+    it('recovers durable task state and idempotency across simulated server restarts', async () => {
+      const mockFirestoreStore = new Map<string, any>();
+      const existingTaskData = {
+        taskId: 'task_persisted_prior_session',
+        taskType: 'job_extraction',
+        aggregateType: 'job',
+        aggregateId: 'job_persist_999',
+        idempotencyKey: 'idemp_persist_999',
+        status: 'succeeded',
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: '2026-09-12T00:00:00.000Z',
+        updatedAt: '2026-09-12T00:00:05.000Z',
+        completedAt: '2026-09-12T00:00:05.000Z',
+        payload: { completed: true },
+      };
+      mockFirestoreStore.set('intelligence_tasks/task_persisted_prior_session', existingTaskData);
+
+      const mockDb = {
+        collection: (colName: string) => ({
+          doc: (docId: string) => ({
+            get: async () => ({
+              exists: mockFirestoreStore.has(`${colName}/${docId}`),
+              data: () => mockFirestoreStore.get(`${colName}/${docId}`),
+            }),
+          }),
+          where: (field: string, op: string, val: any) => ({
+            limit: (num: number) => ({
+              get: async () => {
+                const results: any[] = [];
+                for (const [key, value] of mockFirestoreStore.entries()) {
+                  if (key.startsWith(`${colName}/`) && value[field] === val) {
+                    results.push({ data: () => value, id: key.split('/')[1] });
+                  }
+                }
+                return {
+                  empty: results.length === 0,
+                  docs: results,
+                };
+              },
+            }),
+          }),
+        }),
+      };
+
+      intelligenceTaskQueue.setFirestoreDb(mockDb);
+
+      // In-memory queue is empty (fresh server restart)
+      expect(intelligenceTaskQueue.getTask('task_persisted_prior_session')).toBeUndefined();
+
+      // Enqueue with same idempotency key hits durable Firestore store
+      const recovered = await intelligenceTaskQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_persist_999',
+        'idemp_persist_999'
+      );
+
+      expect(recovered.taskId).toBe('task_persisted_prior_session');
+      expect(recovered.status).toBe('succeeded');
+
+      intelligenceTaskQueue.setFirestoreDb(null);
+    });
+
+    it('executes Firestore cursor-based backfill with task-first pattern and cost limits', async () => {
+      const mockFirestoreStore = new Map<string, any>();
+      mockFirestoreStore.set('jobs/job_bf_1', { title: 'Boiler Leak', description: 'Leaking pipe', category: 'Plumbing' });
+      mockFirestoreStore.set('jobs/job_bf_2', { title: 'Fuse Board', description: 'Trip switch', category: 'Electrical' });
+      mockFirestoreStore.set('jobs/job_bf_3', { title: 'Roof Slate', description: 'Loose slate', category: 'Roofing' });
+
+      const mockDb = {
+        collection: (colName: string) => ({
+          limit: (n: number) => ({
+            get: async () => {
+              const docs = Array.from(mockFirestoreStore.entries())
+                .filter(([k]) => k.startsWith(`${colName}/`))
+                .map(([k, v]) => ({ id: k.split('/')[1], data: () => v }));
+              return {
+                docs: docs.slice(0, n),
+                empty: docs.length === 0,
+              };
+            },
+            startAfter: (docSnap: any) => ({
+              get: async () => {
+                const allDocs = Array.from(mockFirestoreStore.entries())
+                  .filter(([k]) => k.startsWith(`${colName}/`))
+                  .map(([k, v]) => ({ id: k.split('/')[1], data: () => v }));
+                const startIdx = allDocs.findIndex(d => d.id === docSnap.id);
+                const sliced = startIdx !== -1 ? allDocs.slice(startIdx + 1, startIdx + 1 + n) : [];
+                return {
+                  docs: sliced,
+                  empty: sliced.length === 0,
+                };
+              },
+            }),
+          }),
+          doc: (docId: string) => ({
+            get: async () => ({
+              id: docId,
+              exists: mockFirestoreStore.has(`${colName}/${docId}`),
+              data: () => mockFirestoreStore.get(`${colName}/${docId}`),
+            }),
+            set: async (data: any) => {
+              mockFirestoreStore.set(`${colName}/${docId}`, data);
+            },
+            update: async (updates: any) => {
+              const existing = mockFirestoreStore.get(`${colName}/${docId}`) || {};
+              mockFirestoreStore.set(`${colName}/${docId}`, { ...existing, ...updates });
+            },
+          }),
+          where: (field: string, op: string, val: any) => ({
+            limit: () => ({
+              get: async () => ({ empty: true, docs: [] }),
+            }),
+          }),
+        }),
+      };
+
+      const progress = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
+        batchSize: 2,
+        dryRun: true,
+      });
+
+      expect(progress.totalScanned).toBe(2);
+      expect(progress.processedCount).toBe(2);
+      expect(progress.nextCursor).toBe('job_bf_2');
+      expect(progress.isComplete).toBe(false);
     });
   });
 });
