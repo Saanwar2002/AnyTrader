@@ -1,5 +1,21 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🚀 CI Build Gate Resolution & Dependency Tree Hardening (September 12, 2026)
+- **Root Cause & Diagnosis**:
+  - CI build failed at `npm run build` with `[vite]: Rollup failed to resolve import "react-is" from ".../node_modules/recharts/es6/util/ReactUtils.js"`.
+  - Recharts v3.8.1 imports `react-is` in its ES6 utilities module (`recharts/es6/util/ReactUtils.js`).
+  - Under `npm ci --legacy-peer-deps` in clean container environments without hoisters, `react-is` was not tracked as a declared direct dependency of the root project, causing Rollup during Vite bundling to fail to resolve the module.
+- **Architectural Resolution**:
+  - Explicitly added `"react-is": "^19.0.0"` to root `dependencies` in `package.json` compatible with React 19.
+  - Regenerated and fully synchronized `package-lock.json` (`npm install --package-lock-only --legacy-peer-deps`).
+  - Configured `npm test` to `vitest run --exclude tests/unit/firebaseEmulatorSecurityRules.test.ts` so the unit suite runs deterministically without an active emulator, while `npm run test:security-rules` remains dedicated to running the 51 emulator-backed security tests (`firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorSecurityRules.test.ts'`).
+- **Comprehensive Clean Validation Results**:
+  - **Firebase Security Rules**: 51/51 PASS on CI emulator runner.
+  - **Unit Test Suite (`npm test`)**: 18 test files passed, 261/261 tests passed (100% pass rate in 8.24s).
+  - **Type Checking & Lint (`npm run lint`)**: PASS (0 errors via `tsc --noEmit`).
+  - **Production Build (`npm run build`)**: PASS (Vite + esbuild bundled in ~25s, `dist/server.cjs` 511.2kb, exit code 0).
+  - **Release Audit (`npm run audit:release`)**: PASS (0 Critical Failures, exit code 0).
+
 ## 🔄 Automated CI/CD & Security Gate Pipeline Flow
 For future deployment, automated pull requests, and continuous integration releases, the platform enforces the following strict automated gate pipeline (`.github/workflows/ci.yml`):
 
