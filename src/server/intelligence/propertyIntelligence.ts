@@ -25,6 +25,13 @@ export interface PropertySourceInput {
   epcRating?: string;
   constructionYear?: number;
   documents?: string[];
+  documentObjects?: Array<{
+    uri?: string;
+    storagePath?: string;
+    bytes?: Buffer | Uint8Array;
+    mimeType?: string;
+    byteSize?: number;
+  }>;
 }
 
 export class PropertyIntelligenceService {
@@ -45,17 +52,63 @@ export class PropertyIntelligenceService {
     let propertyEvidence = evidenceRegistry.getForAggregate('property', property.propertyId);
 
     if (propertyEvidence.length === 0) {
-      // Register property baseline spec evidence
-      const specText = `Property: ${property.propertyId}, Type: ${property.propertyType || 'Residential'}, EPC: ${property.epcRating || 'Unrated'}, Built: ${property.constructionYear || 'Unknown'}`;
-      evidenceRegistry.register(
+      // Register property baseline spec evidence via canonical structured hashing
+      const specPayload = {
+        propertyId: property.propertyId,
+        propertyType: property.propertyType || 'Residential',
+        epcRating: property.epcRating || 'Unrated',
+        constructionYear: property.constructionYear || null,
+      };
+
+      evidenceRegistry.registerStructuredData(
         'property',
         property.propertyId,
         'structured_spec',
         `properties/${property.propertyId}`,
-        specText,
+        specPayload,
         { propertyType: property.propertyType, epcRating: property.epcRating },
-        true
+        { documentId: property.propertyId, sourceField: 'spec' }
       );
+
+      // Handle document objects with real binary bytes or reference-only
+      if (property.documentObjects && property.documentObjects.length > 0) {
+        for (const [idx, docObj] of property.documentObjects.entries()) {
+          const sourceRef = docObj.storagePath || docObj.uri || `documents/${idx}`;
+          if (docObj.bytes) {
+            evidenceRegistry.register(
+              'property',
+              property.propertyId,
+              'document',
+              sourceRef,
+              docObj.bytes,
+              { mimeType: docObj.mimeType || 'application/pdf', byteSize: docObj.byteSize, index: idx },
+              true,
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+            );
+          } else {
+            evidenceRegistry.registerReferenceOnly(
+              'property',
+              property.propertyId,
+              'document',
+              sourceRef,
+              { mimeType: docObj.mimeType, index: idx },
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+            );
+          }
+        }
+      } else if (property.documents && property.documents.length > 0) {
+        for (const [idx, docUrl] of property.documents.entries()) {
+          evidenceRegistry.registerReferenceOnly(
+            'property',
+            property.propertyId,
+            'document',
+            docUrl,
+            { docUrl, index: idx },
+            { uri: docUrl, storagePath: docUrl.startsWith('properties/') ? docUrl : undefined, sourceField: `documents[${idx}]` }
+          );
+        }
+      }
+
       propertyEvidence = evidenceRegistry.getForAggregate('property', property.propertyId);
     }
 

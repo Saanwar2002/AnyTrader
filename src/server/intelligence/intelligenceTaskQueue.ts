@@ -17,7 +17,7 @@ export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unk
 
 export interface FirestoreTaskDb {
   collection(name: string): any;
-  runTransaction?(updateFunction: (transaction: any) => Promise<any>): Promise<any>;
+  runTransaction?<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
 }
 
 export class IntelligenceTaskQueue {
@@ -40,6 +40,13 @@ export class IntelligenceTaskQueue {
   }
 
   /**
+   * Gets the current Firestore database instance
+   */
+  public getFirestoreDb(): FirestoreTaskDb | null {
+    return this.firestoreDb;
+  }
+
+  /**
    * Registers a task handler for a specific task type
    */
   public registerHandler(type: TaskType, handler: TaskHandler): void {
@@ -56,7 +63,7 @@ export class IntelligenceTaskQueue {
     idempotencyKey: string,
     payload: Record<string, unknown> = {}
   ): IntelligenceTask {
-    // Replay Safety: Check if identical task already exists
+    // Replay Safety: Check in-memory index first
     const existingTaskId = this.idempotencyIndex.get(idempotencyKey);
     if (existingTaskId) {
       const existing = this.tasks.get(existingTaskId);
@@ -87,17 +94,67 @@ export class IntelligenceTaskQueue {
 
     // Persist to Firestore if initialized
     if (this.firestoreDb) {
-      try {
-        this.firestoreDb.collection('intelligence_tasks').doc(taskId).set(task).catch(() => {});
-      } catch {
-        // Non-blocking background persistence
-      }
+      this.persistTaskToFirestore(task).catch((err) => {
+        console.error(`[IntelligenceTaskQueue] Failed to persist task ${taskId} to Firestore:`, err);
+      });
     }
 
     // Trigger async non-blocking drain
     setImmediate(() => this.processNext());
 
     return task;
+  }
+
+  /**
+   * Asynchronously enqueues a task, waiting for durable Firestore confirmation
+   */
+  public async enqueueTaskAsync(
+    taskType: TaskType,
+    aggregateType: IntelligenceAggregateType,
+    aggregateId: string,
+    idempotencyKey: string,
+    payload: Record<string, unknown> = {}
+  ): Promise<IntelligenceTask> {
+    // Check in-memory index
+    const existingTaskId = this.idempotencyIndex.get(idempotencyKey);
+    if (existingTaskId) {
+      const existing = this.tasks.get(existingTaskId);
+      if (existing) {
+        return existing;
+      }
+    }
+
+    const taskId = `task_${taskType}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const now = new Date().toISOString();
+
+    const task: IntelligenceTask = {
+      taskId,
+      taskType,
+      aggregateType,
+      aggregateId,
+      idempotencyKey,
+      status: 'pending',
+      attempts: 0,
+      maxAttempts: this.maxRetries,
+      createdAt: now,
+      updatedAt: now,
+      payload,
+    };
+
+    this.tasks.set(taskId, task);
+    this.idempotencyIndex.set(idempotencyKey, taskId);
+
+    if (this.firestoreDb) {
+      await this.persistTaskToFirestore(task);
+    }
+
+    setImmediate(() => this.processNext());
+    return task;
+  }
+
+  private async persistTaskToFirestore(task: IntelligenceTask): Promise<void> {
+    if (!this.firestoreDb) return;
+    await this.firestoreDb.collection('intelligence_tasks').doc(task.taskId).set(task);
   }
 
   /**
@@ -138,21 +195,90 @@ export class IntelligenceTaskQueue {
     this.tasks.set(taskId, task);
 
     if (this.firestoreDb) {
-      try {
-        this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-          status: 'processing',
-          attempts: task.attempts,
-          startedAt: task.startedAt,
-          workerId: task.workerId,
-          leaseExpiresAt: task.leaseExpiresAt,
-          updatedAt: task.updatedAt,
-        }).catch(() => {});
-      } catch {
-        // Non-blocking
-      }
+      this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+        status: 'processing',
+        attempts: task.attempts,
+        startedAt: task.startedAt,
+        workerId: task.workerId,
+        leaseExpiresAt: task.leaseExpiresAt,
+        updatedAt: task.updatedAt,
+      }).catch((err: unknown) => {
+        console.error(`[IntelligenceTaskQueue] Failed to update claimed state in Firestore for ${taskId}:`, err);
+      });
     }
 
     return true;
+  }
+
+  /**
+   * Atomically claims a task in Firestore via runTransaction
+   */
+  public async claimTaskTransactional(
+    taskId: string,
+    workerId: string = `worker_${Math.random().toString(36).slice(2, 8)}`,
+    leaseDurationMs: number = this.defaultLeaseDurationMs,
+    force: boolean = false
+  ): Promise<boolean> {
+    if (!this.firestoreDb || typeof this.firestoreDb.runTransaction !== 'function') {
+      return this.claimTask(taskId, workerId, leaseDurationMs, force);
+    }
+
+    const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    const leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
+
+    try {
+      const claimed = await this.firestoreDb.runTransaction(async (transaction: any) => {
+        const docSnap = await transaction.get(taskRef);
+        if (!docSnap.exists) {
+          return false;
+        }
+
+        const data = docSnap.data() as IntelligenceTask;
+        const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() < now : false;
+
+        const canClaim =
+          force ||
+          data.status === 'pending' ||
+          (data.status === 'retrying' && (!data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now)) ||
+          (data.status === 'processing' && isLeaseExpired);
+
+        if (!canClaim) {
+          return false;
+        }
+
+        const newAttempts = (data.attempts || 0) + 1;
+        transaction.update(taskRef, {
+          status: 'processing',
+          attempts: newAttempts,
+          startedAt: nowIso,
+          workerId: workerId,
+          leaseExpiresAt: leaseExpiresAt,
+          updatedAt: nowIso,
+        });
+
+        return true;
+      });
+
+      if (claimed) {
+        // Sync local memory state
+        const local = this.tasks.get(taskId);
+        if (local) {
+          local.status = 'processing';
+          local.attempts += 1;
+          local.startedAt = nowIso;
+          local.workerId = workerId;
+          local.leaseExpiresAt = leaseExpiresAt;
+          local.updatedAt = nowIso;
+        }
+      }
+
+      return claimed;
+    } catch (err) {
+      console.error(`[IntelligenceTaskQueue] Transactional claim error for task ${taskId}:`, err);
+      return false;
+    }
   }
 
   /**
@@ -183,6 +309,18 @@ export class IntelligenceTaskQueue {
           }
           task.updatedAt = new Date(now).toISOString();
           recovered.push(task);
+
+          if (this.firestoreDb) {
+            this.firestoreDb.collection('intelligence_tasks').doc(task.taskId).update({
+              status: task.status,
+              nextAttemptAt: task.nextAttemptAt || null,
+              lastError: task.lastError,
+              errorCode: task.errorCode,
+              updatedAt: task.updatedAt,
+            }).catch((err: unknown) => {
+              console.error(`[IntelligenceTaskQueue] Failed to persist stale recovery for ${task.taskId}:`, err);
+            });
+          }
         }
       }
     }
@@ -229,6 +367,15 @@ export class IntelligenceTaskQueue {
         timestamp: new Date().toISOString(),
       };
       task.updatedAt = new Date().toISOString();
+      if (this.firestoreDb) {
+        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+          status: task.status,
+          errorCode: task.errorCode,
+          lastError: task.lastError,
+          error: task.error,
+          updatedAt: task.updatedAt,
+        });
+      }
       return task;
     }
 
@@ -255,17 +402,13 @@ export class IntelligenceTaskQueue {
       delete task.leaseExpiresAt;
 
       if (this.firestoreDb) {
-        try {
-          this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-            status: 'succeeded',
-            completedAt: task.completedAt,
-            processingDurationMs: task.processingDurationMs,
-            updatedAt: task.updatedAt,
-            payload: task.payload,
-          }).catch(() => {});
-        } catch {
-          // Non-blocking
-        }
+        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+          status: 'succeeded',
+          completedAt: task.completedAt,
+          processingDurationMs: task.processingDurationMs,
+          updatedAt: task.updatedAt,
+          payload: task.payload,
+        });
       }
 
       return task;
@@ -301,19 +444,15 @@ export class IntelligenceTaskQueue {
       delete task.leaseExpiresAt;
 
       if (this.firestoreDb) {
-        try {
-          this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-            status: task.status,
-            attempts: task.attempts,
-            nextAttemptAt: task.nextAttemptAt || null,
-            lastError: task.lastError,
-            errorCode: task.errorCode,
-            error: task.error,
-            updatedAt: task.updatedAt,
-          }).catch(() => {});
-        } catch {
-          // Non-blocking
-        }
+        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+          status: task.status,
+          attempts: task.attempts,
+          nextAttemptAt: task.nextAttemptAt || null,
+          lastError: task.lastError,
+          errorCode: task.errorCode,
+          error: task.error,
+          updatedAt: task.updatedAt,
+        });
       }
 
       return task;

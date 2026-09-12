@@ -27,7 +27,21 @@ export interface JobSourceInput {
   postcode?: string;
   createdAt?: string;
   photos?: string[];
+  photoObjects?: Array<{
+    uri?: string;
+    storagePath?: string;
+    bytes?: Buffer | Uint8Array;
+    mimeType?: string;
+    byteSize?: number;
+  }>;
   documents?: string[];
+  documentObjects?: Array<{
+    uri?: string;
+    storagePath?: string;
+    bytes?: Buffer | Uint8Array;
+    mimeType?: string;
+    byteSize?: number;
+  }>;
 }
 
 export class JobIntelligenceService {
@@ -56,20 +70,86 @@ export class JobIntelligenceService {
           `jobs/${job.jobId}/description`,
           job.description,
           { title: job.title },
-          true
+          true,
+          { documentId: job.jobId, sourceField: 'description' }
         );
       }
 
-      if (job.photos && job.photos.length > 0) {
+      // 1a. Handle structured photo objects with real binary bytes if present
+      if (job.photoObjects && job.photoObjects.length > 0) {
+        for (const [idx, photoObj] of job.photoObjects.entries()) {
+          const sourceRef = photoObj.storagePath || photoObj.uri || `photos/${idx}`;
+          if (photoObj.bytes) {
+            evidenceRegistry.register(
+              'job',
+              job.jobId,
+              'image',
+              sourceRef,
+              photoObj.bytes,
+              { mimeType: photoObj.mimeType || 'image/jpeg', byteSize: photoObj.byteSize, index: idx },
+              true,
+              { uri: photoObj.uri, storagePath: photoObj.storagePath, sourceField: `photos[${idx}]` }
+            );
+          } else {
+            evidenceRegistry.registerReferenceOnly(
+              'job',
+              job.jobId,
+              'image',
+              sourceRef,
+              { mimeType: photoObj.mimeType, index: idx },
+              { uri: photoObj.uri, storagePath: photoObj.storagePath, sourceField: `photos[${idx}]` }
+            );
+          }
+        }
+      } else if (job.photos && job.photos.length > 0) {
+        // Fallback: reference-only pointers without fabricated byte hashes
         for (const [idx, photoUrl] of job.photos.entries()) {
-          evidenceRegistry.register(
+          evidenceRegistry.registerReferenceOnly(
             'job',
             job.jobId,
             'image',
             photoUrl,
-            Buffer.from(`photo_evidence_${job.jobId}_${idx}_${photoUrl}`),
             { photoUrl, index: idx },
-            true
+            { uri: photoUrl, storagePath: photoUrl.startsWith('jobs/') ? photoUrl : undefined, sourceField: `photos[${idx}]` }
+          );
+        }
+      }
+
+      // 1b. Handle document objects with real binary bytes or reference-only
+      if (job.documentObjects && job.documentObjects.length > 0) {
+        for (const [idx, docObj] of job.documentObjects.entries()) {
+          const sourceRef = docObj.storagePath || docObj.uri || `documents/${idx}`;
+          if (docObj.bytes) {
+            evidenceRegistry.register(
+              'job',
+              job.jobId,
+              'document',
+              sourceRef,
+              docObj.bytes,
+              { mimeType: docObj.mimeType || 'application/pdf', byteSize: docObj.byteSize, index: idx },
+              true,
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+            );
+          } else {
+            evidenceRegistry.registerReferenceOnly(
+              'job',
+              job.jobId,
+              'document',
+              sourceRef,
+              { mimeType: docObj.mimeType, index: idx },
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+            );
+          }
+        }
+      } else if (job.documents && job.documents.length > 0) {
+        for (const [idx, docUrl] of job.documents.entries()) {
+          evidenceRegistry.registerReferenceOnly(
+            'job',
+            job.jobId,
+            'document',
+            docUrl,
+            { docUrl, index: idx },
+            { uri: docUrl, storagePath: docUrl.startsWith('jobs/') ? docUrl : undefined, sourceField: `documents[${idx}]` }
           );
         }
       }

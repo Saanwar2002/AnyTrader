@@ -546,4 +546,115 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(progress.isComplete).toBe(true);
     });
   });
+
+  describe('10. Binary Byte Integrity vs Reference-Only Pointers in Job & Property Ingestion', () => {
+    it('registers real binary photos with valid SHA-256 hash and byte size when photoObjects provided', async () => {
+      const mockPhotoBytes = Buffer.from('MOCK_JPEG_BINARY_DATA_FOR_BOILER_PHOTO');
+      const expectedHash = computeSha256(mockPhotoBytes);
+
+      const { jobIntelligence } = await jobIntelligenceService.deriveJobIntelligence({
+        jobId: 'job_bin_101',
+        title: 'Boiler leaking water',
+        description: 'Water pool under heat exchanger',
+        category: 'Plumbing',
+        photoObjects: [
+          {
+            storagePath: 'jobs/job_bin_101/photos/boiler_leak.jpg',
+            bytes: mockPhotoBytes,
+            mimeType: 'image/jpeg',
+            byteSize: mockPhotoBytes.length,
+          },
+        ],
+      });
+
+      expect(jobIntelligence.evidenceIds.length).toBeGreaterThanOrEqual(2);
+      const photoEvidence = evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
+      expect(photoEvidence).toBeDefined();
+      expect(photoEvidence?.evidenceType).toBe('image');
+      expect(photoEvidence?.verified).toBe(true);
+      expect(photoEvidence?.integrityStatus).toBe('verified');
+      expect(photoEvidence?.contentHash).toBe(expectedHash);
+      expect(photoEvidence?.byteSize).toBe(mockPhotoBytes.length);
+      expect(photoEvidence?.sourceReference?.storagePath).toBe('jobs/job_bin_101/photos/boiler_leak.jpg');
+    });
+
+    it('registers reference-only evidence without fabricating artificial byte hashes when only URLs provided', async () => {
+      const { jobIntelligence } = await jobIntelligenceService.deriveJobIntelligence({
+        jobId: 'job_ref_102',
+        title: 'Roof tile slipped',
+        description: 'Single slate slipped on north slope',
+        category: 'Roofing',
+        photos: ['https://storage.googleapis.com/anytrader-photos/job_ref_102_0.jpg'],
+      });
+
+      const photoEvidence = evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
+      expect(photoEvidence).toBeDefined();
+      expect(photoEvidence?.evidenceType).toBe('image');
+      expect(photoEvidence?.verified).toBe(false);
+      expect(photoEvidence?.integrityStatus).toBe('reference_only');
+      expect(photoEvidence?.contentHash).toBe('');
+      expect(photoEvidence?.byteSize).toBe(0);
+      expect(photoEvidence?.sourceRef).toBe('https://storage.googleapis.com/anytrader-photos/job_ref_102_0.jpg');
+    });
+  });
+
+  describe('11. Firestore-Backed Durable Task Queue with Transactional Claiming', () => {
+    it('persists tasks to mock Firestore and prevents double claiming via transactional locks', async () => {
+      const mockFirestoreStore = new Map<string, any>();
+      const mockDb = {
+        collection: (colName: string) => ({
+          doc: (docId: string) => ({
+            set: async (data: any) => {
+              mockFirestoreStore.set(`${colName}/${docId}`, data);
+            },
+            update: async (updates: any) => {
+              const existing = mockFirestoreStore.get(`${colName}/${docId}`) || {};
+              mockFirestoreStore.set(`${colName}/${docId}`, { ...existing, ...updates });
+            },
+            get: async () => ({
+              exists: mockFirestoreStore.has(`${colName}/${docId}`),
+              data: () => mockFirestoreStore.get(`${colName}/${docId}`),
+            }),
+          }),
+        }),
+        runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
+          const mockTx = {
+            get: async (docRef: any) => {
+              return docRef.get();
+            },
+            update: (docRef: any, updates: any) => {
+              docRef.update(updates);
+            },
+          };
+          return updateFn(mockTx);
+        },
+      };
+
+      intelligenceTaskQueue.setFirestoreDb(mockDb);
+
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_firestore_901',
+        'idemp_fs_901'
+      );
+
+      expect(mockFirestoreStore.has(`intelligence_tasks/${task.taskId}`)).toBe(true);
+
+      // Worker 1 claims transactionally
+      const claim1 = await intelligenceTaskQueue.claimTaskTransactional(task.taskId, 'worker_A', 30000);
+      expect(claim1).toBe(true);
+      const fsData = mockFirestoreStore.get(`intelligence_tasks/${task.taskId}`);
+      expect(fsData.status).toBe('processing');
+      expect(fsData.workerId).toBe('worker_A');
+
+      // Worker 2 attempts concurrent transactional claim -> rejected
+      const claim2 = await intelligenceTaskQueue.claimTaskTransactional(task.taskId, 'worker_B', 30000);
+      expect(claim2).toBe(false);
+      expect(mockFirestoreStore.get(`intelligence_tasks/${task.taskId}`).workerId).toBe('worker_A');
+
+      // Reset db
+      intelligenceTaskQueue.setFirestoreDb(null);
+    });
+  });
 });

@@ -30,7 +30,7 @@ export class EvidenceRegistry {
     aggregateId: string,
     evidenceType: EvidenceType,
     sourceRef: string,
-    rawContent: string | Buffer | null | undefined,
+    rawContent: string | Buffer | Uint8Array | null | undefined,
     metadata: Record<string, unknown> = {},
     verified: boolean = false,
     sourceReference?: EvidenceSourceReference
@@ -47,7 +47,11 @@ export class EvidenceRegistry {
       );
     }
 
-    const contentBuffer = Buffer.isBuffer(rawContent) ? rawContent : Buffer.from(rawContent, 'utf8');
+    const contentBuffer = Buffer.isBuffer(rawContent)
+      ? rawContent
+      : rawContent instanceof Uint8Array
+      ? Buffer.from(rawContent)
+      : Buffer.from(rawContent, 'utf8');
     const contentHash = computeSha256(contentBuffer);
     const byteSize = contentBuffer.length;
     const integrityStatus: EvidenceIntegrityStatus = 'verified';
