@@ -4269,6 +4269,48 @@
         "$ref": "#/entities/PublicProperty"
       },
       "description": "Public sanitized property passport projections for external verification without PII or internal components."
+    },
+    "/intelligence_events/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Immutable derived intelligence events with evidence IDs, multi-dimensional confidence, and provenance."
+    },
+    "/intelligence_evidence/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Cryptographically hashed evidence records supporting derived intelligence assertions."
+    },
+    "/intelligence_extractions/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Model extractions with storage manifest references and candidate structured outputs."
+    },
+    "/intelligence_tasks/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Asynchronous intelligence tasks with idempotency keys and retry lifecycle."
+    },
+    "/intelligence_jobs/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Compact derived job intelligence records strictly conforming to 100 KiB safety budget."
+    },
+    "/intelligence_properties/{id}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Derived property roll-up records aggregating building components and observed conditions."
+    },
+    "/intelligence_quality/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Admin quality review and human correction records with cryptographic audit provenance."
     }
   }
 }

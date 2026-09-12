@@ -30,6 +30,15 @@ import {
   backfillPublicProperties,
   sanitizePropertyToPublicPassport
 } from "./src/server/projectionSync.ts";
+import {
+  jobIntelligenceService,
+  propertyIntelligenceService,
+  qualityReviewService,
+  controlledBackfillEngine,
+  evidenceRegistry,
+  intelligenceTaskQueue,
+  buildIdempotencyKey
+} from "./src/server/intelligence/index.ts";
 
 dotenv.config();
 
@@ -4466,6 +4475,207 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     try {
       const auditReport = runProductionChecks(process.env, db);
       res.json({ success: true, ...auditReport });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // ==========================================
+  // V8.1 STRUCTURED INTELLIGENCE DOMAIN ROUTES
+  // ==========================================
+
+  // Register task handlers for the async queue
+  intelligenceTaskQueue.registerHandler("job_extraction", async (task) => {
+    const { job } = task.payload as { job: any };
+    if (!job) throw new Error("Missing job payload for extraction");
+    const result = await jobIntelligenceService.deriveJobIntelligence(job);
+    if (db) {
+      await db.collection("intelligence_jobs").doc(job.jobId).set(result.jobIntelligence, { merge: true });
+      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+    }
+    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId };
+  });
+
+  intelligenceTaskQueue.registerHandler("property_rollup", async (task) => {
+    const { property, historicalJobs } = task.payload as { property: any; historicalJobs: any[] };
+    if (!property) throw new Error("Missing property payload for rollup");
+    const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
+    if (db) {
+      await db.collection("intelligence_properties").doc(property.propertyId).set(result.propertyIntelligence, { merge: true });
+      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+    }
+    return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId };
+  });
+
+  // Trigger Asynchronous Job Intelligence Analysis
+  app.post("/api/intelligence/jobs/:jobId/analyze", requireAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      let jobData: any = null;
+      if (db) {
+        const jobDoc = await db.collection("jobs").doc(jobId).get();
+        if (!jobDoc.exists) {
+          return res.status(404).json({ error: `Job ${jobId} not found` });
+        }
+        jobData = { jobId, ...jobDoc.data() };
+      } else {
+        jobData = { jobId, title: req.body.title || "Job Title", description: req.body.description || "Job Description" };
+      }
+
+      // Assert authorization: owner, assigned trader, or admin
+      const isOwner = jobData.homeownerId === user.uid || jobData.userId === user.uid;
+      const isAssignedTrader = jobData.assignedTraderId === user.uid;
+      const isAdminUser = user.admin === true || user.role === "admin";
+      if (!isOwner && !isAssignedTrader && !isAdminUser) {
+        return res.status(403).json({ error: "Forbidden: insufficient permissions to analyze this job" });
+      }
+
+      const idempotencyKey = buildIdempotencyKey(jobId, "JOB_ANALYSIS_COMPLETED", "v1");
+      const task = intelligenceTaskQueue.enqueueTask(
+        "job_extraction",
+        "job",
+        jobId,
+        idempotencyKey,
+        { job: jobData }
+      );
+
+      res.status(202).json({
+        success: true,
+        message: "Intelligence extraction task enqueued",
+        taskId: task.taskId,
+        idempotencyKey: task.idempotencyKey,
+        status: task.status,
+      });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Get Derived Job Intelligence
+  app.get("/api/intelligence/jobs/:jobId", requireAuth, async (req, res) => {
+    try {
+      const { jobId } = req.params;
+      const user = (req as any).user;
+
+      if (db) {
+        const jobDoc = await db.collection("jobs").doc(jobId).get();
+        if (jobDoc.exists) {
+          const jd = jobDoc.data() || {};
+          const isOwner = jd.homeownerId === user.uid || jd.userId === user.uid;
+          const isAssigned = jd.assignedTraderId === user.uid;
+          const isAdminUser = user.admin === true || user.role === "admin";
+          if (!isOwner && !isAssigned && !isAdminUser) {
+            return res.status(403).json({ error: "Forbidden: unauthorized to read job intelligence" });
+          }
+        }
+
+        const intelDoc = await db.collection("intelligence_jobs").doc(jobId).get();
+        if (!intelDoc.exists) {
+          return res.status(404).json({ error: "Job intelligence record not found" });
+        }
+        return res.json({ success: true, intelligence: intelDoc.data() });
+      }
+
+      res.status(404).json({ error: "Job intelligence database not initialized" });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Trigger Asynchronous Property Intelligence Roll-up (Admin Only)
+  app.post("/api/intelligence/properties/:propertyId/rollup", requireAdmin, async (req, res) => {
+    try {
+      const { propertyId } = req.params;
+
+      let propData: any = { propertyId };
+      let historicalJobs: any[] = [];
+
+      if (db) {
+        const propDoc = await db.collection("properties").doc(propertyId).get();
+        if (propDoc.exists) {
+          propData = { propertyId, ...propDoc.data() };
+        }
+        const jobsSnap = await db.collection("intelligence_jobs").get();
+        historicalJobs = jobsSnap.docs.map((d) => d.data());
+      }
+
+      const idempotencyKey = buildIdempotencyKey(propertyId, "PROPERTY_ROLLUP_COMPLETED", "v1");
+      const task = intelligenceTaskQueue.enqueueTask(
+        "property_rollup",
+        "property",
+        propertyId,
+        idempotencyKey,
+        { property: propData, historicalJobs }
+      );
+
+      res.status(202).json({
+        success: true,
+        message: "Property rollup task enqueued",
+        taskId: task.taskId,
+        idempotencyKey: task.idempotencyKey,
+        status: task.status,
+      });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Admin Quality Review & Human Correction
+  app.post("/api/intelligence/quality/review", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { targetCollection, targetId, action, reason, originalCandidate, correctedResult } = req.body;
+
+      const reviewOutcome = qualityReviewService.applyReview({
+        targetCollection,
+        targetId,
+        action,
+        reviewerId: user.uid || "admin",
+        reason,
+        originalCandidate,
+        correctedResult,
+      });
+
+      if (db) {
+        await db.collection("intelligence_quality").doc(reviewOutcome.review.qualityId).set(reviewOutcome.review);
+        await db.collection("intelligence_events").doc(reviewOutcome.auditEvent.eventId).set(reviewOutcome.auditEvent);
+      }
+
+      res.json({
+        success: true,
+        review: reviewOutcome.review,
+        auditEventId: reviewOutcome.auditEvent.eventId,
+      });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Controlled Historical Backfill (Admin Only, Dry Run By Default)
+  app.post("/api/intelligence/backfill", requireAdmin, async (req, res) => {
+    try {
+      const { batchSize = 50, dryRun = true, maxCostUsd = 5.0, cursor } = req.body;
+
+      let jobs: any[] = [];
+      if (db) {
+        const jobsSnap = await db.collection("jobs").limit(batchSize * 2).get();
+        jobs = jobsSnap.docs.map((d) => ({ jobId: d.id, ...d.data() }));
+      }
+
+      const progress = await controlledBackfillEngine.executeBackfill(jobs, {
+        batchSize,
+        dryRun,
+        maxCostUsd,
+        cursor,
+      });
+
+      res.json({
+        success: true,
+        mode: dryRun ? "DRY_RUN" : "LIVE_BACKFILL",
+        progress,
+      });
     } catch (err: any) {
       sendHttpError(res, err, req);
     }

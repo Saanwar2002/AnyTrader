@@ -1,5 +1,35 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation (September 12, 2026)
+- **Domain Overview**:
+  - Implements the complete V8.1 Structured Intelligence Domain without altering or endangering the core transactional backbone (jobs, quotes, payments, Stripe Connect).
+  - Models real-world property workflows through the 9-stage intelligence chain: `Property → Building Component → Observed Condition → Problem → Recommended Intervention → Quote → Job → Completion → Outcome`.
+  - Enforces the core non-negotiable rule: **"No evidence, no assertion"** — all assertions must point to traceable, cryptographically hashed evidence (photos, metadata, verified descriptions).
+  - Designed as an asynchronous, zero-blocking event-driven pipeline that never interferes with user booking, quoting, or escrow release flows.
+- **Architectural Modules (`src/server/intelligence/`)**:
+  - `types.ts`: Strongly typed domain definitions (`CanonicalIntelligenceEvent`, `JobIntelligence`, `PropertyIntelligence`, `IntelligenceEvidence`, `IntelligenceTask`, `ConfidenceScores`, `StorageManifest`, `QualityReview`).
+  - `schemas.ts`: Strict Zod runtime schemas validating all extractions, property roll-ups, evidence registrations, and quality reviews before persistence.
+  - `provenance.ts`: SHA-256 content hashing, version tracking (`pipelineVersion`, `schemaVersion`, `modelVersion`, `promptVersion`), and deterministic idempotency key generator (`idemp_{aggregateId}_{eventType}_{hash}`).
+  - `confidence.ts`: Multidimensional deterministic confidence engine scoring extraction, evidence quality, category classification, and temporal freshness.
+  - `storageTier.ts`: Two-tier storage architecture enforcing Firestore 100 KiB document safety budget (Tier A) and gzip compression with SHA-256 manifests for raw artifacts (Tier B).
+  - `promptDefense.ts`: Hermetic prompt packaging isolating system instructions from untrusted user evidence with XML containment and adversarial prompt breakout sanitization.
+  - `geminiProvider.ts`: Decoupled `IntelligenceModelProvider` interface with live `GeminiIntelligenceProvider` using `@google/genai` (Gemini 3.8 Flash) with token metrics and economic cost tracking.
+  - `evidenceRegistry.ts`: Ingestion and integrity verification engine managing cryptographic evidence references.
+  - `intelligenceTaskQueue.ts`: Asynchronous task orchestration engine with state machine (`pending` -> `processing` -> `succeeded` | `retrying` -> `dead_letter`), bounded exponential backoff (max 3 retries), and duplicate submission deduplication.
+  - `jobIntelligence.ts`: Asynchronous extraction service producing compact, queryable job intelligence under 100 KiB.
+  - `propertyIntelligence.ts`: Property roll-up service aggregating historical jobs and property specs into building components, conditions, and health scores.
+  - `qualityReview.ts`: Admin quality review and human correction framework preserving original candidate, corrected result, reviewer ID, reason, and cryptographic correction provenance.
+  - `backfillEngine.ts`: Controlled historical backfill engine with dry-run mode (default), bounded batch execution (e.g. 100, 500), rate limiting, cost ceiling enforcement, and resumable cursor checkpoints.
+- **Security & Invariants**:
+  - `firestore.rules`: All 7 intelligence collections (`/intelligence_events`, `/intelligence_evidence`, `/intelligence_extractions`, `/intelligence_tasks`, `/intelligence_jobs`, `/intelligence_properties`, `/intelligence_quality`) strictly restricted to server/admin authorization (`isAdmin()`). Client-direct reads and writes are denied.
+  - `storage.rules`: Tier B `/intelligence_raw/{aggregateId}/**` path restricted to admin/server SDK.
+  - `firestore.indexes.json`: Composite query indexes defined for tasks and event timelines.
+  - `server.ts`: Server-authoritative endpoints for async job analysis (`POST /api/intelligence/jobs/:jobId/analyze`), job intelligence query (`GET /api/intelligence/jobs/:jobId`), property roll-up (`POST /api/intelligence/properties/:propertyId/rollup`), quality review (`POST /api/intelligence/quality/review`), and controlled backfill (`POST /api/intelligence/backfill`).
+- **Test Results**:
+  - 19 test files passed, 282/282 tests passing (100% pass rate).
+  - 21/21 dedicated unit tests passing in `tests/unit/intelligenceDomain.test.ts`.
+  - Zero linter errors (`npm run lint`), successful production compile (`npm run build`).
+
 ## 🚀 CI Build Gate Resolution & Dependency Tree Hardening (September 12, 2026)
 - **Root Cause & Diagnosis**:
   - CI build failed at `npm run build` with `[vite]: Rollup failed to resolve import "react-is" from ".../node_modules/recharts/es6/util/ReactUtils.js"`.

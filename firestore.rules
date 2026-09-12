@@ -1068,5 +1068,32 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+
+    // ==========================================
+    // V8.1 STRUCTURED INTELLIGENCE SECURITY BOUNDARY
+    // Server-Authoritative / Admin Only
+    // Public and ordinary client reads/writes strictly DENIED
+    // ==========================================
+    match /intelligence_events/{eventId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_evidence/{evidenceId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_extractions/{extractionId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_tasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_jobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_properties/{propertyId} {
+      allow read, write: if isAdmin();
+    }
+    match /intelligence_quality/{qualityId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

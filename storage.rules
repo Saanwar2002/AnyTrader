@@ -220,7 +220,13 @@ service firebase.storage {
       allow write: if isVehicleParticipant(vehicleId) && isValidMedia();
     }
 
-    // 10. Default Deny on all other paths
+    // 10. V8.1 Structured Intelligence Raw Storage (Tier B)
+    // Server/Admin SDK writes directly. Client reads and writes are DENIED.
+    match /intelligence_raw/{aggregateId}/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // 11. Default Deny on all other paths
     match /{allPaths=**} {
       allow read, write: if false;
     }
