@@ -59,6 +59,13 @@ import {
 import {
   controlledBackfillEngine,
 } from '../../src/server/intelligence/backfillEngine';
+import {
+  immutableIntelligenceStore,
+  getSummaryCollectionName,
+} from '../../src/server/intelligence/immutableStore';
+import {
+  buildVersionId,
+} from '../../src/server/intelligence/provenance';
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
@@ -1311,6 +1318,401 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const data = taskSnap.data()!;
       expect(data.status).toBe('succeeded');
       expect(data.attempts).toBe(1);
+    });
+  });
+
+  // ==========================================================
+  // 9. TASK 7A IMMUTABLE INTELLIGENCE PERSISTENCE & CONCURRENCY
+  // ==========================================================
+  describe('9. Task 7A Immutable Intelligence Persistence & Concurrency Invariants (Emulator)', () => {
+    function createRealFirestoreStoreDb(modularDb: any) {
+      return {
+        collection(name: string) {
+          const colRef = collection(modularDb, name);
+          return {
+            doc(id: string) {
+              const docRef = doc(modularDb, name, id);
+              return {
+                colName: name,
+                id,
+                get: async () => {
+                  const snap = await getDoc(docRef);
+                  return {
+                    id: snap.id,
+                    exists: snap.exists(),
+                    data: () => snap.data(),
+                  };
+                },
+                set: async (data: any, options?: { merge?: boolean }) => {
+                  if (options?.merge) {
+                    await setDoc(docRef, data, { merge: true });
+                  } else {
+                    await setDoc(docRef, data);
+                  }
+                },
+                update: async (data: any) => updateDoc(docRef, data),
+              };
+            },
+            where(field: string, op: any, val: any) {
+              return {
+                get: async () => {
+                  const q = query(colRef, where(field, op, val));
+                  const snap = await getDocs(q);
+                  return {
+                    empty: snap.empty,
+                    docs: snap.docs.map((d) => ({
+                      id: d.id,
+                      data: () => d.data(),
+                    })),
+                  };
+                },
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
+          return runTransaction(modularDb, async (tx) => {
+            const txWrapper = {
+              get: async (refObj: any) => {
+                const docRef = doc(modularDb, refObj.colName, refObj.id);
+                const snap = await tx.get(docRef);
+                return {
+                  id: snap.id,
+                  exists: snap.exists(),
+                  data: () => snap.data(),
+                };
+              },
+              set: (refObj: any, data: any, options?: { merge?: boolean }) => {
+                const docRef = doc(modularDb, refObj.colName, refObj.id);
+                if (options?.merge) {
+                  tx.set(docRef, data, { merge: true });
+                } else {
+                  tx.set(docRef, data);
+                }
+              },
+              update: (refObj: any, data: any) => {
+                const docRef = doc(modularDb, refObj.colName, refObj.id);
+                tx.update(docRef, data);
+              },
+            };
+            return await updateFunction(txWrapper);
+          });
+        },
+      };
+    }
+
+    it('proves atomic creation of identical historical extractions under high concurrency (3 concurrent workers, 1 created, 2 idempotent successes)', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store', { role: 'admin', admin: true }).firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+      const versionId = buildVersionId('job', 'job_concurrent_100', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+
+      const confidence = { overall: 0.95, extraction: 0.95, evidenceQuality: 0.95, classification: 0.95, temporalFreshness: 0.95, method: 'deterministic_heuristic' as const };
+      const provenance = { source: 'user', evidenceIds: ['ev_con_1'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_con_1' };
+
+      const extractionPayload = {
+        extractionId: `ext_job_concurrent_100_1`,
+        versionId,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_concurrent_100',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        sourceVersion: 1,
+        provider: 'google_genai',
+        createdAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        rawManifest: { sha256: 'hcon', encoding: 'gzip' as const, originalBytes: 15, compressedBytes: 15, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_con', createdAt: new Date().toISOString() },
+        structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe Concurrent' },
+        evidenceIds: ['ev_con_1'],
+        confidence,
+        provenance,
+      };
+
+      const eventPayload = {
+        eventId: `ie_ev_con_1`,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_concurrent_100',
+        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        createdAt: new Date().toISOString(),
+        source: 'jobs/job_concurrent_100',
+        evidenceIds: ['ev_con_1'],
+        confidence,
+        provenance,
+        status: 'valid' as const,
+        payload: { category: 'Plumbing' },
+      };
+
+      const summaryPayload = {
+        jobId: 'job_concurrent_100',
+        currentVersionId: versionId,
+        category: 'Plumbing',
+        buildingComponent: 'Pipe',
+        observedProblem: 'Burst Pipe Concurrent',
+        extractedScope: ['Fix pipe'],
+        recommendedIntervention: 'Replace pipe',
+        evidenceIds: ['ev_con_1'],
+        confidence,
+        provenance,
+        pipelineVersion: 'v8.1',
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Launch 3 concurrent persistence calls against real Firestore emulator
+      const results = await Promise.all([
+        immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_concurrent_100',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        }),
+        immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_concurrent_100',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        }),
+        immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_concurrent_100',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        }),
+      ]);
+
+      expect(results.length).toBe(3);
+      const newCount = results.filter((r) => r.isNew).length;
+      const idempotentCount = results.filter((r) => !r.isNew).length;
+
+      expect(newCount).toBe(1);
+      expect(idempotentCount).toBe(2);
+
+      // Verify Firestore emulator document exists
+      const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+      expect(docSnap.exists()).toBe(true);
+      expect(docSnap.data()?.versionId).toBe(versionId);
+    });
+
+    it('proves atomic transaction rejects race condition attempt to overwrite historical extraction with different content with [Intelligence Immutability Error]', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store2', { role: 'admin', admin: true }).firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+      const versionId = buildVersionId('job', 'job_immutability_200', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+
+      const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+      const provenance = { source: 'user', evidenceIds: ['ev_200'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_200' };
+
+      const originalExtraction = {
+        extractionId: `ext_job_immutability_200_1`,
+        versionId,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_immutability_200',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        sourceVersion: 1,
+        provider: 'google_genai',
+        createdAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        rawManifest: { sha256: 'h200', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_200', createdAt: new Date().toISOString() },
+        structuredCandidate: { category: 'Roofing', problem: 'Original Roof Leak' },
+        evidenceIds: ['ev_200'],
+        confidence,
+        provenance,
+      };
+
+      const eventPayload = {
+        eventId: `ie_ev_200`,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_immutability_200',
+        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        createdAt: new Date().toISOString(),
+        source: 'jobs/job_immutability_200',
+        evidenceIds: ['ev_200'],
+        confidence,
+        provenance,
+        status: 'valid' as const,
+        payload: { category: 'Roofing' },
+      };
+
+      const summaryPayload = {
+        jobId: 'job_immutability_200',
+        currentVersionId: versionId,
+        category: 'Roofing',
+        buildingComponent: 'Roof',
+        observedProblem: 'Original Roof Leak',
+        extractedScope: ['Fix roof'],
+        recommendedIntervention: 'Tile replacement',
+        evidenceIds: ['ev_200'],
+        confidence,
+        provenance,
+        pipelineVersion: 'v8.1',
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 1. Initial write creates historical extraction
+      const res1 = await immutableIntelligenceStore.persistOutput({
+        db: storeDb,
+        aggregateType: 'job',
+        aggregateId: 'job_immutability_200',
+        versionId,
+        extraction: originalExtraction,
+        event: eventPayload,
+        summaryProjection: summaryPayload,
+      });
+      expect(res1.isNew).toBe(true);
+
+      // 2. Race attempt to write different content under same versionId must be rejected
+      const tamperedExtraction = {
+        ...originalExtraction,
+        structuredCandidate: { category: 'Roofing', problem: 'TAMPERED ROOF LEAK' },
+      };
+
+      await expect(
+        immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_immutability_200',
+          versionId,
+          extraction: tamperedExtraction,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        })
+      ).rejects.toThrow(/\[Intelligence Immutability Error\] Cannot mutate historical intelligence version/);
+
+      // Verify original content in Firestore was NOT mutated
+      const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+      expect(docSnap.data()?.structuredCandidate?.problem).toBe('Original Roof Leak');
+    });
+
+    it('proves atomic creation updates active pointer for generalized aggregates (e.g. contractor)', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store3', { role: 'admin', admin: true }).firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+      const versionId = buildVersionId('contractor' as any, 'contractor_300', 1, 'v8.1', 'gemini-3.7-flash', 'contractor_extraction_v8.1', '1.0.0');
+
+      expect(getSummaryCollectionName('contractor' as any)).toBe('intelligence_contractors');
+
+      const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+      const provenance = { source: 'user', evidenceIds: ['ev_300'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_300' };
+
+      const extractionPayload = {
+        extractionId: `ext_contractor_300_1`,
+        versionId,
+        aggregateType: 'contractor' as any,
+        aggregateId: 'contractor_300',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'contractor_extraction_v8.1',
+        sourceVersion: 1,
+        provider: 'google_genai',
+        createdAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        rawManifest: { sha256: 'h300', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_300', createdAt: new Date().toISOString() },
+        structuredCandidate: { trade: 'Electrical', rating: 4.9 },
+        evidenceIds: ['ev_300'],
+        confidence,
+        provenance,
+      };
+
+      const eventPayload = {
+        eventId: `ie_ev_300`,
+        aggregateType: 'contractor' as any,
+        aggregateId: 'contractor_300',
+        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'contractor_extraction_v8.1',
+        createdAt: new Date().toISOString(),
+        source: 'contractors/contractor_300',
+        evidenceIds: ['ev_300'],
+        confidence,
+        provenance,
+        status: 'valid' as const,
+        payload: { trade: 'Electrical' },
+      };
+
+      const summaryPayload = {
+        contractorId: 'contractor_300',
+        currentVersionId: versionId,
+        trade: 'Electrical',
+        rating: 4.9,
+      };
+
+      const result = await immutableIntelligenceStore.persistOutput({
+        db: storeDb,
+        aggregateType: 'contractor' as any,
+        aggregateId: 'contractor_300',
+        versionId,
+        extraction: extractionPayload,
+        event: eventPayload,
+        summaryProjection: summaryPayload,
+      });
+
+      expect(result.isNew).toBe(true);
+
+      // Read intelligence_contractors/contractor_300 from Firestore emulator
+      const summarySnap = await getDoc(doc(adminDb, 'intelligence_contractors', 'contractor_300'));
+      expect(summarySnap.exists()).toBe(true);
+      expect(summarySnap.data()?.currentVersionId).toBe(versionId);
+      expect(summarySnap.data()?.trade).toBe('Electrical');
+    });
+
+    it('proves production store fails closed when Firestore database is unavailable / null without falling back to in-memory Map', async () => {
+      const versionId = 'fail_closed_ver_400';
+
+      const extractionPayload: any = {
+        extractionId: 'ext_400',
+        versionId,
+        aggregateType: 'job',
+        aggregateId: 'job_400',
+      };
+      const eventPayload: any = { eventId: 'ev_400' };
+      const summaryPayload: any = { jobId: 'job_400' };
+
+      // Attempting to persist without a DB fails closed
+      await expect(
+        immutableIntelligenceStore.persistOutput({
+          db: null,
+          aggregateType: 'job',
+          aggregateId: 'job_400',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        })
+      ).rejects.toThrow(/\[ImmutableStore\] Firestore database is not configured or ready. Operational failure \(Fail Closed\)\./);
+
+      // Attempting to read without a DB fails closed
+      await expect(
+        immutableIntelligenceStore.getVersionById(null, versionId)
+      ).rejects.toThrow(/\[ImmutableStore\] Firestore database is not configured or ready. Operational failure \(Fail Closed\)\./);
+
+      await expect(
+        immutableIntelligenceStore.getVersionsForAggregate(null, 'job', 'job_400')
+      ).rejects.toThrow(/\[ImmutableStore\] Firestore database is not configured or ready. Operational failure \(Fail Closed\)\./);
+
+      await expect(
+        immutableIntelligenceStore.getCurrentPointer(null, 'job', 'job_400')
+      ).rejects.toThrow(/\[ImmutableStore\] Firestore database is not configured or ready. Operational failure \(Fail Closed\)\./);
     });
   });
 });

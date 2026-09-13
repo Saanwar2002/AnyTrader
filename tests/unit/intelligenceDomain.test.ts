@@ -1020,8 +1020,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
     it('creates immutable extraction records via store without mutating previous versions', async () => {
       const { immutableIntelligenceStore } = await import('../../src/server/intelligence/immutableStore');
       const { buildVersionId } = await import('../../src/server/intelligence/provenance');
+      const { createInMemoryTestDb } = await import('../../src/server/intelligence/testDoubles');
 
-      immutableIntelligenceStore.clear();
+      const testDb = createInMemoryTestDb();
 
       const versionId1 = buildVersionId('job', 'job_888', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
 
@@ -1041,7 +1042,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         provider: 'google_genai',
         createdAt: new Date().toISOString(),
         generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: 'h1', encoding: 'gzip', originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path1', createdAt: new Date().toISOString() },
+        rawManifest: { sha256: 'h1', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path1', createdAt: new Date().toISOString() },
         structuredCandidate: { category: 'Plumbing', problem: 'Leaking Pipe' },
         evidenceIds: ['ev_1'],
         confidence: confidence1,
@@ -1082,7 +1083,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       };
 
       await immutableIntelligenceStore.persistOutput({
-        db: null,
+        db: testDb,
         aggregateType: 'job',
         aggregateId: 'job_888',
         versionId: versionId1,
@@ -1091,13 +1092,13 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         summaryProjection: summary1,
       });
 
-      const fetched1 = await immutableIntelligenceStore.getVersionById(null, versionId1);
+      const fetched1 = await immutableIntelligenceStore.getVersionById(testDb, versionId1);
       expect(fetched1?.versionId).toBe(versionId1);
       expect(fetched1?.structuredCandidate.problem).toBe('Leaking Pipe');
 
       // Attempting in-place mutation throws error
       await expect(
-        immutableIntelligenceStore.attemptMutateVersion(null, versionId1, { problem: 'Mutated!' })
+        immutableIntelligenceStore.attemptMutateVersion(testDb, versionId1, { problem: 'Mutated!' })
       ).rejects.toThrow(/Direct modification of historical extraction/);
 
       // Create version 2 with sourceVersion 2
@@ -1112,7 +1113,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       };
 
       await immutableIntelligenceStore.persistOutput({
-        db: null,
+        db: testDb,
         aggregateType: 'job',
         aggregateId: 'job_888',
         versionId: versionId2,
@@ -1122,13 +1123,13 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       });
 
       // Both historical versions exist independently and version 1 was NOT mutated
-      const v1Fetch = await immutableIntelligenceStore.getVersionById(null, versionId1);
-      const v2Fetch = await immutableIntelligenceStore.getVersionById(null, versionId2);
+      const v1Fetch = await immutableIntelligenceStore.getVersionById(testDb, versionId1);
+      const v2Fetch = await immutableIntelligenceStore.getVersionById(testDb, versionId2);
 
       expect(v1Fetch?.structuredCandidate.problem).toBe('Leaking Pipe');
       expect(v2Fetch?.structuredCandidate.problem).toBe('Burst Pipe & Flooding');
 
-      const history = await immutableIntelligenceStore.getVersionsForAggregate(null, 'job', 'job_888');
+      const history = await immutableIntelligenceStore.getVersionsForAggregate(testDb, 'job', 'job_888');
       expect(history.length).toBe(2);
     });
 

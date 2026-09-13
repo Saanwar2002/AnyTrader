@@ -10,7 +10,17 @@
  * - Quality Assurance & Human Correction Provenance
  */
 
-export type IntelligenceAggregateType = 'job' | 'property';
+export type CanonicalAggregateType =
+  | 'job'
+  | 'property'
+  | 'contractor'
+  | 'quote'
+  | 'review'
+  | 'material'
+  | 'project'
+  | 'customer_request';
+
+export type IntelligenceAggregateType = CanonicalAggregateType | (string & {});
 
 export type IntelligenceEventType =
   | 'JOB_ANALYSIS_COMPLETED'

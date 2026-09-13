@@ -12,16 +12,18 @@
  *    - New pipelineVersion, modelVersion, sourceVersion, promptVersion, or schemaVersion creates a new independent version.
  *    - Previous historical versions remain permanently untouched.
  * 4. Decoupled Current Active Pointer:
- *    - `intelligence_jobs/{jobId}` and `intelligence_properties/{propertyId}` maintain a mutable pointer
- *      (`currentVersionId`, `currentPipelineVersion`, `currentModelVersion`, `updatedAt`) and projection,
+ *    - Active summary projections (`intelligence_jobs/{jobId}`, `intelligence_properties/{propertyId}`, `intelligence_<aggregateType>s/{aggregateId}`)
+ *      maintain a mutable pointer (`currentVersionId`, `currentPipelineVersion`, `currentModelVersion`, `updatedAt`) and projection,
  *      while historical records in `intelligence_extractions` remain immutable.
  * 5. Atomic Pointer & Version Association:
- *    - Uses atomic batch/transactional writes so the active pointer never references a nonexistent version.
- * 6. Provenance & Audit Trail Preservation:
- *    - Retains full links to evidenceIds, sourceVersion, pipelineVersion, modelVersion, promptVersion, schemaVersion, generatedAt.
+ *    - Uses atomic transactional writes (`runTransaction`) so the active pointer never references a nonexistent version.
+ * 6. Zero Production Memory Fallback:
+ *    - Does NOT fall back to in-memory maps in production. Fails closed if Firestore is unavailable.
+ * 7. Platform-Wide Aggregate Extensibility:
+ *    - Supports any aggregateType ('job', 'property', 'contractor', 'quote', 'review', etc.).
  */
 
-import { computeSha256, computeStructuredDataHash } from './provenance';
+import { computeStructuredDataHash } from './provenance';
 import {
   CanonicalIntelligenceEvent,
   IntelligenceAggregateType,
@@ -43,7 +45,7 @@ export interface PersistIntelligenceOptions {
   versionId: string;
   extraction: IntelligenceExtraction;
   event: CanonicalIntelligenceEvent;
-  summaryProjection: JobIntelligence | PropertyIntelligence;
+  summaryProjection: JobIntelligence | PropertyIntelligence | Record<string, unknown>;
   sourceVersion?: string | number;
 }
 
@@ -54,30 +56,47 @@ export interface PersistIntelligenceResult {
   eventId: string;
 }
 
-export class ImmutableIntelligenceStore {
-  private inMemoryExtractions = new Map<string, IntelligenceExtraction>(); // versionId -> extraction
-  private inMemoryEvents = new Map<string, CanonicalIntelligenceEvent>(); // eventId -> event
-  private inMemorySummaryPointers = new Map<string, JobIntelligence | PropertyIntelligence>(); // aggregateId -> summary
+/**
+ * Global default database instance for the intelligence store.
+ */
+let globalIntelligenceDb: FirestoreDbLike | null = null;
 
+export function setGlobalIntelligenceDb(db: FirestoreDbLike | null): void {
+  globalIntelligenceDb = db;
+}
+
+export function getGlobalIntelligenceDb(): FirestoreDbLike | null {
+  return globalIntelligenceDb;
+}
+
+/**
+ * Derives the collection name for summary active pointers.
+ */
+export function getSummaryCollectionName(aggregateType: IntelligenceAggregateType): string {
+  if (aggregateType === 'job') return 'intelligence_jobs';
+  if (aggregateType === 'property') return 'intelligence_properties';
+  return `intelligence_${aggregateType}s`;
+}
+
+export class ImmutableIntelligenceStore {
   /**
-   * Resets local in-memory stores (for testing)
+   * Resets local state (no-op retained for testing interface compatibility)
    */
   public clear(): void {
-    this.inMemoryExtractions.clear();
-    this.inMemoryEvents.clear();
-    this.inMemorySummaryPointers.clear();
+    // No-op: in-memory maps removed in Task 7A to eliminate silent production fallback.
   }
 
   /**
-   * Persists an intelligence extraction immutably, ensuring:
-   * - No historical record is ever mutated in place.
-   * - Exact duplicate configuration is idempotent (no duplicate versions).
-   * - New versions create independent immutable records.
-   * - Current version pointer is updated atomically.
+   * Persists an intelligence extraction immutably in Firestore using atomic transactions:
+   * - Historical extractions in `intelligence_extractions/{versionId}` are strictly CREATE-ONLY and append-only.
+   * - Identical deterministic versions (same versionId + same content hash) are idempotent (no-op success, updates active pointer).
+   * - Differing content for an existing versionId causes a hard failure transactionally.
+   * - Active summary pointers (`intelligence_jobs/{jobId}`, `intelligence_properties/{propertyId}`, `intelligence_<aggregateType>s/{aggregateId}`)
+   *   are updated atomically within the transaction.
+   * - Zero production memory fallback: Fails closed if Firestore is unavailable.
    */
   public async persistOutput(options: PersistIntelligenceOptions): Promise<PersistIntelligenceResult> {
     const {
-      db,
       aggregateType,
       aggregateId,
       versionId,
@@ -85,6 +104,11 @@ export class ImmutableIntelligenceStore {
       event,
       summaryProjection,
     } = options;
+
+    const db = options.db || globalIntelligenceDb;
+    if (!db) {
+      throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
+    }
 
     if (!versionId) {
       throw new Error('[ImmutableStore] Missing versionId for immutable intelligence persistence');
@@ -101,122 +125,93 @@ export class ImmutableIntelligenceStore {
       candidate: extraction.structuredCandidate,
     });
 
-    const summaryCollectionName = aggregateType === 'job' ? 'intelligence_jobs' : 'intelligence_properties';
+    const summaryCollectionName = getSummaryCollectionName(aggregateType);
 
-    // 1. Check if version already exists in Firestore or memory
-    if (db) {
-      const existingDocRef = db.collection('intelligence_extractions').doc(versionId);
-      const existingSnap = await existingDocRef.get();
+    const extractionRef = db.collection('intelligence_extractions').doc(versionId);
+    const eventRef = db.collection('intelligence_events').doc(event.eventId);
+    const summaryRef = db.collection(summaryCollectionName).doc(aggregateId);
 
-      if (existingSnap && existingSnap.exists) {
-        const existingData = existingSnap.data() as IntelligenceExtraction;
-        const existingHash = computeStructuredDataHash({
-          aggregateId: existingData.aggregateId,
-          aggregateType: existingData.aggregateType,
-          sourceVersion: existingData.sourceVersion,
-          pipelineVersion: existingData.pipelineVersion,
-          modelVersion: existingData.modelVersion,
-          promptVersion: existingData.promptVersion,
-          schemaVersion: existingData.schemaVersion,
-          candidate: existingData.structuredCandidate,
-        });
+    const updatedSummary = {
+      ...summaryProjection,
+      currentVersionId: versionId,
+      currentPipelineVersion: extraction.pipelineVersion,
+      currentModelVersion: extraction.modelVersion,
+      currentSourceVersion: extraction.sourceVersion,
+      currentPromptVersion: extraction.promptVersion,
+      currentSchemaVersion: extraction.schemaVersion,
+      updatedAt: new Date().toISOString(),
+    };
 
-        if (existingHash === extractionHash) {
-          // Idempotent retry: Exact same execution recognized.
-          // Ensure the summary pointer points to this versionId and return without mutating.
-          const summaryRef = db.collection(summaryCollectionName).doc(aggregateId);
-          await summaryRef.set(
-            {
-              ...summaryProjection,
-              currentVersionId: versionId,
-              currentPipelineVersion: extraction.pipelineVersion,
-              currentModelVersion: extraction.modelVersion,
-              currentSourceVersion: extraction.sourceVersion,
-              currentPromptVersion: extraction.promptVersion,
-              currentSchemaVersion: extraction.schemaVersion,
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          );
+    if (typeof db.runTransaction === 'function') {
+      return await db.runTransaction(async (transaction: any) => {
+        const existingSnap = await transaction.get(extractionRef);
 
-          return {
-            versionId,
-            isNew: false,
-            extraction: existingData,
-            eventId: event.eventId,
-          };
-        } else {
-          // Collision or mutation attempt on existing historical version
-          throw new Error(
-            `[Intelligence Immutability Error] Cannot mutate historical intelligence version '${versionId}'. Historical intelligence outputs are append-only.`
-          );
+        if (existingSnap && existingSnap.exists) {
+          const existingData = (typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data) as IntelligenceExtraction;
+          const existingHash = computeStructuredDataHash({
+            aggregateId: existingData.aggregateId,
+            aggregateType: existingData.aggregateType,
+            sourceVersion: existingData.sourceVersion,
+            pipelineVersion: existingData.pipelineVersion,
+            modelVersion: existingData.modelVersion,
+            promptVersion: existingData.promptVersion,
+            schemaVersion: existingData.schemaVersion,
+            candidate: existingData.structuredCandidate,
+          });
+
+          if (existingHash === extractionHash) {
+            // Idempotent retry: Exact same execution recognized.
+            // Transactionally update summary pointer and return existing extraction.
+            transaction.set(summaryRef, updatedSummary, { merge: true });
+            return {
+              versionId,
+              isNew: false,
+              extraction: existingData,
+              eventId: event.eventId,
+            };
+          } else {
+            // Collision or mutation attempt on existing historical version -> HARD FAILURE
+            throw new Error(
+              `[Intelligence Immutability Error] Cannot mutate historical intelligence version '${versionId}'. Historical intelligence outputs are append-only.`
+            );
+          }
         }
-      }
 
-      // 2. Perform atomic creation in Firestore using batch write
-      if (typeof db.batch === 'function') {
-        const batch = db.batch();
-        const extractionRef = db.collection('intelligence_extractions').doc(versionId);
-        const eventRef = db.collection('intelligence_events').doc(event.eventId);
-        const summaryRef = db.collection(summaryCollectionName).doc(aggregateId);
+        // Atomic create-only transaction write
+        transaction.set(extractionRef, extraction);
+        transaction.set(eventRef, event);
+        transaction.set(summaryRef, updatedSummary, { merge: true });
 
-        batch.set(extractionRef, extraction);
-        batch.set(eventRef, event);
-        batch.set(
-          summaryRef,
-          {
-            ...summaryProjection,
-            currentVersionId: versionId,
-            currentPipelineVersion: extraction.pipelineVersion,
-            currentModelVersion: extraction.modelVersion,
-            currentSourceVersion: extraction.sourceVersion,
-            currentPromptVersion: extraction.promptVersion,
-            currentSchemaVersion: extraction.schemaVersion,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-
-        await batch.commit();
-      } else {
-        // Direct write sequence if batch is not implemented on mock
-        await db.collection('intelligence_extractions').doc(versionId).set(extraction);
-        await db.collection('intelligence_events').doc(event.eventId).set(event);
-        await db.collection(summaryCollectionName).doc(aggregateId).set(
-          {
-            ...summaryProjection,
-            currentVersionId: versionId,
-            currentPipelineVersion: extraction.pipelineVersion,
-            currentModelVersion: extraction.modelVersion,
-            currentSourceVersion: extraction.sourceVersion,
-            currentPromptVersion: extraction.promptVersion,
-            currentSchemaVersion: extraction.schemaVersion,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      }
+        return {
+          versionId,
+          isNew: true,
+          extraction,
+          eventId: event.eventId,
+        };
+      });
     }
 
-    // 3. In-memory storage handling (and local cache mirror)
-    if (this.inMemoryExtractions.has(versionId)) {
-      const existingInMemory = this.inMemoryExtractions.get(versionId)!;
+    // Fallback for mock db objects that do not provide runTransaction
+    const existingSnap = await extractionRef.get();
+    if (existingSnap && existingSnap.exists) {
+      const existingData = (typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data) as IntelligenceExtraction;
       const existingHash = computeStructuredDataHash({
-        aggregateId: existingInMemory.aggregateId,
-        aggregateType: existingInMemory.aggregateType,
-        sourceVersion: existingInMemory.sourceVersion,
-        pipelineVersion: existingInMemory.pipelineVersion,
-        modelVersion: existingInMemory.modelVersion,
-        promptVersion: existingInMemory.promptVersion,
-        schemaVersion: existingInMemory.schemaVersion,
-        candidate: existingInMemory.structuredCandidate,
+        aggregateId: existingData.aggregateId,
+        aggregateType: existingData.aggregateType,
+        sourceVersion: existingData.sourceVersion,
+        pipelineVersion: existingData.pipelineVersion,
+        modelVersion: existingData.modelVersion,
+        promptVersion: existingData.promptVersion,
+        schemaVersion: existingData.schemaVersion,
+        candidate: existingData.structuredCandidate,
       });
 
       if (existingHash === extractionHash) {
+        await summaryRef.set(updatedSummary, { merge: true });
         return {
           versionId,
           isNew: false,
-          extraction: existingInMemory,
+          extraction: existingData,
           eventId: event.eventId,
         };
       } else {
@@ -226,19 +221,17 @@ export class ImmutableIntelligenceStore {
       }
     }
 
-    // Store frozen immutable records locally
-    this.inMemoryExtractions.set(versionId, Object.freeze({ ...extraction }));
-    this.inMemoryEvents.set(event.eventId, Object.freeze({ ...event }));
-    this.inMemorySummaryPointers.set(aggregateId, {
-      ...summaryProjection,
-      currentVersionId: versionId,
-      currentPipelineVersion: extraction.pipelineVersion,
-      currentModelVersion: extraction.modelVersion,
-      currentSourceVersion: extraction.sourceVersion,
-      currentPromptVersion: extraction.promptVersion,
-      currentSchemaVersion: extraction.schemaVersion,
-      updatedAt: new Date().toISOString(),
-    });
+    if (typeof db.batch === 'function') {
+      const batch = db.batch();
+      batch.set(extractionRef, extraction);
+      batch.set(eventRef, event);
+      batch.set(summaryRef, updatedSummary, { merge: true });
+      await batch.commit();
+    } else {
+      await extractionRef.set(extraction);
+      await eventRef.set(event);
+      await summaryRef.set(updatedSummary, { merge: true });
+    }
 
     return {
       versionId,
@@ -249,74 +242,81 @@ export class ImmutableIntelligenceStore {
   }
 
   /**
-   * Retrieves all historical intelligence versions for a specific aggregate
+   * Retrieves all historical intelligence versions for a specific aggregate.
+   * Fails closed if Firestore database is unavailable.
    */
   public async getVersionsForAggregate(
     db: FirestoreDbLike | null,
     aggregateType: IntelligenceAggregateType,
     aggregateId: string
   ): Promise<IntelligenceExtraction[]> {
-    if (db) {
-      const snap = await db
-        .collection('intelligence_extractions')
-        .where('aggregateId', '==', aggregateId)
-        .where('aggregateType', '==', aggregateType)
-        .get();
-
-      if (snap && snap.docs) {
-        return snap.docs.map((d: any) => (typeof d.data === 'function' ? d.data() : d));
-      }
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
 
-    // In-memory lookup
-    const list: IntelligenceExtraction[] = [];
-    for (const item of this.inMemoryExtractions.values()) {
-      if (item.aggregateId === aggregateId && item.aggregateType === aggregateType) {
-        list.push(item);
-      }
+    const snap = await effectiveDb
+      .collection('intelligence_extractions')
+      .where('aggregateId', '==', aggregateId)
+      .where('aggregateType', '==', aggregateType)
+      .get();
+
+    if (snap && snap.docs) {
+      const docs = snap.docs.map((d: any) => (typeof d.data === 'function' ? d.data() : d.data || d));
+      return docs.sort((a: IntelligenceExtraction, b: IntelligenceExtraction) =>
+        (a.createdAt || '').localeCompare(b.createdAt || '')
+      );
     }
-    return list.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    return [];
   }
 
   /**
-   * Retrieves a single historical intelligence version by versionId
+   * Retrieves a single historical intelligence version by versionId.
+   * Fails closed if Firestore database is unavailable.
    */
   public async getVersionById(
     db: FirestoreDbLike | null,
     versionId: string
   ): Promise<IntelligenceExtraction | null> {
-    if (db) {
-      const docSnap = await db.collection('intelligence_extractions').doc(versionId).get();
-      if (docSnap && docSnap.exists) {
-        return docSnap.data() as IntelligenceExtraction;
-      }
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
-    return this.inMemoryExtractions.get(versionId) || null;
+
+    const docSnap = await effectiveDb.collection('intelligence_extractions').doc(versionId).get();
+    if (docSnap && docSnap.exists) {
+      return (typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data) as IntelligenceExtraction;
+    }
+    return null;
   }
 
   /**
-   * Retrieves the current summary pointer for an aggregate
+   * Retrieves the current summary pointer for an aggregate.
+   * Fails closed if Firestore database is unavailable.
    */
   public async getCurrentPointer(
     db: FirestoreDbLike | null,
     aggregateType: IntelligenceAggregateType,
     aggregateId: string
-  ): Promise<JobIntelligence | PropertyIntelligence | null> {
-    const colName = aggregateType === 'job' ? 'intelligence_jobs' : 'intelligence_properties';
-    if (db) {
-      const docSnap = await db.collection(colName).doc(aggregateId).get();
-      if (docSnap && docSnap.exists) {
-        return docSnap.data();
-      }
+  ): Promise<JobIntelligence | PropertyIntelligence | Record<string, unknown> | null> {
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
-    return this.inMemorySummaryPointers.get(aggregateId) || null;
+
+    const colName = getSummaryCollectionName(aggregateType);
+    const docSnap = await effectiveDb.collection(colName).doc(aggregateId).get();
+    if (docSnap && docSnap.exists) {
+      return typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data;
+    }
+    return null;
   }
 
   /**
-   * Attempting an in-place update on a historical extraction must be explicitly rejected.
+   * Attempting an in-place update on a historical extraction is strictly prohibited.
    */
   public async attemptMutateVersion(
-    db: FirestoreDbLike | null,
+    _db: FirestoreDbLike | null,
     versionId: string,
     _mutatedPayload: Record<string, unknown>
   ): Promise<void> {
