@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Run Firebase Security Rules Emulator Tests
+      - name: Run Firebase Security Rules & Real Firestore Emulator Concurrency Tests
         run: npm run test:security-rules
 
       - name: Run Unit & Pen-Testing Suite

@@ -13,6 +13,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run --exclude tests/unit/firebaseEmulatorSecurityRules.test.ts",
     "test:security-rules": "firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorSecurityRules.test.ts tests/unit/firebaseEmulatorIntelligenceV81.test.ts'",
+    "test:emulator-concurrency": "firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorIntelligenceV81.test.ts'",
     "audit:release": "tsx scripts/final-release-audit.mjs"
   },
   "dependencies": {

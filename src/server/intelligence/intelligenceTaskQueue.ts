@@ -375,52 +375,6 @@ export class IntelligenceTaskQueue {
     }
   }
 
-  /**
-   * Synchronous claimTask method delegating to atomic logic
-   */
-  public claimTask(
-    taskId: string,
-    workerId: string = this.workerId,
-    leaseDurationMs: number = this.defaultLeaseDurationMs
-  ): boolean {
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-
-    if (
-      task.status === 'succeeded' ||
-      task.status === 'dead_letter' ||
-      (task.status as string) === 'cancelled' ||
-      (task.attempts || 0) >= (task.maxAttempts || this.maxRetries)
-    ) {
-      return false;
-    }
-
-    const now = Date.now();
-    const isLeaseExpired = task.leaseExpiresAt ? new Date(task.leaseExpiresAt).getTime() <= now : true;
-    const canClaim =
-      task.status === 'pending' ||
-      (task.status === 'retrying' && (!task.nextAttemptAt || new Date(task.nextAttemptAt).getTime() <= now)) ||
-      (task.status === 'processing' && isLeaseExpired);
-
-    if (!canClaim) return false;
-
-    const nowIso = new Date(now).toISOString();
-    task.status = 'processing';
-    task.attempts += 1;
-    task.startedAt = nowIso;
-    task.workerId = workerId;
-    task.leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
-    task.updatedAt = nowIso;
-    this.tasks.set(taskId, task);
-
-    if (this.firestoreDb) {
-      this.claimTaskTransactional(taskId, workerId, leaseDurationMs).catch((err) => {
-        console.error(`[IntelligenceTaskQueue] Async claim sync error for ${taskId}:`, err);
-      });
-    }
-
-    return true;
-  }
 
   /**
    * Recovers stale tasks synchronously (memory cache only)

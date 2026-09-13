@@ -40,6 +40,10 @@ import {
   deleteDoc,
   collection,
   getDocs,
+  runTransaction,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -620,6 +624,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect((queue as any).enqueueTask).toBeUndefined();
     });
 
+    it('Test D2: The removed synchronous claimTask() API is not available', () => {
+      const queue = new IntelligenceTaskQueue();
+      expect((queue as any).claimTask).toBeUndefined();
+    });
+
     it('Test E: getByIdempotencyKeyAsync() rejects when Firestore is unavailable, preventing backfill from silently switching to memory', async () => {
       const queue = new IntelligenceTaskQueue();
       await expect(
@@ -1075,6 +1084,198 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       // The other worker did not run handler and saw either processing or succeeded
       const otherRes = executedBy === 'worker-A' ? resB : resA;
       expect(['processing', 'succeeded']).toContain(otherRes.status);
+    });
+  });
+
+  // ==========================================================
+  // 8. REAL FIRESTORE EMULATOR CONCURRENCY & ATOMIC CLAIMING (CI WIRED)
+  // ==========================================================
+  describe('8. Real Firestore Emulator Concurrency & Atomic Claiming (CI Wired)', () => {
+    function createRealFirestoreTaskDb(modularDb: any) {
+      return {
+        collection(name: string) {
+          const colRef = collection(modularDb, name);
+          return {
+            doc(id: string) {
+              const docRef = doc(modularDb, name, id);
+              return {
+                id,
+                get: async () => {
+                  const snap = await getDoc(docRef);
+                  return {
+                    id: snap.id,
+                    exists: snap.exists(),
+                    data: () => snap.data(),
+                  };
+                },
+                set: async (data: any) => setDoc(docRef, data),
+                update: async (data: any) => updateDoc(docRef, data),
+              };
+            },
+            where(field: string, op: any, val: any) {
+              return {
+                limit(count: number) {
+                  return {
+                    get: async () => {
+                      const q = query(colRef, where(field, op, val), limit(count));
+                      const snap = await getDocs(q);
+                      return {
+                        empty: snap.empty,
+                        docs: snap.docs.map((d) => ({
+                          id: d.id,
+                          data: () => d.data(),
+                        })),
+                      };
+                    },
+                  };
+                },
+                get: async () => {
+                  const q = query(colRef, where(field, op, val));
+                  const snap = await getDocs(q);
+                  return {
+                    empty: snap.empty,
+                    docs: snap.docs.map((d) => ({
+                      id: d.id,
+                      data: () => d.data(),
+                    })),
+                  };
+                },
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
+          return runTransaction(modularDb, async (tx) => {
+            const txWrapper = {
+              get: async (refObj: any) => {
+                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
+                const snap = await tx.get(docRef);
+                return {
+                  id: snap.id,
+                  exists: snap.exists(),
+                  data: () => snap.data(),
+                };
+              },
+              set: (refObj: any, data: any) => {
+                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
+                tx.set(docRef, data);
+              },
+              update: (refObj: any, data: any) => {
+                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
+                tx.update(docRef, data);
+              },
+            };
+            return await updateFunction(txWrapper);
+          });
+        },
+      };
+    }
+
+    it('proves real Firestore emulator atomic claiming under high concurrency (3 concurrent workers, 1 winner)', async () => {
+      if (!testEnv) return;
+
+      const adminDb = testEnv.authenticatedContext('admin_emu_worker', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_emu_race_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // Seed initial pending task in real Firestore emulator
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
+      const queueC = new IntelligenceTaskQueue(3, 300000, 'emu-worker-C');
+
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+      queueC.setFirestoreDb(firestoreTaskDb as any);
+
+      // Concurrently race 3 workers via real Firestore transactions on the emulator
+      const results = await Promise.all([
+        queueA.claimTaskTransactional(taskId, 'emu-worker-A', 60000),
+        queueB.claimTaskTransactional(taskId, 'emu-worker-B', 60000),
+        queueC.claimTaskTransactional(taskId, 'emu-worker-C', 60000),
+      ]);
+
+      // Exactly ONE worker must have claimed the task
+      const successCount = results.filter(Boolean).length;
+      expect(successCount).toBe(1);
+
+      // Read state back from real Firestore emulator
+      const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+      expect(taskSnap.exists()).toBe(true);
+      const data = taskSnap.data()!;
+      expect(data.status).toBe('processing');
+      expect(data.attempts).toBe(1);
+      expect(['emu-worker-A', 'emu-worker-B', 'emu-worker-C']).toContain(data.workerId);
+    });
+
+    it('proves real Firestore emulator atomic executeTask() prevents duplicate handler execution under race', async () => {
+      if (!testEnv) return;
+
+      const adminDb = testEnv.authenticatedContext('admin_emu_worker_exec', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_emu_exec_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // Seed initial pending task in real Firestore emulator
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
+
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+
+      let handlerCalls = 0;
+      let winningWorker = '';
+
+      queueA.registerHandler('job_extraction', async (task) => {
+        handlerCalls++;
+        winningWorker = task.workerId || 'emu-worker-A';
+        return { extracted: true, worker: 'A' };
+      });
+
+      queueB.registerHandler('job_extraction', async (task) => {
+        handlerCalls++;
+        winningWorker = task.workerId || 'emu-worker-B';
+        return { extracted: true, worker: 'B' };
+      });
+
+      // Concurrently execute task on both workers against real Firestore emulator
+      const [resA, resB] = await Promise.all([
+        queueA.executeTask(taskId),
+        queueB.executeTask(taskId),
+      ]);
+
+      // Exactly ONE handler execution occurred
+      expect(handlerCalls).toBe(1);
+      expect(['emu-worker-A', 'emu-worker-B']).toContain(winningWorker);
+
+      // Verify that real Firestore emulator recorded the succeeded state
+      const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+      expect(taskSnap.exists()).toBe(true);
+      const data = taskSnap.data()!;
+      expect(data.status).toBe('succeeded');
+      expect(data.attempts).toBe(1);
     });
   });
 });
