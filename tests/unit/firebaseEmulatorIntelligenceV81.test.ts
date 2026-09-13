@@ -82,9 +82,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           port: 9199,
         },
       });
-    } catch {
-      // If emulator is not running in pure unit-test mode, we test local & transactional logic
-      testEnv = null;
+    } catch (err) {
+      console.error('FATAL ERROR: Failed to initialize Firebase Emulator test environment for V8.1 suite!', err);
+      throw new Error(
+        'FATAL: Firebase Emulator is not running or unreachable! V8.1 Intelligence Emulator suite requires live Firestore (127.0.0.1:8080) and Storage (127.0.0.1:9199) emulators. It must fail hard instead of silently skipping.'
+      );
     }
   });
 
@@ -95,10 +97,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   });
 
   beforeEach(async () => {
-    if (testEnv) {
-      await testEnv.clearFirestore();
-      await testEnv.clearStorage();
+    if (!testEnv) {
+      throw new Error('FATAL: Firebase Emulator test environment not initialized for V8.1 suite.');
     }
+    await testEnv.clearFirestore();
+    await testEnv.clearStorage();
     evidenceRegistry.clear();
   });
 
@@ -118,8 +121,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     ];
 
     it('rejects unauthenticated read and write across all intelligence collections', async () => {
-      if (!testEnv) return;
-      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      const unauthDb = testEnv!.unauthenticatedContext().firestore();
 
       for (const colName of intelligenceCollections) {
         const docRef = doc(unauthDb, colName, 'test_doc_1');
@@ -129,8 +131,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('rejects ordinary authenticated non-admin user read and write across all intelligence collections', async () => {
-      if (!testEnv) return;
-      const userDb = testEnv.authenticatedContext('user_bob', { role: 'customer' }).firestore();
+      const userDb = testEnv!.authenticatedContext('user_bob', { role: 'customer' }).firestore();
 
       for (const colName of intelligenceCollections) {
         const docRef = doc(userDb, colName, 'test_doc_2');
@@ -140,8 +141,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('allows platform admin to create and read intelligence documents', async () => {
-      if (!testEnv) return;
-      const adminDb = testEnv.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
+      const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
       for (const colName of intelligenceCollections) {
         const docRef = doc(adminDb, colName, 'valid_doc_1');
@@ -151,7 +151,6 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('enforces historical immutability: admin cannot update or delete events, evidence, extractions, quality', async () => {
-      if (!testEnv) return;
       const immutableCollections = [
         'intelligence_events',
         'intelligence_evidence',
@@ -159,7 +158,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         'intelligence_quality',
       ];
 
-      const adminDb = testEnv.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
+      const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
       for (const colName of immutableCollections) {
         const docRef = doc(adminDb, colName, 'immutable_doc_1');
@@ -173,7 +172,6 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('prevents deletion of tasks, jobs, properties, and backfill runs to protect audit trails', async () => {
-      if (!testEnv) return;
       const auditCollections = [
         'intelligence_tasks',
         'intelligence_jobs',
@@ -181,7 +179,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         'intelligence_backfill_runs',
       ];
 
-      const adminDb = testEnv.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
+      const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
       for (const colName of auditCollections) {
         const docRef = doc(adminDb, colName, 'audit_doc_1');
@@ -199,9 +197,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('2. Storage Rules for Raw Intelligence (Emulator)', () => {
     it('denies unauthenticated and standard users direct write to raw intelligence paths', async () => {
-      if (!testEnv) return;
-      const unauthStorage = testEnv.unauthenticatedContext().storage();
-      const userStorage = testEnv.authenticatedContext('user_carol', { role: 'customer' }).storage();
+      const unauthStorage = testEnv!.unauthenticatedContext().storage();
+      const userStorage = testEnv!.authenticatedContext('user_carol', { role: 'customer' }).storage();
 
       const rawRefUnauth = unauthStorage.ref('intelligence_raw/job_123/payload.json.gz');
       const rawRefUser = userStorage.ref('intelligence_raw/job_123/payload.json.gz');
@@ -1172,9 +1169,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     }
 
     it('proves real Firestore emulator atomic claiming under high concurrency (3 concurrent workers, 1 winner)', async () => {
-      if (!testEnv) return;
-
-      const adminDb = testEnv.authenticatedContext('admin_emu_worker', { role: 'admin', admin: true }).firestore();
+      const adminDb = testEnv!.authenticatedContext('admin_emu_worker', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
       const taskId = `task_emu_race_${Date.now()}`;
@@ -1220,9 +1215,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('proves real Firestore emulator atomic executeTask() prevents duplicate handler execution under race', async () => {
-      if (!testEnv) return;
-
-      const adminDb = testEnv.authenticatedContext('admin_emu_worker_exec', { role: 'admin', admin: true }).firestore();
+      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_exec', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
       const taskId = `task_emu_exec_${Date.now()}`;

@@ -1,6 +1,14 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
+- **V8.1 Firebase Emulator Suite Hardening & CI Real Emulator Execution (Task 3)**:
+  - **Eliminated Silent Skips**: Refactored `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` so that it **fails hard** when the Firebase Emulator is unavailable or unreachable instead of catching initialization errors and silently skipping tests.
+  - **Removed All Early Returns**: Stripped out all `if (!testEnv) return;` statements across Section 1 (Firestore security rules), Section 2 (Storage security rules), and Section 8 (real multi-worker transactional concurrency & atomic claim races). All emulator tests now assert directly against `testEnv!`.
+  - **Fail-Hard Invariant Verified**: Tested and verified that executing `npx vitest run tests/unit/firebaseEmulatorIntelligenceV81.test.ts` without an active emulator immediately triggers a fatal failure in `beforeAll` (`FATAL: Firebase Emulator is not running or unreachable! V8.1 Intelligence Emulator suite requires live Firestore (127.0.0.1:8080) and Storage (127.0.0.1:9199) emulators. It must fail hard instead of silently skipping.`) and terminates with exit code 1.
+  - **CI Pipeline Execution (`.github/workflows/ci.yml` & `package.json`)**:
+    - Step `Run Firebase Security Rules & Real Firestore Emulator Concurrency Tests` in `.github/workflows/ci.yml` executes `npm run test:security-rules`, which launches `firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run tests/unit/firebaseEmulatorSecurityRules.test.ts tests/unit/firebaseEmulatorIntelligenceV81.test.ts'` in an environment with Java 21 (`setup-java@v4`).
+    - Configured `npm test` to run all 19 offline unit & pen-testing suites deterministically without port conflicts (`vitest run --exclude tests/unit/firebaseEmulatorSecurityRules.test.ts --exclude tests/unit/firebaseEmulatorIntelligenceV81.test.ts`). Added `"test:emulator"` script alias.
+    - Verified all 295 unit & pen-testing tests pass with 100% pass rate (`npm test`), `npm run audit:release` passes cleanly (0 critical failures), `npm run lint` passes with 0 errors, and `npm run build` succeeds.
 - **V8.1 Task Queue Hardening (Fail-Closed Production Invariants, Synchronous Claim Removal & Real Firestore Emulator CI Concurrency Suite)**:
   - Eliminated the remaining synchronous `claimTask()` API from `IntelligenceTaskQueue` so all task claiming operations exclusively execute through the Firestore-authoritative asynchronous transactional path (`claimTaskTransactional`). The synchronous method is completely undefined (`expect((queue as any).claimTask).toBeUndefined()`).
   - Eliminated the unsafe synchronous `enqueueTask()` method and background in-memory `processNext` loop to prevent accidental in-memory-only task creation.
