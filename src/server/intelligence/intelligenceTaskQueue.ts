@@ -43,11 +43,29 @@ export class IntelligenceTaskQueue {
   private isWorkerRunning = false;
   private workerIntervalTimer: NodeJS.Timeout | null = null;
   private firestoreDb: FirestoreTaskDb | null = null;
+  private workerId: string;
 
   constructor(
     private maxRetries: number = 3,
-    private defaultLeaseDurationMs: number = 300000 // 5 minutes
-  ) {}
+    private defaultLeaseDurationMs: number = 300000, // 5 minutes
+    workerId?: string
+  ) {
+    this.workerId = workerId || `worker_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  /**
+   * Gets the worker identifier for this queue instance
+   */
+  public getWorkerId(): string {
+    return this.workerId;
+  }
+
+  /**
+   * Sets the worker identifier for this queue instance
+   */
+  public setWorkerId(id: string): void {
+    this.workerId = id;
+  }
 
   /**
    * Sets the authoritative Firestore database instance for durable task persistence
@@ -148,7 +166,7 @@ export class IntelligenceTaskQueue {
     const tasks = await this.getRunnableTasksFromFirestore(10);
     for (const task of tasks) {
       try {
-        await this.executeTask(task.taskId, false);
+        await this.executeTask(task.taskId);
       } catch (error) {
         console.error(`[IntelligenceTaskQueue] Worker failed for task ${task.taskId}:`, error);
       }
@@ -264,9 +282,8 @@ export class IntelligenceTaskQueue {
    */
   public async claimTaskTransactional(
     taskId: string,
-    workerId: string = `worker_${Math.random().toString(36).slice(2, 8)}`,
-    leaseDurationMs: number = this.defaultLeaseDurationMs,
-    force: boolean = false
+    workerId: string = this.workerId,
+    leaseDurationMs: number = this.defaultLeaseDurationMs
   ): Promise<boolean> {
     if (!this.firestoreDb) {
       throw new Error("Firestore task store is not ready");
@@ -289,10 +306,24 @@ export class IntelligenceTaskQueue {
         }
 
         const data = docSnap.data() as IntelligenceTask;
+
+        // Completed, dead-letter, or cancelled tasks cannot be claimed
+        if (
+          data.status === 'succeeded' ||
+          data.status === 'dead_letter' ||
+          (data.status as string) === 'cancelled'
+        ) {
+          return false;
+        }
+
+        const maxAttempts = data.maxAttempts || this.maxRetries;
+        if ((data.attempts || 0) >= maxAttempts) {
+          return false;
+        }
+
         const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= now : true;
 
         const canClaim =
-          force ||
           data.status === 'pending' ||
           (data.status === 'retrying' && (!data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now)) ||
           (data.status === 'processing' && isLeaseExpired);
@@ -329,7 +360,7 @@ export class IntelligenceTaskQueue {
           payload: {},
         };
         local.status = 'processing';
-        local.attempts += 1;
+        local.attempts = (local.attempts || 0) + 1;
         local.startedAt = nowIso;
         local.workerId = workerId;
         local.leaseExpiresAt = leaseExpiresAt;
@@ -349,17 +380,24 @@ export class IntelligenceTaskQueue {
    */
   public claimTask(
     taskId: string,
-    workerId: string = `worker_${Math.random().toString(36).slice(2, 8)}`,
-    leaseDurationMs: number = this.defaultLeaseDurationMs,
-    force: boolean = false
+    workerId: string = this.workerId,
+    leaseDurationMs: number = this.defaultLeaseDurationMs
   ): boolean {
     const task = this.tasks.get(taskId);
     if (!task) return false;
 
+    if (
+      task.status === 'succeeded' ||
+      task.status === 'dead_letter' ||
+      (task.status as string) === 'cancelled' ||
+      (task.attempts || 0) >= (task.maxAttempts || this.maxRetries)
+    ) {
+      return false;
+    }
+
     const now = Date.now();
     const isLeaseExpired = task.leaseExpiresAt ? new Date(task.leaseExpiresAt).getTime() <= now : true;
     const canClaim =
-      force ||
       task.status === 'pending' ||
       (task.status === 'retrying' && (!task.nextAttemptAt || new Date(task.nextAttemptAt).getTime() <= now)) ||
       (task.status === 'processing' && isLeaseExpired);
@@ -376,7 +414,7 @@ export class IntelligenceTaskQueue {
     this.tasks.set(taskId, task);
 
     if (this.firestoreDb) {
-      this.claimTaskTransactional(taskId, workerId, leaseDurationMs, force).catch((err) => {
+      this.claimTaskTransactional(taskId, workerId, leaseDurationMs).catch((err) => {
         console.error(`[IntelligenceTaskQueue] Async claim sync error for ${taskId}:`, err);
       });
     }
@@ -560,20 +598,37 @@ export class IntelligenceTaskQueue {
   }
 
   /**
-   * Executes a single task step through its handler with guaranteed atomic claim protection.
+   * Executes a single task step through its handler with authoritative Firestore lease & ownership gating.
+   * 
+   * Invariants:
+   * - A worker MUST NEVER execute a task merely because it knows the taskId.
+   * - Execution is only allowed if the task is successfully claimed or already legitimately owned
+   *   by the executing worker with an active lease.
+   * - If the claim fails (e.g. active lease owned by another worker, completed, retry not due),
+   *   the handler MUST NOT execute.
+   * - No force or bypass parameter exists.
    */
-  public async executeTask(taskId: string, force: boolean = true): Promise<IntelligenceTask> {
+  public async executeTask(
+    taskId: string,
+    workerId?: string
+  ): Promise<IntelligenceTask> {
     if (!this.firestoreDb) {
       throw new Error("Firestore task store is not ready");
     }
 
+    const effectiveWorkerId = (typeof workerId === 'string' && workerId) ? workerId : this.workerId;
     let task = await this.getTaskAsync(taskId);
 
     if (!task) {
       throw new Error(`[TaskQueue Error] Task ${taskId} not found`);
     }
 
-    if (task.status === 'succeeded' || task.status === 'dead_letter') {
+    // Terminal or cancelled tasks must never execute
+    if (
+      task.status === 'succeeded' ||
+      task.status === 'dead_letter' ||
+      (task.status as string) === 'cancelled'
+    ) {
       return task;
     }
 
@@ -599,13 +654,35 @@ export class IntelligenceTaskQueue {
       return task;
     }
 
-    // Guaranteed transactional claim check
-    if (task.status !== 'processing') {
-      const claimed = await this.claimTaskTransactional(taskId, undefined, this.defaultLeaseDurationMs, force);
+    // Lease & Ownership verification:
+    // If the task is already processing, execution is allowed ONLY if the current worker legitimately owns the active lease.
+    const now = Date.now();
+    const isOwnerWithActiveLease =
+      task.status === 'processing' &&
+      task.workerId === effectiveWorkerId &&
+      !!task.leaseExpiresAt &&
+      new Date(task.leaseExpiresAt).getTime() > now;
+
+    if (!isOwnerWithActiveLease) {
+      // Must atomically claim the task in Firestore before handler can execute.
+      const claimed = await this.claimTaskTransactional(taskId, effectiveWorkerId, this.defaultLeaseDurationMs);
       if (!claimed) {
+        // A failed claim MUST mean: DO NOT EXECUTE THE HANDLER.
         return (await this.getTaskAsync(taskId)) || task;
       }
       task = (await this.getTaskAsync(taskId)) || task;
+    }
+
+    // Final boundary guard: Handler invocation occurs ONLY after verified ownership and active lease.
+    const verifiedNow = Date.now();
+    const verifiedOwner =
+      task.status === 'processing' &&
+      task.workerId === effectiveWorkerId &&
+      !!task.leaseExpiresAt &&
+      new Date(task.leaseExpiresAt).getTime() > verifiedNow;
+
+    if (!verifiedOwner) {
+      return task;
     }
 
     const startTime = Date.now();
@@ -663,6 +740,7 @@ export class IntelligenceTaskQueue {
       }
       task.updatedAt = new Date().toISOString();
       delete task.leaseExpiresAt;
+      delete task.workerId;
 
       await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
         status: task.status,
@@ -672,6 +750,7 @@ export class IntelligenceTaskQueue {
         errorCode: task.errorCode,
         error: task.error,
         updatedAt: task.updatedAt,
+        workerId: null,
       });
 
       this.tasks.set(taskId, task);

@@ -315,8 +315,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       queueB.setFirestoreDb(mockDb as any);
 
       const [claimedA, claimedB] = await Promise.all([
-        queueA.claimTaskTransactional(taskId, 'worker_A', 60000, false),
-        queueB.claimTaskTransactional(taskId, 'worker_B', 60000, false),
+        queueA.claimTaskTransactional(taskId, 'worker_A', 60000),
+        queueB.claimTaskTransactional(taskId, 'worker_B', 60000),
       ]);
 
       // Exactly one worker must succeed in claiming the task
@@ -766,6 +766,315 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       await expect(
         queue.getRunnableTasksFromFirestore()
       ).rejects.toThrow('PERMISSION_DENIED');
+    });
+  });
+
+  describe('7. Task 2: Execute-Task Lease & Ownership Hardening', () => {
+    // Helper to create mockDb with atomic transactional isolation
+    const createTransactionalMockDb = () => {
+      const mockDocs = new Map<string, any>();
+      // Mutex for atomic transaction serialization
+      let lockPromise = Promise.resolve();
+
+      const mockDb = {
+        collection(colName: string) {
+          return {
+            doc(id: string) {
+              const fullKey = id;
+              return {
+                id,
+                get: async () => ({
+                  exists: mockDocs.has(fullKey),
+                  data: () => mockDocs.get(fullKey),
+                }),
+                set: async (data: any) => {
+                  mockDocs.set(fullKey, { ...data });
+                },
+                update: async (data: any) => {
+                  mockDocs.set(fullKey, { ...mockDocs.get(fullKey), ...data });
+                },
+              };
+            },
+            where(field: string, op: string, val: any) {
+              return {
+                get: async () => {
+                  const docs: any[] = [];
+                  for (const [id, doc] of mockDocs.entries()) {
+                    if (doc[field] === val) {
+                      docs.push({ id, data: () => doc });
+                    }
+                  }
+                  return { empty: docs.length === 0, docs };
+                },
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          // Mutex chain ensuring atomic serial execution matching Firestore's lock manager
+          const currentLock = lockPromise;
+          let releaseLock: () => void;
+          lockPromise = new Promise<void>((resolve) => {
+            releaseLock = resolve;
+          });
+
+          await currentLock;
+          try {
+            const transaction = {
+              get: async (ref: any) => ref.get(),
+              update: (ref: any, data: any) => ref.update(data),
+              set: (ref: any, data: any) => ref.set(data),
+            };
+            return await fn(transaction);
+          } finally {
+            releaseLock!();
+          }
+        },
+      };
+
+      return { mockDb, mockDocs };
+    };
+
+    it('TEST 1: Claim required - calling executeTask(taskId) claims task before handler executes', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-1');
+      queue.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_claim_required_1';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        payload: { title: 'Test Job' },
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerSawStatus = '';
+      let handlerSawWorker = '';
+      let handlerSawLease: string | undefined = undefined;
+
+      queue.registerHandler('job_extraction', async (task) => {
+        handlerSawStatus = task.status;
+        handlerSawWorker = task.workerId || '';
+        handlerSawLease = task.leaseExpiresAt;
+        return { extracted: true };
+      });
+
+      const result = await queue.executeTask(taskId);
+
+      expect(handlerSawStatus).toBe('processing');
+      expect(handlerSawWorker).toBe('worker-1');
+      expect(handlerSawLease).toBeDefined();
+      expect(new Date(handlerSawLease!).getTime()).toBeGreaterThan(Date.now());
+      expect(result.status).toBe('succeeded');
+    });
+
+    it('TEST 2: Active lease prevents second worker - claim fails and handler is NOT called', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_active_lease_worker_A';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        workerId: 'worker-A',
+        leaseExpiresAt: new Date(Date.now() + 120000).toISOString(),
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerCalled = false;
+      queueB.registerHandler('job_extraction', async () => {
+        handlerCalled = true;
+        return { shouldNotHappen: true };
+      });
+
+      await queueB.executeTask(taskId);
+
+      expect(handlerCalled).toBe(false);
+      const fsTask = mockDocs.get(taskId);
+      expect(fsTask.status).toBe('processing');
+      expect(fsTask.workerId).toBe('worker-A');
+    });
+
+    it('TEST 3: No force bypass - no API parameter or backdoor allows bypassing claiming or lease ownership', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_owned_by_worker_A';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        workerId: 'worker-A',
+        leaseExpiresAt: new Date(Date.now() + 120000).toISOString(),
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerCalled = false;
+      queueB.registerHandler('job_extraction', async () => {
+        handlerCalled = true;
+        return { bypassed: true };
+      });
+
+      // Attempt previous unsafe signature executeTask(taskId, true)
+      await (queueB as any).executeTask(taskId, true);
+
+      // Must NOT execute handler
+      expect(handlerCalled).toBe(false);
+      expect(mockDocs.get(taskId).workerId).toBe('worker-A');
+      expect(mockDocs.get(taskId).status).toBe('processing');
+    });
+
+    it('TEST 4: Completed task cannot execute - executeTask returns without invoking handler', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-1');
+      queue.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_completed_1';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'succeeded',
+        completedAt: new Date().toISOString(),
+        attempts: 1,
+        maxAttempts: 3,
+        payload: { done: true },
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerCalled = false;
+      queue.registerHandler('job_extraction', async () => {
+        handlerCalled = true;
+        return { doneAgain: true };
+      });
+
+      const res = await queue.executeTask(taskId);
+
+      expect(handlerCalled).toBe(false);
+      expect(res.status).toBe('succeeded');
+    });
+
+    it('TEST 5: Retry-not-due cannot execute - nextAttemptAt in future prevents claiming and handler execution', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-1');
+      queue.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_retry_future_1';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'retrying',
+        nextAttemptAt: new Date(Date.now() + 300000).toISOString(), // 5 minutes in future
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerCalled = false;
+      queue.registerHandler('job_extraction', async () => {
+        handlerCalled = true;
+        return { retryExecutedEarly: true };
+      });
+
+      const res = await queue.executeTask(taskId);
+
+      expect(handlerCalled).toBe(false);
+      expect(res.status).toBe('retrying');
+    });
+
+    it('TEST 6: Stale lease behaviour - expired processing task executes only after legitimate reclamation', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+      queue.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_stale_lease_1';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        workerId: 'crashed_worker',
+        leaseExpiresAt: new Date(Date.now() - 30000).toISOString(), // Expired 30 seconds ago
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      let handlerCalled = false;
+      let executingWorker = '';
+      queue.registerHandler('job_extraction', async (task) => {
+        handlerCalled = true;
+        executingWorker = task.workerId || '';
+        return { recovered: true };
+      });
+
+      // Execute task - since lease is expired, worker-recovery legitimately reclaims it via transaction
+      const res = await queue.executeTask(taskId);
+
+      expect(handlerCalled).toBe(true);
+      expect(executingWorker).toBe('worker-recovery');
+      expect(res.status).toBe('succeeded');
+      expect(mockDocs.get(taskId).status).toBe('succeeded');
+    });
+
+    it('TEST 7: Concurrent claim - exactly ONE worker claims and executes handler among concurrent workers', async () => {
+      const { mockDb, mockDocs } = createTransactionalMockDb();
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueA.setFirestoreDb(mockDb as any);
+      queueB.setFirestoreDb(mockDb as any);
+
+      const taskId = 'task_concurrent_claim_race';
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      let totalHandlerCalls = 0;
+      let executedBy = '';
+
+      queueA.registerHandler('job_extraction', async () => {
+        totalHandlerCalls++;
+        executedBy = 'worker-A';
+        return { by: 'A' };
+      });
+
+      queueB.registerHandler('job_extraction', async () => {
+        totalHandlerCalls++;
+        executedBy = 'worker-B';
+        return { by: 'B' };
+      });
+
+      // Both workers attempt to execute the exact same pending task simultaneously
+      const [resA, resB] = await Promise.all([
+        queueA.executeTask(taskId),
+        queueB.executeTask(taskId),
+      ]);
+
+      // Exactly ONE handler execution
+      expect(totalHandlerCalls).toBe(1);
+      expect(['worker-A', 'worker-B']).toContain(executedBy);
+
+      // The winner transitioned the task to succeeded
+      const finalDoc = mockDocs.get(taskId);
+      expect(finalDoc.status).toBe('succeeded');
+      expect(finalDoc.attempts).toBe(1);
+
+      // The other worker did not run handler and saw either processing or succeeded
+      const otherRes = executedBy === 'worker-A' ? resB : resA;
+      expect(['processing', 'succeeded']).toContain(otherRes.status);
     });
   });
 });

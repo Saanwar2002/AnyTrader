@@ -495,10 +495,16 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(r1.attempts).toBe(1);
       expect(r1.nextRetryAt).toBeDefined();
 
+      // Retry time arrives for attempt 2
+      mockDocs.get(`intelligence_tasks/${task.taskId}`).nextAttemptAt = new Date(Date.now() - 1000).toISOString();
+
       // Attempt 2: retrying
       const r2 = await intelligenceTaskQueue.executeTask(task.taskId);
       expect(r2.status).toBe('retrying');
       expect(r2.attempts).toBe(2);
+
+      // Retry time arrives for attempt 3
+      mockDocs.get(`intelligence_tasks/${task.taskId}`).nextAttemptAt = new Date(Date.now() - 1000).toISOString();
 
       // Attempt 3: terminal dead_letter
       const r3 = await intelligenceTaskQueue.executeTask(task.taskId);
