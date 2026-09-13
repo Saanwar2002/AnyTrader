@@ -4662,22 +4662,18 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     try {
       const { batchSize = 50, dryRun = true, maxCostUsd = 5.0, cursor } = req.body;
 
-      let progress;
-      if (db) {
-        progress = await controlledBackfillEngine.executeFirestoreBackfill(db, {
-          batchSize,
-          dryRun,
-          maxCostUsd,
-          cursor,
-        });
-      } else {
-        progress = await controlledBackfillEngine.executeBackfill([], {
-          batchSize,
-          dryRun,
-          maxCostUsd,
-          cursor,
+      if (!db) {
+        return res.status(503).json({
+          error: "Service Unavailable: Firestore database instance required for production backfill execution",
         });
       }
+
+      const progress = await controlledBackfillEngine.executeFirestoreBackfill(db, {
+        batchSize,
+        dryRun,
+        maxCostUsd,
+        cursor,
+      });
 
       res.json({
         success: true,

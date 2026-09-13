@@ -2,13 +2,28 @@
  * AnyTrader V8.1 — Controlled Historical Backfill Engine
  * 
  * Invariants:
- * - Never runs automatically on startup/deployment.
- * - Dry-run mode by default.
- * - Task-First Pattern: Enqueues intelligence task before running extraction.
- * - No Direct Fallback Bypass: If task execution fails, it records an error and NEVER bypasses the queue.
- * - Durable Checkpointing: Persists run status and checkpoint cursor to /intelligence_backfill_runs/{runId}.
- * - Deterministic, Ordered Queries: Ordered query on source collection with bounded batch sizes.
- * - Resumable execution via cursor checkpointing.
+ * - Authoritative Production Architecture:
+ *     Firestore source data
+ *           ↓
+ *     durable backfill run (/intelligence_backfill_runs)
+ *           ↓
+ *     Firestore cursor/checkpoint
+ *           ↓
+ *     enqueue durable intelligence task
+ *           ↓
+ *     normal task claiming/lease
+ *           ↓
+ *     intelligence handler
+ *           ↓
+ *     durable checkpoint
+ *           ↓
+ *     next batch
+ * - Production execution exclusively uses executeFirestoreBackfill().
+ * - Production backfill MUST NOT load all documents into memory.
+ * - Processing is strictly bounded by batches via Firestore queries (`limit(batchSize)`).
+ * - Progress is persisted to durable Firestore checkpoints on every processed document.
+ * - Restart/resume reads the persisted cursor from Firestore rather than starting from the beginning.
+ * - Legacy in-memory array method is isolated for test compatibility and strictly forbidden in production.
  */
 
 import { buildIdempotencyKey } from './provenance';
@@ -56,12 +71,19 @@ export interface BackfillProgress {
 
 export class ControlledBackfillEngine {
   /**
-   * Runs a controlled, bounded, resumable backfill across historical jobs in an array
+   * @deprecated TEST-ONLY LEGACY IMPLEMENTATION
+   * Strictly forbidden in production. Retained solely for test compatibility.
+   * Production backfill execution MUST use `executeFirestoreBackfill`.
    */
   public async executeBackfill(
     jobs: JobSourceInput[],
     options: BackfillOptions
   ): Promise<BackfillProgress> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[BackfillEngine] executeBackfill is a legacy array-based method and is strictly forbidden in production. Use executeFirestoreBackfill.'
+      );
+    }
     const {
       batchSize = 100,
       dryRun = true,

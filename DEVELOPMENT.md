@@ -1,6 +1,18 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
+- **V8.1 Task 5 — Elimination & Strict Isolation of Legacy Array-Based Backfill Path**:
+  - **Eliminated Production In-Memory Fallback**: Refactored `server.ts` (`POST /api/intelligence/backfill`) to permanently eliminate `controlledBackfillEngine.executeBackfill([], ...)` when Firestore `db` is unavailable. The production backfill route now fails closed immediately with HTTP 503 (`Service Unavailable: Firestore database instance required for production backfill execution`) if `db` is absent, and exclusively invokes `executeFirestoreBackfill(db, ...)`.
+  - **Isolated Legacy Array Backfill**: Marked `executeBackfill()` in `src/server/intelligence/backfillEngine.ts` as `@deprecated @internal` and isolated it with a hard runtime production guard (`if (process.env.NODE_ENV === 'production') throw new Error('[BackfillEngine] executeBackfill is a legacy array-based method and is strictly forbidden in production. Use executeFirestoreBackfill.');`).
+  - **Authoritative Durable Production Flow Enforced**:
+    ```
+    Firestore source data -> durable backfill run (/intelligence_backfill_runs) ->
+    Firestore cursor/checkpoint -> enqueue durable intelligence task ->
+    normal task claiming/lease -> intelligence handler -> durable checkpoint -> next batch
+    ```
+  - **Bounded Memory Safety**: Production backfill exclusively queries bounded batches via Firestore `limit(batchSize)` and `orderBy('__name__')`, persisting progress to `/intelligence_backfill_runs` and checkpointing cursors on every processed record without loading full datasets or arrays into RAM.
+  - **Process Crash Resumability**: Resumes directly from persisted checkpoint cursors using `startAfter(cursorDoc)` on a fresh `ControlledBackfillEngine` instance without reprocessing previous items or rebuilding in-memory state.
+  - **Automated Verification (`tests/unit/task5BackfillDurablePath.test.ts`)**: 6 comprehensive unit tests verifying production path routing, 503 fail-closed behavior on missing db, bounded query limits, multi-batch cursor execution, crash-restart resumption from saved checkpoints, and production throw protections. All 20 unit test suites (303 tests) pass at 100%.
 - **V8.1 Backfill Checkpoint Durability (Eliminating Swallowed Firestore Checkpoint Errors)**:
   - **Eliminated Swallowed Checkpoint Errors**: Hardened `src/server/intelligence/backfillEngine.ts` (`executeFirestoreBackfill`) by eliminating all `catch { /* ignore */ }` and `console.warn` error suppressions on `/intelligence_backfill_runs` operations.
   - **Durable Initialization Enforcement**: If `runRef.set(...)` fails to initialize the backfill run in Firestore (e.g. network timeout, missing credentials, permission denial), it now throws `Error: [BackfillEngine] Checkpoint initialization failed for run '<runId>'` immediately instead of logging a warning and continuing without durable tracking.
