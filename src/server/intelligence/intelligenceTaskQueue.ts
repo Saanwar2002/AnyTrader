@@ -89,15 +89,41 @@ export class IntelligenceTaskQueue {
   }
 
   /**
-   * Starts the background worker loop discovering runnable tasks from Firestore
+   * Checks if a handler is registered for the specified task type
+   */
+  public hasHandler(type: TaskType): boolean {
+    return this.handlers.has(type);
+  }
+
+  /**
+   * Gets list of registered handler task types
+   */
+  public getRegisteredHandlers(): TaskType[] {
+    return Array.from(this.handlers.keys());
+  }
+
+  /**
+   * Starts the background worker loop discovering runnable tasks from Firestore.
+   * Fails closed if Firestore database instance is not configured.
+   * Idempotent if worker is already running.
    */
   public startWorker(pollIntervalMs: number = 5000): void {
     if (this.workerIntervalTimer) return;
+    if (!this.firestoreDb) {
+      throw new Error("[IntelligenceTaskQueue] Cannot start worker: Firestore task store is not configured or not ready.");
+    }
     this.workerIntervalTimer = setInterval(() => {
       this.workerTick().catch((err) => {
         console.error('[IntelligenceTaskQueue] Worker tick error:', err);
       });
     }, pollIntervalMs);
+  }
+
+  /**
+   * Returns whether the background worker is currently running
+   */
+  public isWorkerActive(): boolean {
+    return this.workerIntervalTimer !== null;
   }
 
   /**

@@ -1,6 +1,28 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
+- **V8.1 Task 6 — Startup / Readiness Ordering Hardening & Cloud Run Deployment Resilience**:
+  - **Deterministic Asynchronous Bootstrap Sequence (`src/server/bootstrap.ts`)**:
+    - Centralized startup lifecycle orchestration into a linear, fail-closed bootstrap runner (`runBootstrapSequence`).
+    - Enforces the strict, non-racy dependency execution chain:
+      1. Firebase Admin & Firestore initialization completes (`initFirebase`).
+      2. Firestore readiness verification probe executes (`verifyFirestoreReadiness`).
+      3. Intelligence Task Queue configured with the verified Firestore instance (`setFirestoreDb`).
+      4. Dynamic domain synchronization workers registered and configured (`startSyncWorkers`).
+      5. Required intelligence task handlers registered and verified (`job_extraction`, `property_rollup`).
+      6. Intelligence worker background polling loop starts (`startWorker`).
+      7. Background distributed cron schedulers start (`startBackgroundSchedulers`).
+      8. Matching system starts (`startMatchingSystem`).
+      9. Express HTTP server starts accepting external traffic (`startHttpServer`).
+  - **Cloud Run Deployment & Sandbox Resilience**:
+    - When running in container environments (e.g. Cloud Run deployments) where server-side service account permissions for Admin Firestore are not present or return `PERMISSION_DENIED` (Code 7), `verifyFirestoreReadiness` safely flags the server-side database as dormant, skipping worker polling loops while ensuring the Express HTTP server and SPA client remain fully operational on port 3000.
+    - Removed fatal `process.exit(1)` container exits on non-fatal background warnings, allowing Cloud Run health checks and ingress routing to succeed seamlessly.
+  - **Fail-Closed Guarantees**:
+    - The intelligence background worker is strictly forbidden from starting while Firestore is uninitialized, unavailable, or unverified.
+    - If required intelligence handlers are missing, bootstrap immediately aborts before launching the worker.
+    - `intelligenceTaskQueue.startWorker()` includes direct runtime guard assertions: throws immediately if `firestoreDb` is not configured, and is strictly idempotent (safe against duplicate startup).
+  - **Automated Verification (`tests/unit/task6StartupOrdering.test.ts`)**:
+    - 8 comprehensive unit tests verifying strict startup ordering (`firebaseInit < firestoreVerified < handlersRegistered < workerStarted < httpServerStarted`), startup rejection on invalid initialization configuration, handler readiness verification before worker start, non-racing asynchronous delay handling, idempotency on multiple worker start calls, fail-closed behavior on uninitialized queue, bounded readiness timeout probes, and graceful dormant database handling when server-side credentials are absent. All test suites pass with 100% success rate.
 - **V8.1 Task 5 — Elimination & Strict Isolation of Legacy Array-Based Backfill Path**:
   - **Eliminated Production In-Memory Fallback**: Refactored `server.ts` (`POST /api/intelligence/backfill`) to permanently eliminate `controlledBackfillEngine.executeBackfill([], ...)` when Firestore `db` is unavailable. The production backfill route now fails closed immediately with HTTP 503 (`Service Unavailable: Firestore database instance required for production backfill execution`) if `db` is absent, and exclusively invokes `executeFirestoreBackfill(db, ...)`.
   - **Isolated Legacy Array Backfill**: Marked `executeBackfill()` in `src/server/intelligence/backfillEngine.ts` as `@deprecated @internal` and isolated it with a hard runtime production guard (`if (process.env.NODE_ENV === 'production') throw new Error('[BackfillEngine] executeBackfill is a legacy array-based method and is strictly forbidden in production. Use executeFirestoreBackfill.');`).

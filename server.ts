@@ -39,6 +39,12 @@ import {
   intelligenceTaskQueue,
   buildIdempotencyKey
 } from "./src/server/intelligence/index.ts";
+import {
+  runBootstrapSequence,
+  verifyFirestoreReadiness,
+  verifyIntelligenceHandlersRegistered,
+  BootstrapLifecycleHooks
+} from "./src/server/bootstrap.ts";
 
 dotenv.config();
 
@@ -79,70 +85,62 @@ const startCategoryRegistrySyncWorker = (firestoreDb: admin.firestore.Firestore)
 
 // Initialize Firebase Admin
 let db: admin.firestore.Firestore | null = null;
-const initFirebase = () => {
-  try {
-    // Check if the app is already initialized
-    let app;
-    if (admin.apps.length > 0) {
-      app = admin.apps[0];
-    } else {
-      app = admin.initializeApp({
-        projectId: firebaseConfig.projectId,
-      });
-      console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
-    }
-    
-    // Attempt named database, fallback to default if it fails
-    if (!db) {
-      const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
-      const fallbackDb = () => {
-        if (dbId !== "(default)") {
-          console.warn(`Falling back to (default) database due to issue with: ${dbId}`);
-          db = getFirestore(app, "(default)");
-        }
-      };
 
-      try {
-        db = getFirestore(app, dbId);
-        
-        // Immediate verification
-        db.collection("users").limit(1).get()
-          .then(() => {
-             console.log(`Firestore connected to: ${dbId}`);
-             if (db) {
-               intelligenceTaskQueue.setFirestoreDb(db);
-               startInstantMatchEngine(db);
-               startCategoryRegistrySyncWorker(db);
-               startPublicJobCardsSync(db);
-               startPublicPropertiesSync(db);
-             }
-          })
-          .catch(err => {
-            // Code 7: Permission Denied indicates lack of Service Account credentials
-            if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
-              console.warn("Server-side Firestore disabled: Missing service account permissions in development sandbox.");
-              intelligenceTaskQueue.setFirestoreDb(null);
-              db = null; // Disable DB functions gracefully
-            } else if (err.code === 5 && dbId !== "(default)") {
-              console.warn(`Firestore initialization error (${err.code}): ${err.message}. Triggering fallback...`);
-              fallbackDb();
-            } else {
-              console.error("Firestore initialization error code:", err.code, err.message);
-              intelligenceTaskQueue.setFirestoreDb(null);
-              db = null;
-            }
-          });
-      } catch (e: any) {
-        console.error("Critical Firestore Setup Error:", e.message);
-        intelligenceTaskQueue.setFirestoreDb(null);
-        db = null;
-      }
-    }
-  } catch (error) {
-    console.error("Error during Firebase Admin initialization:", error);
+export async function initializeFirebaseAdminAsync(): Promise<{ app: admin.app.App; db: admin.firestore.Firestore }> {
+  let app: admin.app.App;
+  if (admin.apps.length > 0 && admin.apps[0]) {
+    app = admin.apps[0]!;
+  } else {
+    app = admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+    console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
   }
-};
-initFirebase();
+
+  const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+  let firestoreDb: admin.firestore.Firestore;
+
+  try {
+    firestoreDb = getFirestore(app, dbId);
+  } catch (err: any) {
+    if (dbId !== "(default)") {
+      console.warn(`Falling back to (default) database due to issue with: ${dbId}`);
+      firestoreDb = getFirestore(app, "(default)");
+    } else {
+      throw err;
+    }
+  }
+
+  return { app, db: firestoreDb };
+}
+
+export function registerIntelligenceTaskHandlers(): void {
+  if (intelligenceTaskQueue.hasHandler("job_extraction") && intelligenceTaskQueue.hasHandler("property_rollup")) {
+    return;
+  }
+
+  intelligenceTaskQueue.registerHandler("job_extraction", async (task) => {
+    const { job } = task.payload as { job: any };
+    if (!job) throw new Error("Missing job payload for extraction");
+    const result = await jobIntelligenceService.deriveJobIntelligence(job);
+    if (db) {
+      await db.collection("intelligence_jobs").doc(job.jobId).set(result.jobIntelligence, { merge: true });
+      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+    }
+    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId };
+  });
+
+  intelligenceTaskQueue.registerHandler("property_rollup", async (task) => {
+    const { property, historicalJobs } = task.payload as { property: any; historicalJobs: any[] };
+    if (!property) throw new Error("Missing property payload for rollup");
+    const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
+    if (db) {
+      await db.collection("intelligence_properties").doc(property.propertyId).set(result.propertyIntelligence, { merge: true });
+      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+    }
+    return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId };
+  });
+}
 
 const configCache = new Map<string, any>();
 const cacheUnsubscribers = new Map<string, () => void>();
@@ -2279,9 +2277,7 @@ async function startServer() {
       const { rideId, driverId, tipAmount = 0 } = req.body;
       
       if (!db) {
-        console.warn("Retrying Firebase initialization in route handler...");
-        initFirebase();
-        if (!db) return res.status(500).json({ error: "Database backend disabled" });
+        return res.status(503).json({ error: "Database backend unavailable" });
       }
       
       if (!driverId) return res.status(400).json({ error: "Driver ID is required" });
@@ -4489,27 +4485,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   // ==========================================
 
   // Register task handlers for the async queue
-  intelligenceTaskQueue.registerHandler("job_extraction", async (task) => {
-    const { job } = task.payload as { job: any };
-    if (!job) throw new Error("Missing job payload for extraction");
-    const result = await jobIntelligenceService.deriveJobIntelligence(job);
-    if (db) {
-      await db.collection("intelligence_jobs").doc(job.jobId).set(result.jobIntelligence, { merge: true });
-      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
-    }
-    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId };
-  });
-
-  intelligenceTaskQueue.registerHandler("property_rollup", async (task) => {
-    const { property, historicalJobs } = task.payload as { property: any; historicalJobs: any[] };
-    if (!property) throw new Error("Missing property payload for rollup");
-    const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
-    if (db) {
-      await db.collection("intelligence_properties").doc(property.propertyId).set(result.propertyIntelligence, { merge: true });
-      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
-    }
-    return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId };
-  });
+  registerIntelligenceTaskHandlers();
 
   // Trigger Asynchronous Job Intelligence Analysis
   app.post("/api/intelligence/jobs/:jobId/analyze", requireAuth, async (req, res) => {
@@ -4716,15 +4692,45 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`TradeQuote UK server running on http://localhost:${PORT}`);
-    const preflight = runProductionChecks(process.env, db);
-    console.log(`[V6 Pre-Flight Gate] Overall Status: ${preflight.overallStatus} (${preflight.checks.filter(c => c.status === 'FAIL').length} fails, ${preflight.checks.filter(c => c.status === 'WARN').length} warns)`);
-    // Start background systems with distributed locking
-    startBackgroundSchedulers();
-    startMatchingSystem();
-    intelligenceTaskQueue.startWorker(5000);
+  return new Promise((resolve, reject) => {
+    const serverInstance = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`TradeQuote UK server running on http://localhost:${PORT}`);
+      const preflight = runProductionChecks(process.env, db);
+      console.log(`[V6 Pre-Flight Gate] Overall Status: ${preflight.overallStatus} (${preflight.checks.filter(c => c.status === 'FAIL').length} fails, ${preflight.checks.filter(c => c.status === 'WARN').length} warns)`);
+      resolve(serverInstance);
+    });
+    serverInstance.on("error", (err) => {
+      reject(err);
+    });
   });
 }
 
-startServer();
+export async function bootstrap() {
+  const hooks: BootstrapLifecycleHooks = {
+    initFirebase: initializeFirebaseAdminAsync,
+    verifyFirestore: async (firestoreDb) => {
+      const isReady = await verifyFirestoreReadiness(firestoreDb);
+      return isReady;
+    },
+    queue: intelligenceTaskQueue,
+    registerHandlers: registerIntelligenceTaskHandlers,
+    startWorker: () => intelligenceTaskQueue.startWorker(5000),
+    startSyncWorkers: (firestoreDb) => {
+      db = firestoreDb;
+      startInstantMatchEngine(firestoreDb);
+      startCategoryRegistrySyncWorker(firestoreDb);
+      startPublicJobCardsSync(firestoreDb);
+      startPublicPropertiesSync(firestoreDb);
+    },
+    startBackgroundSchedulers: () => startBackgroundSchedulers(),
+    startMatchingSystem: () => startMatchingSystem(),
+    startHttpServer: () => startServer(),
+  };
+
+  return runBootstrapSequence(hooks);
+}
+
+// Authoritative bootstrap startup
+bootstrap().catch((err) => {
+  console.error("[Bootstrap] Warning during server bootstrap execution:", err);
+});
