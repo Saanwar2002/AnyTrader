@@ -43,6 +43,7 @@ export class QualityReviewService {
       qualityId,
       targetCollection: validated.targetCollection,
       targetId: validated.targetId,
+      targetVersionId: validated.targetVersionId,
       action: validated.action,
       reviewerId: validated.reviewerId,
       reviewedAt: now,

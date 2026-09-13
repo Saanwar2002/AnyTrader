@@ -996,4 +996,171 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(updateAttemptCount).toBeGreaterThanOrEqual(1);
     });
   });
+
+  describe('12. Task 7: Immutable Intelligence Outputs & Explicit Versioning', () => {
+    it('generates deterministic version ID based on aggregate metadata', async () => {
+      const { buildVersionId } = await import('../../src/server/intelligence/provenance');
+      const versionId1 = buildVersionId('job', 'job_777', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+      const versionId2 = buildVersionId('job', 'job_777', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+
+      expect(versionId1).toBe(versionId2);
+      expect(versionId1).toContain('ver_job_job_777_');
+    });
+
+    it('creates different version IDs when model or sourceVersion changes', async () => {
+      const { buildVersionId } = await import('../../src/server/intelligence/provenance');
+      const v1 = buildVersionId('job', 'job_777', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+      const v2 = buildVersionId('job', 'job_777', 2, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+      const v3 = buildVersionId('job', 'job_777', 1, 'v8.1', 'gemini-3.5-pro', 'job_extraction_v8.1', '1.0.0');
+
+      expect(v1).not.toBe(v2);
+      expect(v1).not.toBe(v3);
+    });
+
+    it('creates immutable extraction records via store without mutating previous versions', async () => {
+      const { immutableIntelligenceStore } = await import('../../src/server/intelligence/immutableStore');
+      const { buildVersionId } = await import('../../src/server/intelligence/provenance');
+
+      immutableIntelligenceStore.clear();
+
+      const versionId1 = buildVersionId('job', 'job_888', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+
+      const confidence1 = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+      const provenance1 = { source: 'user', evidenceIds: ['ev_1'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash1' };
+
+      const extraction1 = {
+        extractionId: `ext_job_888_1`,
+        versionId: versionId1,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_888',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        sourceVersion: 1,
+        provider: 'google_genai',
+        createdAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        rawManifest: { sha256: 'h1', encoding: 'gzip', originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path1', createdAt: new Date().toISOString() },
+        structuredCandidate: { category: 'Plumbing', problem: 'Leaking Pipe' },
+        evidenceIds: ['ev_1'],
+        confidence: confidence1,
+        provenance: provenance1,
+      };
+
+      const event1 = {
+        eventId: `ie_ev1`,
+        aggregateType: 'job' as const,
+        aggregateId: 'job_888',
+        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        createdAt: new Date().toISOString(),
+        source: 'jobs/job_888',
+        evidenceIds: ['ev_1'],
+        confidence: confidence1,
+        provenance: provenance1,
+        status: 'valid' as const,
+        payload: { category: 'Plumbing' },
+      };
+
+      const summary1 = {
+        jobId: 'job_888',
+        currentVersionId: versionId1,
+        category: 'Plumbing',
+        buildingComponent: 'Pipe',
+        observedProblem: 'Leaking Pipe',
+        extractedScope: ['Fix pipe'],
+        recommendedIntervention: 'Seal leak',
+        evidenceIds: ['ev_1'],
+        confidence: confidence1,
+        provenance: provenance1,
+        pipelineVersion: 'v8.1',
+        updatedAt: new Date().toISOString(),
+      };
+
+      await immutableIntelligenceStore.persistOutput({
+        db: null,
+        aggregateType: 'job',
+        aggregateId: 'job_888',
+        versionId: versionId1,
+        extraction: extraction1,
+        event: event1,
+        summaryProjection: summary1,
+      });
+
+      const fetched1 = await immutableIntelligenceStore.getVersionById(null, versionId1);
+      expect(fetched1?.versionId).toBe(versionId1);
+      expect(fetched1?.structuredCandidate.problem).toBe('Leaking Pipe');
+
+      // Attempting in-place mutation throws error
+      await expect(
+        immutableIntelligenceStore.attemptMutateVersion(null, versionId1, { problem: 'Mutated!' })
+      ).rejects.toThrow(/Direct modification of historical extraction/);
+
+      // Create version 2 with sourceVersion 2
+      const versionId2 = buildVersionId('job', 'job_888', 2, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+
+      const extraction2 = {
+        ...extraction1,
+        extractionId: `ext_job_888_2`,
+        versionId: versionId2,
+        sourceVersion: 2,
+        structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe & Flooding' },
+      };
+
+      await immutableIntelligenceStore.persistOutput({
+        db: null,
+        aggregateType: 'job',
+        aggregateId: 'job_888',
+        versionId: versionId2,
+        extraction: extraction2,
+        event: { ...event1, eventId: 'ie_ev2' },
+        summaryProjection: { ...summary1, currentVersionId: versionId2, observedProblem: 'Burst Pipe & Flooding' },
+      });
+
+      // Both historical versions exist independently and version 1 was NOT mutated
+      const v1Fetch = await immutableIntelligenceStore.getVersionById(null, versionId1);
+      const v2Fetch = await immutableIntelligenceStore.getVersionById(null, versionId2);
+
+      expect(v1Fetch?.structuredCandidate.problem).toBe('Leaking Pipe');
+      expect(v2Fetch?.structuredCandidate.problem).toBe('Burst Pipe & Flooding');
+
+      const history = await immutableIntelligenceStore.getVersionsForAggregate(null, 'job', 'job_888');
+      expect(history.length).toBe(2);
+    });
+
+    it('derives Job Intelligence with version metadata and currentVersionId pointer', async () => {
+      const ev = evidenceRegistry.register('job', 'job_999', 'user_description', 'jobs/job_999/desc', 'Fixed radiator thermostat in bedroom.', {}, true);
+      const result = await jobIntelligenceService.deriveJobIntelligence(
+        { jobId: 'job_999', title: 'Radiator Fix', description: 'Fixed radiator thermostat in bedroom.' },
+        [ev.evidenceId]
+      );
+
+      expect(result.jobIntelligence.jobId).toBe('job_999');
+      expect(result.versionId).toBeDefined();
+      expect(result.jobIntelligence.currentVersionId).toBe(result.versionId);
+      expect(result.extraction.versionId).toBe(result.versionId);
+      expect(result.event.payload.versionId).toBe(result.versionId);
+    });
+
+    it('derives Property Intelligence with version metadata and currentVersionId pointer', async () => {
+      const ev = evidenceRegistry.register('property', 'prop_999', 'document', 'props/prop_999/doc', 'Roof tiles cracked and leaking damp.', {}, true);
+      const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
+        { propertyId: 'prop_999' },
+        [],
+        [ev.evidenceId]
+      );
+
+      expect(result.propertyIntelligence.propertyId).toBe('prop_999');
+      expect(result.versionId).toBeDefined();
+      expect(result.propertyIntelligence.currentVersionId).toBe(result.versionId);
+      expect(result.extraction.versionId).toBe(result.versionId);
+      expect(result.event.payload.versionId).toBe(result.versionId);
+    });
+  });
+
 });
+

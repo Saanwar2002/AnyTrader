@@ -29,3 +29,4 @@ export * from './jobIntelligence';
 export * from './propertyIntelligence';
 export * from './qualityReview';
 export * from './backfillEngine';
+export * from './immutableStore';

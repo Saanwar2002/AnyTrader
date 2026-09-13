@@ -14,9 +14,9 @@
 import { calculateConfidence } from './confidence';
 import { evidenceRegistry } from './evidenceRegistry';
 import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiProvider';
-import { buildProvenance, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
+import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
-import { CanonicalIntelligenceEvent, JobIntelligence, PropertyIntelligence } from './types';
+import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence, PropertyIntelligence } from './types';
 
 export interface PropertySourceInput {
   propertyId: string;
@@ -24,6 +24,13 @@ export interface PropertySourceInput {
   propertyType?: string;
   epcRating?: string;
   constructionYear?: number;
+  sourceVersion?: string | number;
+  pipelineVersion?: string;
+  promptVersion?: string;
+  modelVersion?: string;
+  schemaVersion?: string;
+  provider?: string;
+  taskId?: string;
   documents?: string[];
   documentObjects?: Array<{
     uri?: string;
@@ -38,7 +45,8 @@ export class PropertyIntelligenceService {
   constructor(private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider()) {}
 
   /**
-   * Aggregates property-level intelligence from historical job intelligence records and property evidence
+   * Aggregates property-level intelligence from historical job intelligence records and property evidence,
+   * producing an immutable extraction record with deterministic version identity.
    */
   public async aggregatePropertyIntelligence(
     property: PropertySourceInput,
@@ -46,7 +54,9 @@ export class PropertyIntelligenceService {
     overrideEvidenceIds?: string[]
   ): Promise<{
     propertyIntelligence: PropertyIntelligence;
+    extraction: IntelligenceExtraction;
     event: CanonicalIntelligenceEvent;
+    versionId: string;
   }> {
     // 1. Gather property-level evidence
     let propertyEvidence = evidenceRegistry.getForAggregate('property', property.propertyId);
@@ -147,8 +157,26 @@ export class PropertyIntelligenceService {
     );
     const candidate = rollupResult.candidate;
 
+    // Determine version identifiers
+    const sourceVersion = property.sourceVersion || '1';
+    const pipelineVersion = property.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION;
+    const modelVersion = property.modelVersion || rollupResult.metrics.model;
+    const promptVersion = property.promptVersion || 'property_rollup_v8.1';
+    const schemaVersion = property.schemaVersion || INTELLIGENCE_SCHEMA_VERSION;
+    const providerName = property.provider || 'google_genai';
+
+    const versionId = buildVersionId(
+      'property',
+      property.propertyId,
+      sourceVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
+      schemaVersion
+    );
+
     // 4. Tier B: Store Raw Model Output Gzip-Compressed
-    const storagePath = `intelligence_raw/property/${property.propertyId}/rollup_${Date.now()}.json.gz`;
+    const storagePath = `intelligence_raw/property/${property.propertyId}/rollup_${versionId}_${Date.now()}.json.gz`;
     const { manifest } = compressPayload(rollupResult.rawResponseText, storagePath);
 
     // 5. Calculate Multidimensional Confidence
@@ -172,16 +200,53 @@ export class PropertyIntelligenceService {
     const provenance = buildProvenance(
       `properties/${property.propertyId}`,
       targetEvidenceIds,
-      rollupResult.metrics.model,
-      'property_rollup_v8.1',
-      provenanceContent
+      modelVersion,
+      promptVersion,
+      provenanceContent,
+      pipelineVersion
     );
 
     const now = new Date().toISOString();
 
-    // 7. Compact Property Intelligence Projection
+    // 7. Immutable Historical Extraction Record
+    const extraction: IntelligenceExtraction = {
+      extractionId: versionId,
+      versionId,
+      taskId: property.taskId,
+      aggregateId: property.propertyId,
+      aggregateType: 'property',
+      sourceAggregateId: property.propertyId,
+      sourceType: 'property',
+      sourceVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
+      schemaVersion,
+      provider: providerName,
+      evidenceIds: targetEvidenceIds,
+      rawManifest: manifest,
+      structuredCandidate: {
+        overallHealthScore: candidate.overallHealthScore,
+        buildingComponents: candidate.buildingComponents,
+        observedConditions: candidate.observedConditions,
+        recommendedInterventions: candidate.recommendedInterventions,
+        derivedFromJobIds: derivedJobIds,
+      },
+      confidence,
+      provenance,
+      generatedAt: now,
+      createdAt: now,
+    };
+
+    // 8. Compact Property Intelligence Projection (Current Active Pointer State)
     const propertyIntelligence: PropertyIntelligence = {
       propertyId: property.propertyId,
+      currentVersionId: versionId,
+      currentPipelineVersion: pipelineVersion,
+      currentModelVersion: modelVersion,
+      currentPromptVersion: promptVersion,
+      currentSchemaVersion: schemaVersion,
+      currentSourceVersion: sourceVersion,
       buildingComponents: candidate.buildingComponents.map((bc) => ({
         component: bc.component,
         condition: bc.condition,
@@ -206,7 +271,7 @@ export class PropertyIntelligenceService {
       overallHealthScore: candidate.overallHealthScore,
       confidence,
       provenance,
-      pipelineVersion: INTELLIGENCE_PIPELINE_VERSION,
+      pipelineVersion,
       updatedAt: now,
     };
 
@@ -216,16 +281,16 @@ export class PropertyIntelligenceService {
       throw new Error(`[PropertyIntelligence Budget Error] Exceeded 100 KiB: ${budgetCheck.actualBytes} bytes`);
     }
 
-    // 8. Canonical Intelligence Event
+    // 9. Canonical Intelligence Event
     const event: CanonicalIntelligenceEvent = {
-      eventId: `ie_prop_${property.propertyId}_${computeSha256(now).slice(0, 10)}`,
+      eventId: `ie_prop_${property.propertyId}_${versionId.slice(4, 16)}_${computeSha256(now).slice(0, 6)}`,
       aggregateType: 'property',
       aggregateId: property.propertyId,
       eventType: 'PROPERTY_ROLLUP_COMPLETED',
-      schemaVersion: INTELLIGENCE_SCHEMA_VERSION,
-      pipelineVersion: INTELLIGENCE_PIPELINE_VERSION,
-      modelVersion: rollupResult.metrics.model,
-      promptVersion: 'property_rollup_v8.1',
+      schemaVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
       createdAt: now,
       source: `properties/${property.propertyId}`,
       evidenceIds: targetEvidenceIds,
@@ -233,6 +298,8 @@ export class PropertyIntelligenceService {
       provenance,
       status: 'valid',
       payload: {
+        versionId,
+        sourceVersion,
         overallHealthScore: candidate.overallHealthScore,
         componentCount: candidate.buildingComponents.length,
         conditionCount: candidate.observedConditions.length,
@@ -243,7 +310,9 @@ export class PropertyIntelligenceService {
 
     return {
       propertyIntelligence,
+      extraction,
       event,
+      versionId,
     };
   }
 }

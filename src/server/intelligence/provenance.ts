@@ -8,7 +8,7 @@
  */
 
 import crypto from 'crypto';
-import { Provenance } from './types';
+import { IntelligenceAggregateType, Provenance } from './types';
 
 export const INTELLIGENCE_PIPELINE_VERSION = 'v8.1.0';
 export const INTELLIGENCE_SCHEMA_VERSION = 'v8.1.0';
@@ -69,6 +69,25 @@ export function buildIdempotencyKey(
   const payload = `${aggregateId}:${eventType}:${sourceVersion}:${pipelineVersion}`;
   const hash = computeSha256(payload);
   return `idemp_${aggregateId}_${eventType}_${hash.slice(0, 16)}`;
+}
+
+/**
+ * Builds a deterministic immutable version ID for intelligence extractions:
+ * sha256(aggregateType + ':' + aggregateId + ':' + sourceVersion + ':' + pipelineVersion + ':' + modelVersion + ':' + promptVersion + ':' + schemaVersion)
+ */
+export function buildVersionId(
+  aggregateType: IntelligenceAggregateType,
+  aggregateId: string,
+  sourceVersion: string | number = '1',
+  pipelineVersion: string = INTELLIGENCE_PIPELINE_VERSION,
+  modelVersion: string = 'gemini-2.5-flash',
+  promptVersion: string = 'v8.1',
+  schemaVersion: string = INTELLIGENCE_SCHEMA_VERSION
+): string {
+  const normSourceVer = String(sourceVersion || '1');
+  const payload = `${aggregateType}:${aggregateId}:${normSourceVer}:${pipelineVersion}:${modelVersion}:${promptVersion}:${schemaVersion}`;
+  const hash = computeSha256(payload);
+  return `ver_${aggregateType}_${aggregateId}_${hash.slice(0, 16)}`;
 }
 
 /**

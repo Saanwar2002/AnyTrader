@@ -121,17 +121,43 @@ export interface CanonicalIntelligenceEvent {
   payload: Record<string, unknown>;
 }
 
-export interface IntelligenceExtraction {
-  extractionId: string;
-  taskId: string;
-  aggregateId: string;
-  aggregateType: IntelligenceAggregateType;
+export interface IntelligenceVersionMetadata {
+  schemaVersion: string;
+  pipelineVersion: string;
   modelVersion: string;
   promptVersion: string;
+  sourceVersion: string | number;
+  generatedAt: string;
+  provider?: string;
+  sourceAggregateId?: string;
+  sourceType?: IntelligenceAggregateType;
+  evidenceIds?: string[];
+  extractionId?: string;
+  versionId?: string;
+  taskId?: string;
+}
+
+export interface IntelligenceExtraction {
+  extractionId: string;
+  versionId: string;
+  taskId?: string;
+  aggregateId: string;
+  aggregateType: IntelligenceAggregateType;
+  sourceAggregateId?: string;
+  sourceType?: IntelligenceAggregateType;
+  sourceVersion: string | number;
+  pipelineVersion: string;
+  modelVersion: string;
+  promptVersion: string;
+  schemaVersion: string;
+  provider: string;
+  evidenceIds: string[];
   rawManifest: StorageManifest;
   structuredCandidate: Record<string, unknown>;
   validationErrors?: string[];
   confidence: ConfidenceScores;
+  provenance: Provenance;
+  generatedAt: string;
   createdAt: string;
 }
 
@@ -181,6 +207,12 @@ export interface IntelligenceTask {
 
 export interface JobIntelligence {
   jobId: string;
+  currentVersionId?: string;
+  currentPipelineVersion?: string;
+  currentModelVersion?: string;
+  currentPromptVersion?: string;
+  currentSchemaVersion?: string;
+  currentSourceVersion?: string | number;
   category: string;
   buildingComponent: string;
   observedProblem: string;
@@ -220,6 +252,12 @@ export interface PropertyRecommendedIntervention {
 
 export interface PropertyIntelligence {
   propertyId: string;
+  currentVersionId?: string;
+  currentPipelineVersion?: string;
+  currentModelVersion?: string;
+  currentPromptVersion?: string;
+  currentSchemaVersion?: string;
+  currentSourceVersion?: string | number;
   buildingComponents: PropertyBuildingComponent[];
   observedConditions: PropertyObservedCondition[];
   recommendedInterventions: PropertyRecommendedIntervention[];
@@ -236,6 +274,7 @@ export interface QualityReview {
   qualityId: string;
   targetCollection: 'intelligence_jobs' | 'intelligence_properties' | 'intelligence_events';
   targetId: string;
+  targetVersionId?: string;
   action: 'approve' | 'reject' | 'correct';
   reviewerId: string;
   reviewedAt: string;

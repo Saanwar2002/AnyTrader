@@ -15,9 +15,9 @@
 import { calculateConfidence } from './confidence';
 import { evidenceRegistry } from './evidenceRegistry';
 import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiProvider';
-import { buildProvenance, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
+import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
-import { CanonicalIntelligenceEvent, JobIntelligence } from './types';
+import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence } from './types';
 
 export interface JobSourceInput {
   jobId: string;
@@ -26,6 +26,13 @@ export interface JobSourceInput {
   category?: string;
   postcode?: string;
   createdAt?: string;
+  sourceVersion?: string | number;
+  pipelineVersion?: string;
+  promptVersion?: string;
+  modelVersion?: string;
+  schemaVersion?: string;
+  provider?: string;
+  taskId?: string;
   photos?: string[];
   photoObjects?: Array<{
     uri?: string;
@@ -48,14 +55,17 @@ export class JobIntelligenceService {
   constructor(private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider()) {}
 
   /**
-   * Derives structured job intelligence from authoritative job data and supporting evidence
+   * Derives structured job intelligence from authoritative job data and supporting evidence,
+   * producing an immutable extraction record with deterministic version identity.
    */
   public async deriveJobIntelligence(
     job: JobSourceInput,
     overrideEvidenceIds?: string[]
   ): Promise<{
     jobIntelligence: JobIntelligence;
+    extraction: IntelligenceExtraction;
     event: CanonicalIntelligenceEvent;
+    versionId: string;
   }> {
     // 1. Gather & verify evidence
     let evidenceItems = evidenceRegistry.getForAggregate('job', job.jobId);
@@ -175,8 +185,26 @@ export class JobIntelligenceService {
     const extractionResult = await this.provider.extractJobCandidate(job.jobId, untrustedSources);
     const candidate = extractionResult.candidate;
 
+    // Determine version identifiers
+    const sourceVersion = job.sourceVersion || '1';
+    const pipelineVersion = job.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION;
+    const modelVersion = job.modelVersion || extractionResult.metrics.model;
+    const promptVersion = job.promptVersion || 'job_extraction_v8.1';
+    const schemaVersion = job.schemaVersion || INTELLIGENCE_SCHEMA_VERSION;
+    const providerName = job.provider || 'google_genai';
+
+    const versionId = buildVersionId(
+      'job',
+      job.jobId,
+      sourceVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
+      schemaVersion
+    );
+
     // 4. Tier B: Store Raw Model Output Gzip-Compressed
-    const storagePath = `intelligence_raw/job/${job.jobId}/extraction_${Date.now()}.json.gz`;
+    const storagePath = `intelligence_raw/job/${job.jobId}/extraction_${versionId}_${Date.now()}.json.gz`;
     const { manifest } = compressPayload(extractionResult.rawResponseText, storagePath);
 
     // 5. Calculate Multidimensional Confidence
@@ -200,16 +228,55 @@ export class JobIntelligenceService {
     const provenance = buildProvenance(
       `jobs/${job.jobId}`,
       targetEvidenceIds,
-      extractionResult.metrics.model,
-      'job_extraction_v8.1',
-      provenanceContent
+      modelVersion,
+      promptVersion,
+      provenanceContent,
+      pipelineVersion
     );
 
     const now = new Date().toISOString();
 
-    // 7. Compact Job Intelligence Projection
+    // 7. Immutable Historical Extraction Record
+    const extraction: IntelligenceExtraction = {
+      extractionId: versionId,
+      versionId,
+      taskId: job.taskId,
+      aggregateId: job.jobId,
+      aggregateType: 'job',
+      sourceAggregateId: job.jobId,
+      sourceType: 'job',
+      sourceVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
+      schemaVersion,
+      provider: providerName,
+      evidenceIds: targetEvidenceIds,
+      rawManifest: manifest,
+      structuredCandidate: {
+        category: candidate.category,
+        buildingComponent: candidate.buildingComponent,
+        observedProblem: candidate.observedProblem,
+        extractedScope: candidate.extractedScope,
+        recommendedIntervention: candidate.recommendedIntervention,
+        candidateConfidence: candidate.candidateConfidence,
+        identifiedEvidenceReferences: candidate.identifiedEvidenceReferences,
+      },
+      confidence,
+      provenance,
+      generatedAt: now,
+      createdAt: now,
+    };
+
+    // 8. Compact Job Intelligence Projection (Current Active Pointer State)
     const jobIntelligence: JobIntelligence = {
       jobId: job.jobId,
+      currentVersionId: versionId,
+      currentPipelineVersion: pipelineVersion,
+      currentModelVersion: modelVersion,
+      currentPromptVersion: promptVersion,
+      currentSchemaVersion: schemaVersion,
+      currentSourceVersion: sourceVersion,
       category: candidate.category,
       buildingComponent: candidate.buildingComponent,
       observedProblem: candidate.observedProblem,
@@ -218,7 +285,7 @@ export class JobIntelligenceService {
       evidenceIds: targetEvidenceIds,
       confidence,
       provenance,
-      pipelineVersion: INTELLIGENCE_PIPELINE_VERSION,
+      pipelineVersion,
       updatedAt: now,
     };
 
@@ -228,16 +295,16 @@ export class JobIntelligenceService {
       throw new Error(`[JobIntelligence Budget Error] Exceeded 100 KiB budget: ${budgetCheck.actualBytes} bytes`);
     }
 
-    // 8. Canonical Intelligence Event
+    // 9. Canonical Intelligence Event
     const event: CanonicalIntelligenceEvent = {
-      eventId: `ie_job_${job.jobId}_${computeSha256(now).slice(0, 10)}`,
+      eventId: `ie_job_${job.jobId}_${versionId.slice(4, 16)}_${computeSha256(now).slice(0, 6)}`,
       aggregateType: 'job',
       aggregateId: job.jobId,
       eventType: 'JOB_ANALYSIS_COMPLETED',
-      schemaVersion: INTELLIGENCE_SCHEMA_VERSION,
-      pipelineVersion: INTELLIGENCE_PIPELINE_VERSION,
-      modelVersion: extractionResult.metrics.model,
-      promptVersion: 'job_extraction_v8.1',
+      schemaVersion,
+      pipelineVersion,
+      modelVersion,
+      promptVersion,
       createdAt: now,
       source: `jobs/${job.jobId}`,
       evidenceIds: targetEvidenceIds,
@@ -245,6 +312,8 @@ export class JobIntelligenceService {
       provenance,
       status: 'valid',
       payload: {
+        versionId,
+        sourceVersion,
         category: candidate.category,
         buildingComponent: candidate.buildingComponent,
         observedProblem: candidate.observedProblem,
@@ -255,7 +324,9 @@ export class JobIntelligenceService {
 
     return {
       jobIntelligence,
+      extraction,
       event,
+      versionId,
     };
   }
 }

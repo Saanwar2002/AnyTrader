@@ -123,6 +123,7 @@ export const PropertyRollupCandidateSchema = z.object({
 export const QualityReviewInputSchema = z.object({
   targetCollection: z.enum(['intelligence_jobs', 'intelligence_properties', 'intelligence_events']),
   targetId: z.string().min(1),
+  targetVersionId: z.string().min(1).optional(),
   action: z.enum(['approve', 'reject', 'correct']),
   reviewerId: z.string().min(1),
   reason: z.string().min(1).max(1000),
