@@ -219,7 +219,7 @@ describe("Task 6: Application Startup & Readiness Ordering Hardening", () => {
     await expect(verifyFirestoreReadiness(hangingDb, 50)).rejects.toThrow("Firestore readiness verification timed out after 50ms");
   });
 
-  it("Test H (PERMISSION DENIED DORMANT GRACEFUL): returns false and does not crash when Firestore permissions are missing in container environment", async () => {
+  it("Test H (FAIL CLOSED ON PERMISSION DENIED OR READINESS FAILURE): rejects immediately and does not start worker or server", async () => {
     const permDeniedDb = {
       collection: vi.fn().mockReturnValue({
         limit: vi.fn().mockReturnValue({
@@ -228,10 +228,10 @@ describe("Task 6: Application Startup & Readiness Ordering Hardening", () => {
       }),
     };
 
-    const isReady = await verifyFirestoreReadiness(permDeniedDb, 500);
-    expect(isReady).toBe(false);
+    // Probe must throw fail-closed
+    await expect(verifyFirestoreReadiness(permDeniedDb, 500)).rejects.toThrow("Firestore readiness verification failed");
 
-    // Bootstrap must start HTTP server for Cloud Run while keeping worker stopped
+    // Bootstrap must reject fail-closed without starting worker or server
     let serverStarted = false;
     let workerStarted = false;
 
@@ -255,38 +255,31 @@ describe("Task 6: Application Startup & Readiness Ordering Hardening", () => {
       }),
     };
 
-    const result = await runBootstrapSequence(hooks);
-    expect(result.status).toBe("ready");
-    expect(serverStarted).toBe(true);
+    await expect(runBootstrapSequence(hooks)).rejects.toThrow("Firestore readiness verification failed");
+    expect(serverStarted).toBe(false);
     expect(workerStarted).toBe(false);
     expect(mockQueue.isWorkerActive()).toBe(false);
   });
 
-  it("Test I (GRACEFUL RECOVERY ON NULL DB): starts HTTP server when db instance is null or missing", async () => {
+  it("Test I (FAIL CLOSED ON NULL DB): rejects if db instance is null or missing", async () => {
     let serverStarted = false;
     let workerStarted = false;
 
     const hooks: BootstrapLifecycleHooks = {
       initFirebase: vi.fn().mockResolvedValue({ app: mockApp, db: null as any }),
-      verifyFirestore: vi.fn().mockResolvedValue(false),
+      verifyFirestore: vi.fn(),
       queue: mockQueue,
-      registerHandlers: vi.fn().mockImplementation(() => {
-        for (const type of REQUIRED_INTELLIGENCE_HANDLERS) {
-          mockQueue.registerHandler(type, vi.fn() as any);
-        }
-      }),
+      registerHandlers: vi.fn(),
       startWorker: vi.fn().mockImplementation(() => {
         workerStarted = true;
       }),
       startHttpServer: vi.fn().mockImplementation(() => {
         serverStarted = true;
-        return { listen: vi.fn() };
       }),
     };
 
-    const result = await runBootstrapSequence(hooks);
-    expect(result.status).toBe("ready");
-    expect(serverStarted).toBe(true);
+    await expect(runBootstrapSequence(hooks)).rejects.toThrow("Failed to obtain valid Firestore database instance");
+    expect(serverStarted).toBe(false);
     expect(workerStarted).toBe(false);
   });
 });

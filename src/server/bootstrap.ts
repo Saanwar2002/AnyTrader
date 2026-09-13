@@ -61,7 +61,7 @@ export async function verifyFirestoreReadiness(
   timeoutMs: number = 5000
 ): Promise<boolean> {
   if (!firestoreDb) {
-    return false;
+    throw new Error("[Bootstrap] Firestore database instance is null or undefined. Startup aborted (Fail-Closed).");
   }
 
   const queryPromise = (async () => {
@@ -70,7 +70,7 @@ export async function verifyFirestoreReadiness(
       collectionRef = firestoreDb.collection("intelligence_tasks");
     }
     if (!collectionRef) {
-      return false;
+      throw new Error("[Bootstrap] Invalid Firestore DB instance: .collection() method missing.");
     }
     const snap = await collectionRef.limit(1).get();
     return snap !== undefined;
@@ -87,24 +87,12 @@ export async function verifyFirestoreReadiness(
 
   try {
     const isReady = await Promise.race([queryPromise, timeoutPromise]);
-    return isReady === true;
-  } catch (err: any) {
-    const isPermissionOrAuthError =
-      err?.code === 7 ||
-      err?.code === 16 ||
-      err?.message?.includes("PERMISSION_DENIED") ||
-      err?.message?.includes("UNAUTHENTICATED") ||
-      err?.message?.includes("Missing or insufficient permissions") ||
-      err?.message?.includes("Could not load the default credentials");
-
-    if (isPermissionOrAuthError) {
-      console.warn(
-        `[Bootstrap] Server-side Firestore permission unavailable (${err?.message || err}). Server-side task queue worker and sync listeners will be disabled while client-side services and HTTP endpoints operate normally.`
-      );
-      return false;
+    if (!isReady) {
+      throw new Error("[Bootstrap] Firestore readiness query returned non-ready result.");
     }
-
-    throw err;
+    return true;
+  } catch (err: any) {
+    throw new Error(`[Bootstrap] Firestore readiness verification failed: ${err?.message || err}`);
   }
 }
 
@@ -134,45 +122,34 @@ export async function runBootstrapSequence(
   console.log("[Bootstrap] Step 1: Initializing Firebase Admin & obtaining Firestore instance...");
   const { app, db } = await hooks.initFirebase();
 
-  let isFirestoreReady = false;
-  if (db) {
-    console.log("[Bootstrap] Step 2: Verifying Firestore readiness probe...");
-    try {
-      isFirestoreReady = await hooks.verifyFirestore(db);
-    } catch (probeErr: any) {
-      console.warn("[Bootstrap] Firestore probe verification notice:", probeErr?.message || probeErr);
-      isFirestoreReady = false;
-    }
+  if (!db) {
+    throw new Error("[Bootstrap] Failed to obtain valid Firestore database instance from Firebase Admin. Startup aborted (Fail-Closed).");
   }
 
-  if (isFirestoreReady && db) {
-    console.log("[Bootstrap] Firestore readiness probe verified successfully.");
-    console.log("[Bootstrap] Step 3: Configuring Intelligence Task Queue with authoritative Firestore instance...");
-    hooks.queue.setFirestoreDb(db);
-
-    if (hooks.startSyncWorkers) {
-      console.log("[Bootstrap] Step 4: Starting background projection & sync workers...");
-      hooks.startSyncWorkers(db);
-    }
-
-    console.log("[Bootstrap] Step 5: Registering & verifying intelligence handlers...");
-    hooks.registerHandlers();
-    verifyIntelligenceHandlersRegistered(hooks.queue);
-    console.log(
-      `[Bootstrap] Verified handlers registered: [${hooks.queue.getRegisteredHandlers().join(", ")}]`
-    );
-
-    console.log("[Bootstrap] Step 6: Starting intelligence background worker loop...");
-    hooks.startWorker();
-  } else {
-    console.log("[Bootstrap] Server-side Firestore is not available. Task queue worker disabled in server runtime.");
-    hooks.registerHandlers();
-    if (hooks.queue.hasHandler("job_extraction") && hooks.queue.hasHandler("property_rollup")) {
-      console.log(
-        `[Bootstrap] Verified handlers registered in standby mode: [${hooks.queue.getRegisteredHandlers().join(", ")}]`
-      );
-    }
+  console.log("[Bootstrap] Step 2: Verifying Firestore readiness probe...");
+  const isFirestoreReady = await hooks.verifyFirestore(db);
+  if (!isFirestoreReady) {
+    throw new Error("[Bootstrap] Firestore readiness probe returned false. Startup aborted (Fail-Closed).");
   }
+  console.log("[Bootstrap] Firestore readiness probe verified successfully.");
+
+  console.log("[Bootstrap] Step 3: Configuring Intelligence Task Queue with authoritative Firestore instance...");
+  hooks.queue.setFirestoreDb(db);
+
+  if (hooks.startSyncWorkers) {
+    console.log("[Bootstrap] Step 4: Starting background projection & sync workers...");
+    hooks.startSyncWorkers(db);
+  }
+
+  console.log("[Bootstrap] Step 5: Registering & verifying intelligence handlers...");
+  hooks.registerHandlers();
+  verifyIntelligenceHandlersRegistered(hooks.queue);
+  console.log(
+    `[Bootstrap] Verified handlers registered: [${hooks.queue.getRegisteredHandlers().join(", ")}]`
+  );
+
+  console.log("[Bootstrap] Step 6: Starting intelligence background worker loop...");
+  hooks.startWorker();
 
   if (hooks.startBackgroundSchedulers) {
     console.log("[Bootstrap] Step 7: Starting background schedulers...");

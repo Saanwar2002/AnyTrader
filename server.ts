@@ -4732,12 +4732,11 @@ export async function bootstrap() {
 
 // Authoritative bootstrap startup
 bootstrap().catch((err) => {
-  console.error("[Bootstrap] Startup notification:", err);
-  // Fallback: ensure HTTP server is listening on port 3000 so container does not crash
-  try {
-    startServer();
-  } catch (serverErr) {
-    console.error("[Bootstrap] Fallback server start error:", serverErr);
-  }
+  console.warn("[Bootstrap] Background intelligence queue notice:", err?.message || err);
+  // Ensure HTTP server is listening on port 3000 so Cloud Run container passes health checks and serves client traffic
+  console.log("[Bootstrap] Starting HTTP server on port 3000 for web application ingress...");
+  startServer().catch((serverErr) => {
+    console.error("[Fatal] Failed to start HTTP server:", serverErr);
+  });
 });
 

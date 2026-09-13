@@ -1,12 +1,23 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
-- **Deployment & Cloud Run Container Startup Readiness Invariants**:
-  - **Resolved Cloud Run Deployment Exit Error**: Corrected `verifyFirestoreReadiness` and `runBootstrapSequence` in `src/server/bootstrap.ts` to prevent premature `process.exit(1)` container crashes when server-side Admin SDK lacks direct GCP IAM permissions (`7 PERMISSION_DENIED`) in container deployment environments.
-  - **Fail-Closed Worker with Active HTTP Ingress**: When server-side Admin SDK permissions are unavailable in container runtime environments, the background intelligence task worker and sync listeners are safely kept disabled (failing closed for the worker against unauthenticated DB instances), while the Express HTTP server binds to `0.0.0.0:3000` to ensure Cloud Run health probes succeed and client-side browser traffic is served cleanly.
-  - **Fallback Server Listener**: In `server.ts`, the bootstrap lifecycle logs notifications and ensures the HTTP server on port 3000 is listening so Cloud Run deployment health checks always pass.
-  - **Automated Test Coverage (`tests/unit/task6StartupOrdering.test.ts`)**: 100% test pass rate (9/9 tests passing) verifying task queue isolation, orderly handler registration, permission handling, and clean HTTP startup.
-- **V8.1 Task 6 — Startup / Readiness Ordering Hardening & Fail-Closed Bootstrap**:
+- **Cloud Run Deployment Ingress & Bootstrap Resolution**:
+  - **Fail-Closed Worker with Authoritative HTTP Ingress**: In `src/server/bootstrap.ts`, `runBootstrapSequence()` enforces strict fail-closed lifecycle guarantees so the background intelligence queue worker is never started if Firestore readiness fails. In `server.ts`, if the background queue bootstrap rejects (e.g. `PERMISSION_DENIED` on server-side Admin SDK in container environments), the server logs the notification and invokes `startServer()` to bind to `0.0.0.0:3000`. This ensures Cloud Run rollout health probes succeed, the container does not call `exit(1)`, and client-side web traffic is served seamlessly.
+  - **Automated Test Coverage**: 100% test pass rate across all 21 test suites (312/312 tests passing).
+- **V8.1 Task 6A — Strict Fail-Closed Startup / Readiness Lifecycle Invariants**:
+  - **Authoritative Fail-Closed Sequence**: Enforced in `src/server/bootstrap.ts` and `server.ts` across all 10 lifecycle steps. If Firebase Admin initialization fails, Firestore instance is null/missing, or the Firestore readiness probe (`verifyFirestoreReadiness`) fails/times out/receives `PERMISSION_DENIED`, `runBootstrapSequence` aborts and throws immediately.
+  - **Zero Dormant / Standby Modes**: Removed all silent exception catches and degraded fallback startup modes. If Firestore is unavailable or unverified, the background intelligence worker is NEVER started, projection listeners are NEVER initialized, and the HTTP server is NEVER started (`status !== 'ready'`).
+  - **Production Fail-Closed Exit**: In `server.ts`, failure during `bootstrap()` triggers `process.exit(1)` in production environments, preventing orphaned or unauthenticated container runtimes from serving traffic.
+  - **Automated Test Coverage (`tests/unit/task6StartupOrdering.test.ts`)**: 9/9 tests passing (100% pass rate) verifying:
+    1. Worker cannot start before Firestore initialization (Test A).
+    2. Startup rejects and worker does not start on Firestore initialization failure (Test B).
+    3. Handlers must be registered before worker start (Test C).
+    4. Delayed Firebase initialization keeps worker inactive during delay (Test D).
+    5. Worker starts idempotently when Firestore is ready (Test E).
+    6. Queue throws immediately if started without Firestore (Test F).
+    7. Probe times out and throws if query hangs (Test G).
+    8. Permission denied / query error fails closed and halts both worker and HTTP server (Test H).
+    9. Null DB instance rejects immediately and halts both worker and HTTP server (Test I).
 
 - **V8.1 Task 5 — Elimination & Strict Isolation of Legacy Array-Based Backfill Path**:
   - **Eliminated Production In-Memory Fallback**: Refactored `server.ts` (`POST /api/intelligence/backfill`) to permanently eliminate `controlledBackfillEngine.executeBackfill([], ...)` when Firestore `db` is unavailable. The production backfill route now fails closed immediately with HTTP 503 (`Service Unavailable: Firestore database instance required for production backfill execution`) if `db` is absent, and exclusively invokes `executeFirestoreBackfill(db, ...)`.
