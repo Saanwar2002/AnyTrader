@@ -102,9 +102,7 @@ export class ControlledBackfillEngine {
       const idempotencyKey = buildIdempotencyKey(job.jobId, 'JOB_ANALYSIS_COMPLETED', 'v1');
 
       // Check if already processed
-      const existingTask = intelligenceTaskQueue.getFirestoreDb()
-        ? await intelligenceTaskQueue.getByIdempotencyKeyAsync(idempotencyKey)
-        : intelligenceTaskQueue.getByIdempotencyKey(idempotencyKey);
+      const existingTask = await intelligenceTaskQueue.getByIdempotencyKeyAsync(idempotencyKey);
 
       if (existingTask && existingTask.status === 'succeeded') {
         progress.skippedIdempotentCount += 1;

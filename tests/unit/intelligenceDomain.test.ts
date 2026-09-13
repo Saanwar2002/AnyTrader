@@ -15,7 +15,7 @@
  * 11. Controlled Historical Backfill with Dry-Run & Resumable Cursors
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   evidenceRegistry,
   computeSha256,
@@ -312,7 +312,92 @@ describe('V8.1 Structured Intelligence Foundation', () => {
     });
   });
 
+  const createMockFirestore = () => {
+    const mockDocs = new Map<string, any>();
+    const mockDb = {
+      collection: (colName: string) => ({
+        doc: (docId: string) => {
+          const key = `${colName}/${docId}`;
+          return {
+            id: docId,
+            get: async () => ({
+              exists: mockDocs.has(key),
+              data: () => mockDocs.get(key),
+            }),
+            set: async (data: any) => {
+              mockDocs.set(key, data);
+            },
+            update: async (data: any) => {
+              if (!mockDocs.has(key)) throw new Error(`Document ${key} not found`);
+              mockDocs.set(key, { ...mockDocs.get(key), ...data });
+            },
+          };
+        },
+        where: (field: string, op: string, val: any) => ({
+          where: (f2: string, op2: string, v2: any) => ({
+            limit: (num: number) => ({
+              get: async () => {
+                const results: any[] = [];
+                for (const [k, v] of mockDocs.entries()) {
+                  if (k.startsWith(`${colName}/`) && v[field] === val && v[f2] <= v2) {
+                    results.push({ id: k.split('/')[1], data: () => v });
+                  }
+                }
+                return { empty: results.length === 0, docs: results };
+              },
+            }),
+          }),
+          limit: (num: number) => ({
+            get: async () => {
+              const results: any[] = [];
+              for (const [k, v] of mockDocs.entries()) {
+                if (k.startsWith(`${colName}/`) && v[field] === val) {
+                  results.push({ id: k.split('/')[1], data: () => v });
+                }
+              }
+              return { empty: results.length === 0, docs: results };
+            },
+          }),
+          get: async () => {
+            const results: any[] = [];
+            for (const [k, v] of mockDocs.entries()) {
+              if (k.startsWith(`${colName}/`) && v[field] === val) {
+                results.push({ id: k.split('/')[1], data: () => v });
+              }
+            }
+            return { empty: results.length === 0, docs: results };
+          },
+        }),
+      }),
+      runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+        const transaction = {
+          get: async (ref: any) => ref.get(),
+          set: (ref: any, data: any) => ref.set(data),
+          update: (ref: any, data: any) => ref.update(data),
+        };
+        return fn(transaction);
+      },
+    };
+    return { mockDb, mockDocs };
+  };
+
   describe('6. Async Task Queue Lifecycle & Idempotency', () => {
+    let mockDb: any;
+    let mockDocs: Map<string, any>;
+
+    beforeEach(() => {
+      const created = createMockFirestore();
+      mockDb = created.mockDb;
+      mockDocs = created.mockDocs;
+      intelligenceTaskQueue.setFirestoreDb(mockDb);
+      intelligenceTaskQueue.clear();
+    });
+
+    afterEach(() => {
+      intelligenceTaskQueue.setFirestoreDb(null);
+      intelligenceTaskQueue.clear();
+    });
+
     it('processes task lifecycle: pending -> processing -> succeeded', async () => {
       let executed = false;
       intelligenceTaskQueue.registerHandler('job_extraction', async () => {
@@ -320,7 +405,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         return { extracted: true };
       });
 
-      const task = intelligenceTaskQueue.enqueueTask(
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_501',
@@ -334,14 +419,14 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(processed.attempts).toBe(1);
     });
 
-    it('prevents duplicate task enqueueing with same idempotencyKey', () => {
-      const task1 = intelligenceTaskQueue.enqueueTask(
+    it('prevents duplicate task enqueueing with same idempotencyKey', async () => {
+      const task1 = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_502',
         'duplicate_key_123'
       );
-      const task2 = intelligenceTaskQueue.enqueueTask(
+      const task2 = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_502',
@@ -351,28 +436,30 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(task1.taskId).toBe(task2.taskId);
     });
 
-    it('enforces atomic claiming and prevents duplicate concurrent worker processing', () => {
-      const task = intelligenceTaskQueue.enqueueTask(
+    it('enforces atomic claiming and prevents duplicate concurrent worker processing', async () => {
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_claim_501',
         buildIdempotencyKey('job_claim_501', 'job_extraction', '1')
       );
 
-      // Worker 1 claims task
-      const claimed1 = intelligenceTaskQueue.claimTask(task.taskId, 'worker_1', 60000);
+      // Worker 1 claims task transactionally
+      const claimed1 = await intelligenceTaskQueue.claimTaskTransactional(task.taskId, 'worker_1', 60000);
       expect(claimed1).toBe(true);
-      expect(intelligenceTaskQueue.getTask(task.taskId)?.status).toBe('processing');
-      expect(intelligenceTaskQueue.getTask(task.taskId)?.workerId).toBe('worker_1');
+      const fsData1 = (await intelligenceTaskQueue.getTaskAsync(task.taskId))!;
+      expect(fsData1.status).toBe('processing');
+      expect(fsData1.workerId).toBe('worker_1');
 
       // Worker 2 attempts concurrent claim while lease active -> fails
-      const claimed2 = intelligenceTaskQueue.claimTask(task.taskId, 'worker_2', 60000);
+      const claimed2 = await intelligenceTaskQueue.claimTaskTransactional(task.taskId, 'worker_2', 60000);
       expect(claimed2).toBe(false);
-      expect(intelligenceTaskQueue.getTask(task.taskId)?.workerId).toBe('worker_1');
+      const fsData2 = (await intelligenceTaskQueue.getTaskAsync(task.taskId))!;
+      expect(fsData2.workerId).toBe('worker_1');
     });
 
-    it('recovers stale processing tasks whose lease has expired', () => {
-      const task = intelligenceTaskQueue.enqueueTask(
+    it('recovers stale processing tasks whose lease has expired', async () => {
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_stale_502',
@@ -380,13 +467,14 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       );
 
       // Worker claims with 0ms lease (instantly stale)
-      intelligenceTaskQueue.claimTask(task.taskId, 'worker_crashed', -1000);
+      await intelligenceTaskQueue.claimTaskTransactional(task.taskId, 'worker_crashed', -1000);
 
       // Scan and recover
-      const recovered = intelligenceTaskQueue.recoverStaleTasks(0);
+      const recovered = await intelligenceTaskQueue.recoverStaleTasksAsync(0);
       expect(recovered.length).toBeGreaterThan(0);
-      expect(intelligenceTaskQueue.getTask(task.taskId)?.status).toBe('retrying');
-      expect(intelligenceTaskQueue.getTask(task.taskId)?.errorCode).toBe('STALE_LEASE_RECOVERED');
+      const updated = await intelligenceTaskQueue.getTaskAsync(task.taskId);
+      expect(updated?.status).toBe('retrying');
+      expect(updated?.errorCode).toBe('STALE_LEASE_RECOVERED');
     });
 
     it('transitions to retrying and eventually dead_letter on repeated failure', async () => {
@@ -394,7 +482,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         throw new Error('Upstream model rate limit');
       });
 
-      const task = intelligenceTaskQueue.enqueueTask(
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'job_extraction',
         'job',
         'job_503',
@@ -509,6 +597,18 @@ describe('V8.1 Structured Intelligence Foundation', () => {
   });
 
   describe('9. Controlled Resumable Historical Backfill', () => {
+    let mockDb: any;
+
+    beforeEach(() => {
+      const created = createMockFirestore();
+      mockDb = created.mockDb;
+      intelligenceTaskQueue.setFirestoreDb(mockDb);
+    });
+
+    afterEach(() => {
+      intelligenceTaskQueue.setFirestoreDb(null);
+    });
+
     it('executes dry-run backfill safely without writing changes', async () => {
       const jobs = [
         { jobId: 'b_1', title: 'Job 1', description: 'Desc 1' },

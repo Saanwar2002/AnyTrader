@@ -46,6 +46,7 @@ import * as path from 'path';
 
 import {
   IntelligenceTaskQueue,
+  intelligenceTaskQueue,
   taskDocumentId,
 } from '../../src/server/intelligence/intelligenceTaskQueue';
 import {
@@ -425,21 +426,62 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('4. Controlled Backfill Invariants', () => {
     it('does not bypass task system with direct AI fallback when task execution fails', async () => {
-      const queue = new IntelligenceTaskQueue();
-      // Do not register handler for job_extraction -> task execution will result in dead_letter (missing handler)
-      const jobs = [
-        { jobId: 'job_backfill_1', title: 'Boiler Fix', description: 'Leaking boiler' },
-      ];
+      const mockDocs = new Map<string, any>();
+      const mockDb = {
+        collection(name: string) {
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                set: async (data: any) => mockDocs.set(id, data),
+                update: async (data: any) => {
+                  if (!mockDocs.has(id)) throw new Error('Not found');
+                  mockDocs.set(id, { ...mockDocs.get(id), ...data });
+                },
+              };
+            },
+            where() {
+              return {
+                limit: () => ({
+                  get: async () => ({
+                    empty: mockDocs.size === 0,
+                    docs: Array.from(mockDocs.entries()).map(([k, v]) => ({ id: k, data: () => v })),
+                  }),
+                }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any) => ref.set(data),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
 
-      const progress = await controlledBackfillEngine.executeBackfill(jobs, {
-        batchSize: 10,
-        dryRun: false,
-        maxCostUsd: 1.0,
-      });
+      intelligenceTaskQueue.setFirestoreDb(mockDb as any);
+      try {
+        // Do not register handler for job_extraction -> task execution will result in dead_letter (missing handler)
+        const jobs = [
+          { jobId: 'job_backfill_1', title: 'Boiler Fix', description: 'Leaking boiler' },
+        ];
 
-      // Failed task must be counted as error, NOT processed via bypass
-      expect(progress.errorCount).toBe(1);
-      expect(progress.processedCount).toBe(0);
+        const progress = await controlledBackfillEngine.executeBackfill(jobs, {
+          batchSize: 10,
+          dryRun: false,
+          maxCostUsd: 1.0,
+        });
+
+        // Failed task must be counted as error, NOT processed via bypass
+        expect(progress.errorCount).toBe(1);
+        expect(progress.processedCount).toBe(0);
+      } finally {
+        intelligenceTaskQueue.setFirestoreDb(null);
+      }
     });
 
     it('persists durable checkpoint in /intelligence_backfill_runs for Firestore backfills', async () => {
@@ -541,28 +583,96 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // 6. PRODUCTION FAIL-CLOSED INVARIANTS (NO IN-MEMORY FALLBACK)
   // ==========================================================
   describe('6. Production Fail-Closed Invariants (No In-Memory Fallback)', () => {
-    it('TEST 1: enqueueTaskAsync fails closed when Firestore is unavailable or throws', async () => {
+    it('Test A: enqueueTaskAsync() rejects when Firestore is not configured', async () => {
       const queue = new IntelligenceTaskQueue();
-      // 1a. Uninitialized Firestore (null)
       await expect(
         queue.enqueueTaskAsync('job_extraction', 'job', 'job_fc_1', 'idem_fc_1', {})
       ).rejects.toThrow('Firestore task store is not ready');
+    });
 
-      // 1b. Firestore throws PERMISSION_DENIED (code 7)
+    it('Test B: enqueueTaskAsync() propagates a Firestore write/transaction failure', async () => {
+      const queue = new IntelligenceTaskQueue();
       const errorDb = {
         collection: () => ({
           doc: () => ({
-            get: async () => { throw { code: 7, message: 'PERMISSION_DENIED: Missing or insufficient permissions.' }; }
+            get: async () => { throw new Error('Firestore transaction failure: write rejected'); }
           })
         }),
         runTransaction: async () => {
-          throw { code: 7, message: 'PERMISSION_DENIED: Missing or insufficient permissions.' };
+          throw new Error('Firestore transaction failure: write rejected');
         }
       };
       queue.setFirestoreDb(errorDb as any);
       await expect(
         queue.enqueueTaskAsync('job_extraction', 'job', 'job_fc_1', 'idem_fc_1', {})
-      ).rejects.toThrow('PERMISSION_DENIED');
+      ).rejects.toThrow('Firestore transaction failure: write rejected');
+    });
+
+    it('Test C: executeTask() rejects when Firestore is not configured', async () => {
+      const queue = new IntelligenceTaskQueue();
+      await expect(
+        queue.executeTask('task_tc_1')
+      ).rejects.toThrow('Firestore task store is not ready');
+    });
+
+    it('Test D: The removed synchronous enqueueTask() API is not available', () => {
+      const queue = new IntelligenceTaskQueue();
+      expect((queue as any).enqueueTask).toBeUndefined();
+    });
+
+    it('Test E: getByIdempotencyKeyAsync() rejects when Firestore is unavailable, preventing backfill from silently switching to memory', async () => {
+      const queue = new IntelligenceTaskQueue();
+      await expect(
+        queue.getByIdempotencyKeyAsync('idem_te_1')
+      ).rejects.toThrow('Firestore task store is not ready');
+    });
+
+    it('Test F: A task persisted in Firestore can be discovered by a fresh queue instance whose in-memory Map starts empty', async () => {
+      const mockDocs = new Map<string, any>();
+      const mockDb = {
+        collection: (colName: string) => ({
+          doc: (docId: string) => {
+            const key = `${colName}/${docId}`;
+            return {
+              id: docId,
+              get: async () => ({
+                exists: mockDocs.has(key),
+                data: () => mockDocs.get(key),
+              }),
+              set: async (data: any) => {
+                mockDocs.set(key, data);
+              },
+              update: async (data: any) => {
+                if (!mockDocs.has(key)) throw new Error('Not found');
+                mockDocs.set(key, { ...mockDocs.get(key), ...data });
+              },
+            };
+          },
+        }),
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any) => ref.set(data),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queue1 = new IntelligenceTaskQueue();
+      queue1.setFirestoreDb(mockDb as any);
+      const task = await queue1.enqueueTaskAsync('job_extraction', 'job', 'job_tf_1', 'idem_tf_1', { hello: 'world' });
+
+      // Fresh queue instance with completely empty in-memory Map
+      const queue2 = new IntelligenceTaskQueue();
+      queue2.setFirestoreDb(mockDb as any);
+      expect(queue2.getTask(task.taskId)).toBeUndefined(); // in-memory Map starts empty
+
+      const discovered = await queue2.getTaskAsync(task.taskId);
+      expect(discovered).toBeDefined();
+      expect(discovered?.taskId).toBe(task.taskId);
+      expect(discovered?.idempotencyKey).toBe('idem_tf_1');
+      expect(discovered?.payload).toEqual({ hello: 'world' });
     });
 
     it('TEST 2: claimTaskTransactional fails closed when Firestore is unavailable or throws', async () => {

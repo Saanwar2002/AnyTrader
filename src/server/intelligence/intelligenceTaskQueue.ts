@@ -174,53 +174,6 @@ export class IntelligenceTaskQueue {
   }
 
   /**
-   * Synchronous / memory-compatible task enqueue.
-   * Production code should prefer enqueueTaskAsync.
-   */
-  public enqueueTask(
-    taskType: TaskType,
-    aggregateType: IntelligenceAggregateType,
-    aggregateId: string,
-    idempotencyKey: string,
-    payload: Record<string, unknown> = {}
-  ): IntelligenceTask {
-    const taskId = taskDocumentId(idempotencyKey);
-    const existingTaskId = this.idempotencyIndex.get(idempotencyKey) || taskId;
-    const existing = this.tasks.get(existingTaskId);
-    if (existing) {
-      return existing;
-    }
-
-    const now = new Date().toISOString();
-    const task: IntelligenceTask = {
-      taskId,
-      taskType,
-      aggregateType,
-      aggregateId,
-      idempotencyKey,
-      status: 'pending',
-      attempts: 0,
-      maxAttempts: this.maxRetries,
-      createdAt: now,
-      updatedAt: now,
-      nextAttemptAt: now,
-      payload,
-    };
-
-    this.tasks.set(taskId, task);
-    this.idempotencyIndex.set(idempotencyKey, taskId);
-
-    if (this.firestoreDb) {
-      this.firestoreDb.collection('intelligence_tasks').doc(taskId).set(task).catch((err: unknown) => {
-        console.error(`[IntelligenceTaskQueue] Failed to persist task ${taskId} to Firestore:`, err);
-      });
-    }
-
-    setImmediate(() => this.processNext());
-    return task;
-  }
-
-  /**
    * Asynchronously enqueues a task, waiting for durable Firestore confirmation.
    * Uses deterministic document ID and Firestore runTransaction to guarantee atomic uniqueness.
    */
@@ -268,7 +221,6 @@ export class IntelligenceTaskQueue {
 
         this.tasks.set(task.taskId, task);
         this.idempotencyIndex.set(idempotencyKey, task.taskId);
-        setImmediate(() => this.processNext());
         return task;
       } else {
         // Fallback if runTransaction not implemented
@@ -298,7 +250,6 @@ export class IntelligenceTaskQueue {
         await taskRef.set(newTask);
         this.tasks.set(taskId, newTask);
         this.idempotencyIndex.set(idempotencyKey, taskId);
-        setImmediate(() => this.processNext());
         return newTask;
       }
     } catch (err: any) {
@@ -612,7 +563,11 @@ export class IntelligenceTaskQueue {
    * Executes a single task step through its handler with guaranteed atomic claim protection.
    */
   public async executeTask(taskId: string, force: boolean = true): Promise<IntelligenceTask> {
-    let task = this.firestoreDb ? await this.getTaskAsync(taskId) : this.tasks.get(taskId);
+    if (!this.firestoreDb) {
+      throw new Error("Firestore task store is not ready");
+    }
+
+    let task = await this.getTaskAsync(taskId);
 
     if (!task) {
       throw new Error(`[TaskQueue Error] Task ${taskId} not found`);
@@ -633,33 +588,24 @@ export class IntelligenceTaskQueue {
         timestamp: new Date().toISOString(),
       };
       task.updatedAt = new Date().toISOString();
-      if (this.firestoreDb) {
-        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-          status: task.status,
-          errorCode: task.errorCode,
-          lastError: task.lastError,
-          error: task.error,
-          updatedAt: task.updatedAt,
-        });
-      }
+      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+        status: task.status,
+        errorCode: task.errorCode,
+        lastError: task.lastError,
+        error: task.error,
+        updatedAt: task.updatedAt,
+      });
+      this.tasks.set(taskId, task);
       return task;
     }
 
     // Guaranteed transactional claim check
     if (task.status !== 'processing') {
-      if (this.firestoreDb) {
-        const claimed = await this.claimTaskTransactional(taskId, undefined, this.defaultLeaseDurationMs, force);
-        if (!claimed) {
-          return (await this.getTaskAsync(taskId)) || task;
-        }
-        task = (await this.getTaskAsync(taskId)) || task;
-      } else {
-        const claimed = this.claimTask(taskId, undefined, this.defaultLeaseDurationMs, force);
-        if (!claimed) {
-          return this.tasks.get(taskId) || task;
-        }
-        task = this.tasks.get(taskId) || task;
+      const claimed = await this.claimTaskTransactional(taskId, undefined, this.defaultLeaseDurationMs, force);
+      if (!claimed) {
+        return (await this.getTaskAsync(taskId)) || task;
       }
+      task = (await this.getTaskAsync(taskId)) || task;
     }
 
     const startTime = Date.now();
@@ -677,16 +623,15 @@ export class IntelligenceTaskQueue {
       delete task.leaseExpiresAt;
 
       // Durable Firestore update - throw if fails so false success is not reported
-      if (this.firestoreDb) {
-        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-          status: 'succeeded',
-          completedAt: task.completedAt,
-          processingDurationMs: task.processingDurationMs,
-          updatedAt: task.updatedAt,
-          payload: task.payload,
-        });
-      }
+      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+        status: 'succeeded',
+        completedAt: task.completedAt,
+        processingDurationMs: task.processingDurationMs,
+        updatedAt: task.updatedAt,
+        payload: task.payload,
+      });
 
+      this.tasks.set(taskId, task);
       return task;
     } catch (err) {
       const duration = Date.now() - startTime;
@@ -719,43 +664,18 @@ export class IntelligenceTaskQueue {
       task.updatedAt = new Date().toISOString();
       delete task.leaseExpiresAt;
 
-      if (this.firestoreDb) {
-        await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-          status: task.status,
-          attempts: task.attempts,
-          nextAttemptAt: task.nextAttemptAt || null,
-          lastError: task.lastError,
-          errorCode: task.errorCode,
-          error: task.error,
-          updatedAt: task.updatedAt,
-        });
-      }
+      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+        status: task.status,
+        attempts: task.attempts,
+        nextAttemptAt: task.nextAttemptAt || null,
+        lastError: task.lastError,
+        errorCode: task.errorCode,
+        error: task.error,
+        updatedAt: task.updatedAt,
+      });
 
+      this.tasks.set(taskId, task);
       return task;
-    }
-  }
-
-  /**
-   * Background process loop that processes all pending or due retry tasks
-   */
-  private async processNext(): Promise<void> {
-    if (this.isWorkerRunning) return;
-    this.isWorkerRunning = true;
-
-    try {
-      const now = Date.now();
-      for (const task of this.tasks.values()) {
-        if (task.status === 'pending') {
-          await this.executeTask(task.taskId);
-        } else if (task.status === 'retrying' && (task.nextAttemptAt || task.nextRetryAt)) {
-          const attemptTime = task.nextAttemptAt ? new Date(task.nextAttemptAt).getTime() : new Date(task.nextRetryAt!).getTime();
-          if (attemptTime <= now) {
-            await this.executeTask(task.taskId);
-          }
-        }
-      }
-    } finally {
-      this.isWorkerRunning = false;
     }
   }
 
