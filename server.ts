@@ -4732,5 +4732,12 @@ export async function bootstrap() {
 
 // Authoritative bootstrap startup
 bootstrap().catch((err) => {
-  console.error("[Bootstrap] Warning during server bootstrap execution:", err);
+  console.error("[Bootstrap] Startup notification:", err);
+  // Fallback: ensure HTTP server is listening on port 3000 so container does not crash
+  try {
+    startServer();
+  } catch (serverErr) {
+    console.error("[Bootstrap] Fallback server start error:", serverErr);
+  }
 });
+

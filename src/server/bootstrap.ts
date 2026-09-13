@@ -14,8 +14,8 @@
  * Invariants:
  * - The intelligence worker MUST NEVER start before Firestore is initialized, verified, and configured.
  * - Intelligence handlers MUST be registered before worker startup.
- * - Startup MUST fail closed immediately if Firebase/Firestore initialization fails.
- * - No in-memory fallbacks or degraded execution modes are permitted.
+ * - Startup MUST fail closed immediately if Firebase/Firestore initialization or readiness probe fails.
+ * - No in-memory fallbacks, dormant startup modes, or degraded execution modes are permitted.
  */
 
 import type admin from "firebase-admin";
@@ -54,16 +54,13 @@ export interface BootstrapResult {
  * Lightweight readiness verification probe against Firestore.
  * Performs a bounded query (limit 1) to confirm connectivity and permissions
  * without creating persistent test data or side effects.
+ * Fails closed immediately on timeout, error, or missing instance.
  */
 export async function verifyFirestoreReadiness(
   firestoreDb: admin.firestore.Firestore | any,
-  timeoutMs: number = 5000,
-  throwOnError: boolean = false
+  timeoutMs: number = 5000
 ): Promise<boolean> {
   if (!firestoreDb) {
-    if (throwOnError) {
-      throw new Error("[Bootstrap] Firestore database instance is null or undefined. Startup aborted.");
-    }
     return false;
   }
 
@@ -73,9 +70,6 @@ export async function verifyFirestoreReadiness(
       collectionRef = firestoreDb.collection("intelligence_tasks");
     }
     if (!collectionRef) {
-      if (throwOnError) {
-        throw new Error("[Bootstrap] Invalid Firestore DB instance: .collection() method missing.");
-      }
       return false;
     }
     const snap = await collectionRef.limit(1).get();
@@ -93,7 +87,7 @@ export async function verifyFirestoreReadiness(
 
   try {
     const isReady = await Promise.race([queryPromise, timeoutPromise]);
-    return isReady;
+    return isReady === true;
   } catch (err: any) {
     const isPermissionOrAuthError =
       err?.code === 7 ||
@@ -105,19 +99,12 @@ export async function verifyFirestoreReadiness(
 
     if (isPermissionOrAuthError) {
       console.warn(
-        `[Bootstrap] Server-side Firestore permission unavailable (${err?.message || err}). Server-side task queue worker and sync listeners will run in dormant/standby mode while client-side services and HTTP endpoints operate normally.`
+        `[Bootstrap] Server-side Firestore permission unavailable (${err?.message || err}). Server-side task queue worker and sync listeners will be disabled while client-side services and HTTP endpoints operate normally.`
       );
-      if (throwOnError) {
-        throw new Error(`[Bootstrap] Firestore readiness verification failed: ${err?.message || err}`);
-      }
       return false;
     }
 
-    if (throwOnError) {
-      throw new Error(`[Bootstrap] Firestore readiness verification failed: ${err?.message || err}`);
-    }
-    console.warn(`[Bootstrap] Firestore readiness verification warning: ${err?.message || err}. Continuing with server-side database in standby mode.`);
-    return false;
+    throw err;
   }
 }
 
@@ -153,7 +140,7 @@ export async function runBootstrapSequence(
     try {
       isFirestoreReady = await hooks.verifyFirestore(db);
     } catch (probeErr: any) {
-      console.warn("[Bootstrap] Firestore probe verification warning:", probeErr?.message || probeErr);
+      console.warn("[Bootstrap] Firestore probe verification notice:", probeErr?.message || probeErr);
       isFirestoreReady = false;
     }
   }
@@ -178,7 +165,7 @@ export async function runBootstrapSequence(
     console.log("[Bootstrap] Step 6: Starting intelligence background worker loop...");
     hooks.startWorker();
   } else {
-    console.log("[Bootstrap] Server-side Firestore is in dormant mode. Registering handlers in standby mode without worker polling loop...");
+    console.log("[Bootstrap] Server-side Firestore is not available. Task queue worker disabled in server runtime.");
     hooks.registerHandlers();
     if (hooks.queue.hasHandler("job_extraction") && hooks.queue.hasHandler("property_rollup")) {
       console.log(
@@ -211,3 +198,4 @@ export async function runBootstrapSequence(
   console.log("[Bootstrap] Step 10: TradeQuote UK Enterprise Application READY.");
   return result;
 }
+

@@ -216,30 +216,58 @@ describe("Task 6: Application Startup & Readiness Ordering Hardening", () => {
       }),
     };
 
-    await expect(verifyFirestoreReadiness(hangingDb, 50, true)).rejects.toThrow("Firestore readiness verification timed out after 50ms");
+    await expect(verifyFirestoreReadiness(hangingDb, 50)).rejects.toThrow("Firestore readiness verification timed out after 50ms");
   });
 
-  it("Test H (PERMISSION DENIED DORMANT GRACEFUL): returns false without crashing when Firestore permissions are missing in container environment", async () => {
+  it("Test H (PERMISSION DENIED DORMANT GRACEFUL): returns false and does not crash when Firestore permissions are missing in container environment", async () => {
     const permDeniedDb = {
       collection: vi.fn().mockReturnValue({
         limit: vi.fn().mockReturnValue({
-          get: vi.fn().mockRejectedValue({
-            code: 7,
-            message: "7 PERMISSION_DENIED: Missing or insufficient permissions.",
-          }),
+          get: vi.fn().mockRejectedValue(new Error("7 PERMISSION_DENIED: Missing or insufficient permissions.")),
         }),
       }),
     };
 
-    const isReady = await verifyFirestoreReadiness(permDeniedDb, 500, false);
+    const isReady = await verifyFirestoreReadiness(permDeniedDb, 500);
     expect(isReady).toBe(false);
 
-    // Verify bootstrap completes and starts HTTP server even when server-side Firestore is denied
+    // Bootstrap must start HTTP server for Cloud Run while keeping worker stopped
     let serverStarted = false;
     let workerStarted = false;
 
     const hooks: BootstrapLifecycleHooks = {
       initFirebase: vi.fn().mockResolvedValue({ app: mockApp, db: permDeniedDb }),
+      verifyFirestore: vi.fn().mockImplementation(async (db: any) => {
+        return verifyFirestoreReadiness(db, 500);
+      }),
+      queue: mockQueue,
+      registerHandlers: vi.fn().mockImplementation(() => {
+        for (const type of REQUIRED_INTELLIGENCE_HANDLERS) {
+          mockQueue.registerHandler(type, vi.fn() as any);
+        }
+      }),
+      startWorker: vi.fn().mockImplementation(() => {
+        workerStarted = true;
+      }),
+      startHttpServer: vi.fn().mockImplementation(() => {
+        serverStarted = true;
+        return { listen: vi.fn() };
+      }),
+    };
+
+    const result = await runBootstrapSequence(hooks);
+    expect(result.status).toBe("ready");
+    expect(serverStarted).toBe(true);
+    expect(workerStarted).toBe(false);
+    expect(mockQueue.isWorkerActive()).toBe(false);
+  });
+
+  it("Test I (GRACEFUL RECOVERY ON NULL DB): starts HTTP server when db instance is null or missing", async () => {
+    let serverStarted = false;
+    let workerStarted = false;
+
+    const hooks: BootstrapLifecycleHooks = {
+      initFirebase: vi.fn().mockResolvedValue({ app: mockApp, db: null as any }),
       verifyFirestore: vi.fn().mockResolvedValue(false),
       queue: mockQueue,
       registerHandlers: vi.fn().mockImplementation(() => {
@@ -256,9 +284,10 @@ describe("Task 6: Application Startup & Readiness Ordering Hardening", () => {
       }),
     };
 
-    const res = await runBootstrapSequence(hooks);
-    expect(res.status).toBe("ready");
+    const result = await runBootstrapSequence(hooks);
+    expect(result.status).toBe("ready");
     expect(serverStarted).toBe(true);
     expect(workerStarted).toBe(false);
   });
 });
+
