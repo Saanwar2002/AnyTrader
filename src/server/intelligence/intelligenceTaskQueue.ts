@@ -97,9 +97,7 @@ export class IntelligenceTaskQueue {
    */
   public async getRunnableTasksFromFirestore(limit = 10): Promise<IntelligenceTask[]> {
     if (!this.firestoreDb) {
-      return Array.from(this.tasks.values()).filter(
-        (t) => t.status === 'pending' || (t.status === 'retrying' && (!t.nextAttemptAt || new Date(t.nextAttemptAt).getTime() <= Date.now()))
-      ).slice(0, limit);
+      throw new Error("Firestore task store is not ready");
     }
 
     const nowIso = new Date().toISOString();
@@ -136,16 +134,11 @@ export class IntelligenceTaskQueue {
           }
         }
       }
+      return Array.from(tasksMap.values());
     } catch (err: any) {
-      if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-        console.warn('[IntelligenceTaskQueue] Firestore permission notice: Permission Denied. Falling back to in-memory mode.');
-        this.firestoreDb = null;
-      } else {
-        console.warn('[IntelligenceTaskQueue] getRunnableTasksFromFirestore query notice:', err?.message || err);
-      }
+      console.error('[IntelligenceTaskQueue] getRunnableTasksFromFirestore query error:', err?.message || err);
+      throw err;
     }
-
-    return Array.from(tasksMap.values());
   }
 
   /**
@@ -166,6 +159,9 @@ export class IntelligenceTaskQueue {
    * Worker tick combining stale lease recovery and task draining
    */
   public async workerTick(): Promise<void> {
+    if (!this.firestoreDb) {
+      return;
+    }
     if (this.isWorkerRunning) return;
     this.isWorkerRunning = true;
 
@@ -235,51 +231,20 @@ export class IntelligenceTaskQueue {
     idempotencyKey: string,
     payload: Record<string, unknown> = {}
   ): Promise<IntelligenceTask> {
+    if (!this.firestoreDb) {
+      throw new Error("Firestore task store is not ready");
+    }
+
     const taskId = taskDocumentId(idempotencyKey);
     const now = new Date().toISOString();
+    const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
-    if (this.firestoreDb) {
-      try {
-        const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
-
-        if (typeof this.firestoreDb.runTransaction === 'function') {
-          const task = await this.firestoreDb.runTransaction(async (transaction: any) => {
-            const existing = await transaction.get(taskRef);
-            if (existing && existing.exists) {
-              return existing.data() as IntelligenceTask;
-            }
-
-            const newTask: IntelligenceTask = {
-              taskId,
-              taskType,
-              aggregateType,
-              aggregateId,
-              idempotencyKey,
-              status: 'pending',
-              attempts: 0,
-              maxAttempts: this.maxRetries,
-              createdAt: now,
-              updatedAt: now,
-              nextAttemptAt: now,
-              payload,
-            };
-
-            transaction.set(taskRef, newTask);
-            return newTask;
-          });
-
-          this.tasks.set(task.taskId, task);
-          this.idempotencyIndex.set(idempotencyKey, task.taskId);
-          setImmediate(() => this.processNext());
-          return task;
-        } else {
-          // Fallback if runTransaction not implemented
-          const existingDoc = await taskRef.get();
-          if (existingDoc && existingDoc.exists) {
-            const data = existingDoc.data() as IntelligenceTask;
-            this.tasks.set(data.taskId, data);
-            this.idempotencyIndex.set(idempotencyKey, data.taskId);
-            return data;
+    try {
+      if (typeof this.firestoreDb.runTransaction === 'function') {
+        const task = await this.firestoreDb.runTransaction(async (transaction: any) => {
+          const existing = await transaction.get(taskRef);
+          if (existing && existing.exists) {
+            return existing.data() as IntelligenceTask;
           }
 
           const newTask: IntelligenceTask = {
@@ -297,49 +262,49 @@ export class IntelligenceTaskQueue {
             payload,
           };
 
-          await taskRef.set(newTask);
-          this.tasks.set(taskId, newTask);
-          this.idempotencyIndex.set(idempotencyKey, taskId);
-          setImmediate(() => this.processNext());
+          transaction.set(taskRef, newTask);
           return newTask;
+        });
+
+        this.tasks.set(task.taskId, task);
+        this.idempotencyIndex.set(idempotencyKey, task.taskId);
+        setImmediate(() => this.processNext());
+        return task;
+      } else {
+        // Fallback if runTransaction not implemented
+        const existingDoc = await taskRef.get();
+        if (existingDoc && existingDoc.exists) {
+          const data = existingDoc.data() as IntelligenceTask;
+          this.tasks.set(data.taskId, data);
+          this.idempotencyIndex.set(idempotencyKey, data.taskId);
+          return data;
         }
-      } catch (err: any) {
-        if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-          console.warn('[IntelligenceTaskQueue] Enqueue async permission notice: Permission Denied. Switching to in-memory mode.');
-          this.firestoreDb = null;
-        } else {
-          console.error(`[IntelligenceTaskQueue] Enqueue async Firestore error for ${taskId}:`, err?.message || err);
-          throw err;
-        }
+
+        const newTask: IntelligenceTask = {
+          taskId,
+          taskType,
+          aggregateType,
+          aggregateId,
+          idempotencyKey,
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: this.maxRetries,
+          createdAt: now,
+          updatedAt: now,
+          nextAttemptAt: now,
+          payload,
+        };
+
+        await taskRef.set(newTask);
+        this.tasks.set(taskId, newTask);
+        this.idempotencyIndex.set(idempotencyKey, taskId);
+        setImmediate(() => this.processNext());
+        return newTask;
       }
+    } catch (err: any) {
+      console.error(`[IntelligenceTaskQueue] Enqueue async Firestore error for ${taskId}:`, err?.message || err);
+      throw err;
     }
-
-    // In-memory fallback (only when no Firestore is configured)
-    const existing = this.tasks.get(taskId);
-    if (existing) {
-      return existing;
-    }
-
-    const task: IntelligenceTask = {
-      taskId,
-      taskType,
-      aggregateType,
-      aggregateId,
-      idempotencyKey,
-      status: 'pending',
-      attempts: 0,
-      maxAttempts: this.maxRetries,
-      createdAt: now,
-      updatedAt: now,
-      nextAttemptAt: now,
-      payload,
-    };
-
-    this.tasks.set(taskId, task);
-    this.idempotencyIndex.set(idempotencyKey, taskId);
-
-    setImmediate(() => this.processNext());
-    return task;
   }
 
   /**
@@ -352,105 +317,80 @@ export class IntelligenceTaskQueue {
     leaseDurationMs: number = this.defaultLeaseDurationMs,
     force: boolean = false
   ): Promise<boolean> {
+    if (!this.firestoreDb) {
+      throw new Error("Firestore task store is not ready");
+    }
+
+    if (typeof this.firestoreDb.runTransaction !== 'function') {
+      throw new Error("Firestore instance does not support runTransaction");
+    }
+
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
     const leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
+    const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
-    if (this.firestoreDb && typeof this.firestoreDb.runTransaction === 'function') {
-      const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
+    try {
+      const claimed = await this.firestoreDb.runTransaction(async (transaction: any) => {
+        const docSnap = await transaction.get(taskRef);
+        if (!docSnap || !docSnap.exists) {
+          return false;
+        }
 
-      try {
-        const claimed = await this.firestoreDb.runTransaction(async (transaction: any) => {
-          const docSnap = await transaction.get(taskRef);
-          if (!docSnap || !docSnap.exists) {
-            return false;
-          }
+        const data = docSnap.data() as IntelligenceTask;
+        const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= now : true;
 
-          const data = docSnap.data() as IntelligenceTask;
-          const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= now : true;
+        const canClaim =
+          force ||
+          data.status === 'pending' ||
+          (data.status === 'retrying' && (!data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now)) ||
+          (data.status === 'processing' && isLeaseExpired);
 
-          const canClaim =
-            force ||
-            data.status === 'pending' ||
-            (data.status === 'retrying' && (!data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now)) ||
-            (data.status === 'processing' && isLeaseExpired);
+        if (!canClaim) {
+          return false;
+        }
 
-          if (!canClaim) {
-            return false;
-          }
-
-          const newAttempts = (data.attempts || 0) + 1;
-          transaction.update(taskRef, {
-            status: 'processing',
-            attempts: newAttempts,
-            startedAt: nowIso,
-            workerId: workerId,
-            leaseExpiresAt: leaseExpiresAt,
-            updatedAt: nowIso,
-          });
-
-          return true;
+        const newAttempts = (data.attempts || 0) + 1;
+        transaction.update(taskRef, {
+          status: 'processing',
+          attempts: newAttempts,
+          startedAt: nowIso,
+          workerId: workerId,
+          leaseExpiresAt: leaseExpiresAt,
+          updatedAt: nowIso,
         });
 
-        if (claimed) {
-          const local = this.tasks.get(taskId) || {
-            taskId,
-            taskType: 'job_extraction',
-            aggregateType: 'job',
-            aggregateId: '',
-            idempotencyKey: '',
-            status: 'pending',
-            attempts: 0,
-            maxAttempts: this.maxRetries,
-            createdAt: nowIso,
-            updatedAt: nowIso,
-            payload: {},
-          };
-          local.status = 'processing';
-          local.attempts += 1;
-          local.startedAt = nowIso;
-          local.workerId = workerId;
-          local.leaseExpiresAt = leaseExpiresAt;
-          local.updatedAt = nowIso;
-          this.tasks.set(taskId, local);
-        }
+        return true;
+      });
 
-        return claimed;
-      } catch (err: any) {
-        if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-          console.warn(`[IntelligenceTaskQueue] Transactional claim permission notice: Permission Denied. Switching to in-memory mode.`);
-          this.firestoreDb = null;
-        } else {
-          console.error(`[IntelligenceTaskQueue] Transactional claim error for task ${taskId}:`, err?.message || err);
-        }
-        return false;
+      if (claimed) {
+        const local = this.tasks.get(taskId) || {
+          taskId,
+          taskType: 'job_extraction',
+          aggregateType: 'job',
+          aggregateId: '',
+          idempotencyKey: '',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: this.maxRetries,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          payload: {},
+        };
+        local.status = 'processing';
+        local.attempts += 1;
+        local.startedAt = nowIso;
+        local.workerId = workerId;
+        local.leaseExpiresAt = leaseExpiresAt;
+        local.updatedAt = nowIso;
+        this.tasks.set(taskId, local);
       }
+
+      return claimed;
+    } catch (err: any) {
+      console.error(`[IntelligenceTaskQueue] Transactional claim error for task ${taskId}:`, err?.message || err);
+      throw err;
     }
-
-    // In-memory atomic claim fallback
-    const task = this.tasks.get(taskId);
-    if (!task) return false;
-
-    const isLeaseExpired = task.leaseExpiresAt ? new Date(task.leaseExpiresAt).getTime() <= now : true;
-    const canClaim =
-      force ||
-      task.status === 'pending' ||
-      (task.status === 'retrying' && (!task.nextAttemptAt || new Date(task.nextAttemptAt).getTime() <= now)) ||
-      (task.status === 'processing' && isLeaseExpired);
-
-    if (!canClaim) {
-      return false;
-    }
-
-    task.status = 'processing';
-    task.attempts += 1;
-    task.startedAt = nowIso;
-    task.workerId = workerId;
-    task.leaseExpiresAt = leaseExpiresAt;
-    task.updatedAt = nowIso;
-    this.tasks.set(taskId, task);
-
-    return true;
   }
 
   /**
@@ -532,98 +472,87 @@ export class IntelligenceTaskQueue {
    * Atomically recovers stale tasks across Firestore using transactions.
    */
   public async recoverStaleTasksAsync(leaseTimeoutMs: number = this.defaultLeaseDurationMs): Promise<IntelligenceTask[]> {
+    if (!this.firestoreDb) {
+      throw new Error("Firestore task store is not ready");
+    }
+
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
     const recovered: IntelligenceTask[] = [];
 
-    if (this.firestoreDb) {
-      try {
-        const snapshot = await this.firestoreDb
-          .collection('intelligence_tasks')
-          .where('status', '==', 'processing')
-          .get();
+    try {
+      const snapshot = await this.firestoreDb
+        .collection('intelligence_tasks')
+        .where('status', '==', 'processing')
+        .get();
 
-        if (snapshot && !snapshot.empty) {
-          for (const doc of snapshot.docs) {
-            const taskId = doc.id;
-            const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
+      if (snapshot && !snapshot.empty) {
+        for (const doc of snapshot.docs) {
+          const taskId = doc.id;
+          const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
-            if (typeof this.firestoreDb.runTransaction === 'function') {
-              try {
-                const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
-                  const currentSnap = await transaction.get(taskRef);
-                  if (!currentSnap || !currentSnap.exists) return null;
+          if (typeof this.firestoreDb.runTransaction === 'function') {
+            try {
+              const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
+                const currentSnap = await transaction.get(taskRef);
+                if (!currentSnap || !currentSnap.exists) return null;
 
-                  const task = currentSnap.data() as IntelligenceTask;
-                  if (task.status !== 'processing') return null;
+                const task = currentSnap.data() as IntelligenceTask;
+                if (task.status !== 'processing') return null;
 
-                  const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
-                  if (!isExpired) return null;
+                const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
+                if (!isExpired) return null;
 
-                  const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
-                  const updates: Partial<IntelligenceTask> = {
-                    status: nextStatus,
-                    nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
-                    nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
-                    lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
-                    errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
-                    leaseExpiresAt: undefined,
-                    workerId: undefined,
-                    updatedAt: nowIso,
-                  };
-
-                  transaction.update(taskRef, updates);
-                  return { ...task, ...updates };
-                });
-
-                if (recoveredTask) {
-                  this.tasks.set(taskId, recoveredTask);
-                  recovered.push(recoveredTask);
-                }
-              } catch (txErr) {
-                console.warn(`[IntelligenceTaskQueue] Transaction recovery error for task ${taskId}:`, txErr);
-              }
-            } else {
-              const task = doc.data() as IntelligenceTask;
-              const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
-
-              if (isExpired) {
                 const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
                 const updates: Partial<IntelligenceTask> = {
                   status: nextStatus,
                   nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
+                  nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
                   lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
                   errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+                  leaseExpiresAt: undefined,
+                  workerId: undefined,
                   updatedAt: nowIso,
                 };
 
-                await taskRef.update(updates);
-                const merged = { ...task, ...updates };
-                this.tasks.set(taskId, merged);
-                recovered.push(merged);
+                transaction.update(taskRef, updates);
+                return { ...task, ...updates };
+              });
+
+              if (recoveredTask) {
+                this.tasks.set(taskId, recoveredTask);
+                recovered.push(recoveredTask);
               }
+            } catch (txErr) {
+              console.warn(`[IntelligenceTaskQueue] Transaction recovery error for task ${taskId}:`, txErr);
+            }
+          } else {
+            const task = doc.data() as IntelligenceTask;
+            const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
+
+            if (isExpired) {
+              const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
+              const updates: Partial<IntelligenceTask> = {
+                status: nextStatus,
+                nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
+                lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
+                errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+                updatedAt: nowIso,
+              };
+
+              await taskRef.update(updates);
+              const merged = { ...task, ...updates };
+              this.tasks.set(taskId, merged);
+              recovered.push(merged);
             }
           }
         }
-      } catch (err: any) {
-        if (err?.code === 7 || err?.message?.includes('PERMISSION_DENIED')) {
-          console.warn('[IntelligenceTaskQueue] Async stale recovery scan notice: Permission Denied. Switching worker to in-memory mode.');
-          this.firestoreDb = null;
-        } else {
-          console.error('[IntelligenceTaskQueue] Async stale recovery scan error:', err?.message || err);
-        }
       }
+      return recovered;
+    } catch (err: any) {
+      console.error('[IntelligenceTaskQueue] Async stale recovery scan error:', err?.message || err);
+      throw err;
     }
-
-    // Also run in-memory recovery
-    const localRecovered = this.recoverStaleTasks(leaseTimeoutMs);
-    for (const lr of localRecovered) {
-      if (!recovered.some((r) => r.taskId === lr.taskId)) {
-        recovered.push(lr);
-      }
-    }
-
-    return recovered;
   }
 
   /**
@@ -635,10 +564,14 @@ export class IntelligenceTaskQueue {
 
   /**
    * Retrieves a task by ID asynchronously with authoritative Firestore lookup.
-   * Throws if Firestore read fails.
+   * Throws if Firestore is not ready or if Firestore read fails.
    */
   public async getTaskAsync(taskId: string): Promise<IntelligenceTask | undefined> {
-    if (this.firestoreDb) {
+    if (!this.firestoreDb) {
+      throw new Error("Firestore task store is not ready");
+    }
+
+    try {
       const docRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
       if (docRef && typeof docRef.get === 'function') {
         const docSnap = await docRef.get();
@@ -652,8 +585,11 @@ export class IntelligenceTaskQueue {
         }
         return data;
       }
+      return undefined;
+    } catch (err: any) {
+      console.error(`[IntelligenceTaskQueue] getTaskAsync Firestore error for ${taskId}:`, err?.message || err);
+      throw err;
     }
-    return this.tasks.get(taskId);
   }
 
   /**
@@ -676,10 +612,7 @@ export class IntelligenceTaskQueue {
    * Executes a single task step through its handler with guaranteed atomic claim protection.
    */
   public async executeTask(taskId: string, force: boolean = true): Promise<IntelligenceTask> {
-    let task = await this.getTaskAsync(taskId);
-    if (!task) {
-      task = this.tasks.get(taskId);
-    }
+    let task = this.firestoreDb ? await this.getTaskAsync(taskId) : this.tasks.get(taskId);
 
     if (!task) {
       throw new Error(`[TaskQueue Error] Task ${taskId} not found`);
@@ -714,11 +647,19 @@ export class IntelligenceTaskQueue {
 
     // Guaranteed transactional claim check
     if (task.status !== 'processing') {
-      const claimed = await this.claimTaskTransactional(taskId, undefined, this.defaultLeaseDurationMs, force);
-      if (!claimed) {
-        return (await this.getTaskAsync(taskId)) || task;
+      if (this.firestoreDb) {
+        const claimed = await this.claimTaskTransactional(taskId, undefined, this.defaultLeaseDurationMs, force);
+        if (!claimed) {
+          return (await this.getTaskAsync(taskId)) || task;
+        }
+        task = (await this.getTaskAsync(taskId)) || task;
+      } else {
+        const claimed = this.claimTask(taskId, undefined, this.defaultLeaseDurationMs, force);
+        if (!claimed) {
+          return this.tasks.get(taskId) || task;
+        }
+        task = this.tasks.get(taskId) || task;
       }
-      task = (await this.getTaskAsync(taskId)) || task;
     }
 
     const startTime = Date.now();

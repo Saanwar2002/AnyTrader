@@ -536,4 +536,126 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(refEv.integrityStatus).toBe('reference_only');
     });
   });
+
+  // ==========================================================
+  // 6. PRODUCTION FAIL-CLOSED INVARIANTS (NO IN-MEMORY FALLBACK)
+  // ==========================================================
+  describe('6. Production Fail-Closed Invariants (No In-Memory Fallback)', () => {
+    it('TEST 1: enqueueTaskAsync fails closed when Firestore is unavailable or throws', async () => {
+      const queue = new IntelligenceTaskQueue();
+      // 1a. Uninitialized Firestore (null)
+      await expect(
+        queue.enqueueTaskAsync('job_extraction', 'job', 'job_fc_1', 'idem_fc_1', {})
+      ).rejects.toThrow('Firestore task store is not ready');
+
+      // 1b. Firestore throws PERMISSION_DENIED (code 7)
+      const errorDb = {
+        collection: () => ({
+          doc: () => ({
+            get: async () => { throw { code: 7, message: 'PERMISSION_DENIED: Missing or insufficient permissions.' }; }
+          })
+        }),
+        runTransaction: async () => {
+          throw { code: 7, message: 'PERMISSION_DENIED: Missing or insufficient permissions.' };
+        }
+      };
+      queue.setFirestoreDb(errorDb as any);
+      await expect(
+        queue.enqueueTaskAsync('job_extraction', 'job', 'job_fc_1', 'idem_fc_1', {})
+      ).rejects.toThrow('PERMISSION_DENIED');
+    });
+
+    it('TEST 2: claimTaskTransactional fails closed when Firestore is unavailable or throws', async () => {
+      const queue = new IntelligenceTaskQueue();
+      // 2a. Uninitialized Firestore (null)
+      await expect(
+        queue.claimTaskTransactional('task_fc_2', 'worker_1', 60000)
+      ).rejects.toThrow('Firestore task store is not ready');
+
+      // 2b. Firestore throws error during transaction
+      const errorDb = {
+        collection: () => ({
+          doc: () => ({})
+        }),
+        runTransaction: async () => {
+          throw new Error('Network error during transaction');
+        }
+      };
+      queue.setFirestoreDb(errorDb as any);
+      await expect(
+        queue.claimTaskTransactional('task_fc_2', 'worker_1', 60000)
+      ).rejects.toThrow('Network error during transaction');
+    });
+
+    it('TEST 3: getTaskAsync fails closed when Firestore is unavailable or throws', async () => {
+      const queue = new IntelligenceTaskQueue();
+      // 3a. Uninitialized Firestore (null)
+      await expect(
+        queue.getTaskAsync('task_fc_3')
+      ).rejects.toThrow('Firestore task store is not ready');
+
+      // 3b. Firestore throws error on read
+      const errorDb = {
+        collection: () => ({
+          doc: () => ({
+            get: async () => {
+              throw new Error('Firestore connection timeout');
+            }
+          })
+        })
+      };
+      queue.setFirestoreDb(errorDb as any);
+      await expect(
+        queue.getTaskAsync('task_fc_3')
+      ).rejects.toThrow('Firestore connection timeout');
+    });
+
+    it('TEST 4: recoverStaleTasksAsync fails closed when Firestore is unavailable or throws', async () => {
+      const queue = new IntelligenceTaskQueue();
+      // 4a. Uninitialized Firestore (null)
+      await expect(
+        queue.recoverStaleTasksAsync()
+      ).rejects.toThrow('Firestore task store is not ready');
+
+      // 4b. Firestore throws on query
+      const errorDb = {
+        collection: () => ({
+          where: () => ({
+            get: async () => {
+              throw new Error('Query index building / permission error');
+            }
+          })
+        })
+      };
+      queue.setFirestoreDb(errorDb as any);
+      await expect(
+        queue.recoverStaleTasksAsync()
+      ).rejects.toThrow('Query index building / permission error');
+    });
+
+    it('TEST 5: getRunnableTasksFromFirestore fails closed when Firestore is unavailable or throws', async () => {
+      const queue = new IntelligenceTaskQueue();
+      // 5a. Uninitialized Firestore (null)
+      await expect(
+        queue.getRunnableTasksFromFirestore()
+      ).rejects.toThrow('Firestore task store is not ready');
+
+      // 5b. Firestore throws PERMISSION_DENIED
+      const errorDb = {
+        collection: () => ({
+          where: () => ({
+            limit: () => ({
+              get: async () => {
+                throw { code: 7, message: 'PERMISSION_DENIED' };
+              }
+            })
+          })
+        })
+      };
+      queue.setFirestoreDb(errorDb as any);
+      await expect(
+        queue.getRunnableTasksFromFirestore()
+      ).rejects.toThrow('PERMISSION_DENIED');
+    });
+  });
 });

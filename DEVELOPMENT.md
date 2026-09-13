@@ -1,6 +1,13 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation (September 12, 2026)
+## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 12, 2026)
+- **V8.1 Task Queue Hardening (Fail-Closed Production Invariants & Worker Guard)**:
+  - Added early exit check to `workerTick()` when `firestoreDb` is uninitialized to gracefully skip background polling ticks without logging unhandled exceptions or throwing `Error: Firestore task store is not ready`.
+  - Eliminated unsafe in-memory fallback from `IntelligenceTaskQueue` when Firestore is uninitialized, unavailable, disconnected, or returns network/permission errors.
+  - Hardened all asynchronous operations (`enqueueTaskAsync`, `claimTaskTransactional`, `recoverStaleTasksAsync`, `getTaskAsync`, `getRunnableTasksFromFirestore`, `executeTask`) to strictly **fail closed** (throw `Firestore task store is not ready` or propagate Firestore error).
+  - Enforced Firestore as the authoritative durable task store in production, preventing false reporting of task queueing/persistence.
+  - Updated `controlledBackfillEngine` (`executeBackfill` and `executeFirestoreBackfill`) to safely handle `getByIdempotencyKeyAsync` and bind Firestore DB instances.
+  - Dedicated fail-closed test invariants added (TEST 1 through TEST 5) in `firebaseEmulatorIntelligenceV81.test.ts`.
 - **Domain Overview**:
   - Implements the complete V8.1 Structured Intelligence Domain without altering or endangering the core transactional backbone (jobs, quotes, payments, Stripe Connect).
   - Models real-world property workflows through the 9-stage intelligence chain: `Property → Building Component → Observed Condition → Problem → Recommended Intervention → Quote → Job → Completion → Outcome`.

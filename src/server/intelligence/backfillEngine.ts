@@ -102,8 +102,9 @@ export class ControlledBackfillEngine {
       const idempotencyKey = buildIdempotencyKey(job.jobId, 'JOB_ANALYSIS_COMPLETED', 'v1');
 
       // Check if already processed
-      const existingTask = await intelligenceTaskQueue.getByIdempotencyKeyAsync(idempotencyKey) ||
-        intelligenceTaskQueue.getByIdempotencyKey(idempotencyKey);
+      const existingTask = intelligenceTaskQueue.getFirestoreDb()
+        ? await intelligenceTaskQueue.getByIdempotencyKeyAsync(idempotencyKey)
+        : intelligenceTaskQueue.getByIdempotencyKey(idempotencyKey);
 
       if (existingTask && existingTask.status === 'succeeded') {
         progress.skippedIdempotentCount += 1;
@@ -180,6 +181,10 @@ export class ControlledBackfillEngine {
 
     if (!firestoreDb) {
       throw new Error('[BackfillEngine] Firestore DB instance required for executeFirestoreBackfill');
+    }
+
+    if (!intelligenceTaskQueue.getFirestoreDb()) {
+      intelligenceTaskQueue.setFirestoreDb(firestoreDb);
     }
 
     const nowIso = new Date().toISOString();
