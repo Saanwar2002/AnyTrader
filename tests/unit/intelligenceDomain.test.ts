@@ -941,5 +941,59 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(progress.nextCursor).toBe('job_bf_2');
       expect(progress.isComplete).toBe(false);
     });
+
+    it('FAILS CLOSED and does NOT swallow error if run initialization fails in Firestore', async () => {
+      const failingDb = {
+        collection: (colName: string) => ({
+          doc: () => ({
+            set: async () => {
+              throw new Error('PERMISSION_DENIED: Missing admin credentials for backfill run initialization');
+            },
+          }),
+        }),
+      };
+
+      await expect(
+        controlledBackfillEngine.executeFirestoreBackfill(failingDb, {
+          batchSize: 5,
+          dryRun: true,
+        })
+      ).rejects.toThrow('PERMISSION_DENIED: Missing admin credentials for backfill run initialization');
+    });
+
+    it('FAILS CLOSED and propagates error when checkpoint update fails in Firestore', async () => {
+      const mockFirestoreStore = new Map<string, any>();
+      mockFirestoreStore.set('jobs/job_err_1', { title: 'Broken Pipe', description: 'Flooding', category: 'Plumbing' });
+
+      let updateAttemptCount = 0;
+      const failingUpdateDb = {
+        collection: (colName: string) => ({
+          limit: (n: number) => ({
+            get: async () => ({
+              docs: [{ id: 'job_err_1', data: () => mockFirestoreStore.get('jobs/job_err_1') }],
+              empty: false,
+            }),
+          }),
+          doc: (docId: string) => ({
+            set: async (data: any) => {
+              mockFirestoreStore.set(`${colName}/${docId}`, data);
+            },
+            update: async () => {
+              updateAttemptCount++;
+              throw new Error('UNAVAILABLE: Firestore checkpoint write stream disconnected');
+            },
+          }),
+        }),
+      };
+
+      await expect(
+        controlledBackfillEngine.executeFirestoreBackfill(failingUpdateDb, {
+          batchSize: 1,
+          dryRun: true,
+        })
+      ).rejects.toThrow('UNAVAILABLE: Firestore checkpoint write stream disconnected');
+
+      expect(updateAttemptCount).toBeGreaterThanOrEqual(1);
+    });
   });
 });

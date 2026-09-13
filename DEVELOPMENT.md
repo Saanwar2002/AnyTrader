@@ -1,6 +1,12 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
+- **V8.1 Backfill Checkpoint Durability (Eliminating Swallowed Firestore Checkpoint Errors)**:
+  - **Eliminated Swallowed Checkpoint Errors**: Hardened `src/server/intelligence/backfillEngine.ts` (`executeFirestoreBackfill`) by eliminating all `catch { /* ignore */ }` and `console.warn` error suppressions on `/intelligence_backfill_runs` operations.
+  - **Durable Initialization Enforcement**: If `runRef.set(...)` fails to initialize the backfill run in Firestore (e.g. network timeout, missing credentials, permission denial), it now throws `Error: [BackfillEngine] Checkpoint initialization failed for run '<runId>'` immediately instead of logging a warning and continuing without durable tracking.
+  - **Fail-Closed Periodic Checkpointing**: All checkpoint cursor updates (`runRef.update(...)`) across skipped idempotent items, processed items, empty collections, and batch completion now propagate Firestore write failures directly, halting the backfill immediately and preventing loss of cursor synchronization or uncheckpointed processing drift.
+  - **Failure Status Reporting**: In the outer `catch (err)` handler, the run status update to `failed` safely logs failures without masking the original underlying error, and re-throws the primary error to guarantee fail-closed behavior.
+  - **Automated Verification**: Added comprehensive unit and emulator tests in `tests/unit/intelligenceDomain.test.ts` and `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` verifying that `executeFirestoreBackfill` fails closed and propagates errors when run initialization fails or when checkpoint write streams disconnect.
 - **V8.1 Firebase Emulator Suite Hardening & CI Real Emulator Execution (Task 3)**:
   - **Eliminated Silent Skips**: Refactored `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` so that it **fails hard** when the Firebase Emulator is unavailable or unreachable instead of catching initialization errors and silently skipping tests.
   - **Removed All Early Returns**: Stripped out all `if (!testEnv) return;` statements across Section 1 (Firestore security rules), Section 2 (Storage security rules), and Section 8 (real multi-worker transactional concurrency & atomic claim races). All emulator tests now assert directly against `testEnv!`.

@@ -541,6 +541,48 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(mockRuns.has(runId)).toBe(true);
       expect(mockRuns.get(runId).status).toBe('completed');
     });
+
+    it('propagates checkpoint write failures and fails closed without swallowing errors', async () => {
+      const mockJobs = new Map<string, any>();
+      mockJobs.set('job_fail_chk_1', { title: 'Emergency Leak', description: 'Major water leak', category: 'Plumbing' });
+
+      const failingDb = {
+        collection: (name: string) => {
+          if (name === 'jobs') {
+            return {
+              orderBy: () => ({
+                limit: () => ({
+                  get: async () => ({
+                    empty: false,
+                    docs: [{ id: 'job_fail_chk_1', data: () => mockJobs.get('job_fail_chk_1') }],
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            doc: () => ({
+              set: async () => {
+                // Initialize succeeds
+              },
+              update: async () => {
+                // Checkpoint write fails
+                throw new Error('DEADLINE_EXCEEDED: Firestore checkpoint write stream timeout');
+              },
+              get: async () => ({ exists: false }),
+            }),
+          };
+        },
+      };
+
+      await expect(
+        controlledBackfillEngine.executeFirestoreBackfill(failingDb, {
+          batchSize: 10,
+          dryRun: true,
+          runId: 'bf_fail_chk_run',
+        })
+      ).rejects.toThrow('DEADLINE_EXCEEDED: Firestore checkpoint write stream timeout');
+    });
   });
 
   // ==========================================================

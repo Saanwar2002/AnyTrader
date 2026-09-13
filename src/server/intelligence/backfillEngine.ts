@@ -207,7 +207,8 @@ export class ControlledBackfillEngine {
         updatedAt: nowIso,
       }, { merge: true });
     } catch (runErr) {
-      console.warn(`[BackfillEngine] Could not initialize run record ${runId}:`, runErr);
+      console.error(`[BackfillEngine] Failed to initialize durable backfill run record ${runId}:`, runErr);
+      throw new Error(`[BackfillEngine] Checkpoint initialization failed for run '${runId}': ${(runErr as Error)?.message || runErr}`);
     }
 
     try {
@@ -229,13 +230,11 @@ export class ControlledBackfillEngine {
 
       if (snapshot.empty) {
         progress.isComplete = true;
-        try {
-          await runRef.update({
-            status: 'completed',
-            completedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-        } catch { /* ignore */ }
+        await runRef.update({
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
         return progress;
       }
 
@@ -267,15 +266,13 @@ export class ControlledBackfillEngine {
           progress.skippedIdempotentCount += 1;
           progress.nextCursor = jobId;
 
-          // Save checkpoint
-          try {
-            await runRef.update({
-              cursor: jobId,
-              scanned: progress.totalScanned,
-              skipped: progress.skippedIdempotentCount,
-              updatedAt: new Date().toISOString(),
-            });
-          } catch { /* ignore */ }
+          // Save checkpoint: must not be swallowed
+          await runRef.update({
+            cursor: jobId,
+            scanned: progress.totalScanned,
+            skipped: progress.skippedIdempotentCount,
+            updatedAt: new Date().toISOString(),
+          });
 
           continue;
         }
@@ -307,17 +304,15 @@ export class ControlledBackfillEngine {
           }
         }
 
-        // Save durable checkpoint after item handled
-        try {
-          await runRef.update({
-            cursor: jobId,
-            scanned: progress.totalScanned,
-            processed: progress.processedCount,
-            errors: progress.errorCount,
-            estimatedCostUsd: progress.estimatedCostUsd,
-            updatedAt: new Date().toISOString(),
-          });
-        } catch { /* ignore */ }
+        // Save durable checkpoint after item handled: must not be swallowed
+        await runRef.update({
+          cursor: jobId,
+          scanned: progress.totalScanned,
+          processed: progress.processedCount,
+          errors: progress.errorCount,
+          estimatedCostUsd: progress.estimatedCostUsd,
+          updatedAt: new Date().toISOString(),
+        });
 
         if (rateLimitDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, rateLimitDelayMs));
@@ -328,14 +323,12 @@ export class ControlledBackfillEngine {
 
       progress.isComplete = snapshot.docs.length < batchSize;
 
-      try {
-        await runRef.update({
-          status: progress.isComplete ? 'completed' : 'paused',
-          cursor: progress.nextCursor || null,
-          completedAt: progress.isComplete ? new Date().toISOString() : undefined,
-          updatedAt: new Date().toISOString(),
-        });
-      } catch { /* ignore */ }
+      await runRef.update({
+        status: progress.isComplete ? 'completed' : 'paused',
+        cursor: progress.nextCursor || null,
+        completedAt: progress.isComplete ? new Date().toISOString() : undefined,
+        updatedAt: new Date().toISOString(),
+      });
 
       return progress;
     } catch (err) {
@@ -346,7 +339,9 @@ export class ControlledBackfillEngine {
           lastError: (err as Error).message || 'Unknown backfill failure',
           updatedAt: new Date().toISOString(),
         });
-      } catch { /* ignore */ }
+      } catch (updateErr) {
+        console.warn(`[BackfillEngine] Could not record failed status for run ${runId}:`, updateErr);
+      }
       throw err;
     }
   }
