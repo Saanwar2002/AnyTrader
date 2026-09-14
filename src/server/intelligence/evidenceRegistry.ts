@@ -5,18 +5,43 @@
  * "No evidence, no assertion."
  * 
  * Manages ingestion, hashing, and retrieval of evidence supporting all
- * intelligence assertions.
+ * intelligence assertions across any platform source.
  */
 
 import { computeSha256, computeStructuredDataHash } from './provenance';
 import {
+  EvidenceCategory,
   EvidenceType,
   EvidenceIntegrityStatus,
   EvidenceSourceReference,
   IntelligenceAggregateType,
   IntelligenceEvidence,
+  SourceType,
 } from './types';
 import { EvidenceRegistrationSchema } from './schemas';
+import {
+  buildDeterministicEvidenceId,
+  deriveEvidenceCategory,
+  validateNotCircularAiEvidence,
+  persistEvidenceToFirestore,
+  CreateEvidenceParams,
+  createEvidenceRecord,
+} from './evidence';
+import { FirestoreDbLike } from './immutableStore';
+
+export interface RegisterEvidenceOptions {
+  sourceType?: SourceType;
+  sourceId?: string;
+  sourceVersion?: string | number;
+  evidenceCategory?: EvidenceCategory;
+  mimeType?: string;
+  storagePath?: string;
+  capturedAt?: string;
+  evidenceQuality?: number;
+  sourceReliability?: number;
+  temporalFreshness?: number;
+  customEvidenceId?: string;
+}
 
 export class EvidenceRegistry {
   private evidenceStore = new Map<string, IntelligenceEvidence>();
@@ -33,8 +58,17 @@ export class EvidenceRegistry {
     rawContent: string | Buffer | Uint8Array | null | undefined,
     metadata: Record<string, unknown> = {},
     verified: boolean = false,
-    sourceReference?: EvidenceSourceReference
+    sourceReference?: EvidenceSourceReference,
+    options?: RegisterEvidenceOptions
   ): IntelligenceEvidence {
+    // Step 9: Validate against circular AI evidence
+    validateNotCircularAiEvidence({
+      sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
+      evidenceType,
+      metadata,
+      sourceReference,
+    });
+
     // If no actual content is provided, it CANNOT be marked as verified content integrity
     if (rawContent === null || rawContent === undefined || (typeof rawContent === 'string' && rawContent.trim() === '')) {
       return this.registerReferenceOnly(
@@ -43,7 +77,8 @@ export class EvidenceRegistry {
         evidenceType,
         sourceRef,
         metadata,
-        sourceReference
+        sourceReference,
+        options
       );
     }
 
@@ -56,35 +91,72 @@ export class EvidenceRegistry {
     const byteSize = contentBuffer.length;
     const integrityStatus: EvidenceIntegrityStatus = 'verified';
 
+    const effectiveSourceType = options?.sourceType || (metadata.sourceType as SourceType) || (aggregateType as SourceType);
+    const effectiveSourceId = options?.sourceId || (metadata.sourceId as string) || aggregateId;
+    const effectiveSourceVersion = options?.sourceVersion || (metadata.sourceVersion as string | number) || sourceReference?.sourceVersion || '1';
+    const effectiveCategory = options?.evidenceCategory || deriveEvidenceCategory(evidenceType);
+
     // Validate registration schema
     const validatedInput = EvidenceRegistrationSchema.parse({
       aggregateType,
       aggregateId,
+      sourceType: effectiveSourceType,
+      sourceId: effectiveSourceId,
+      sourceVersion: effectiveSourceVersion,
       evidenceType,
+      evidenceCategory: effectiveCategory,
       sourceRef,
       sourceReference,
       contentHash,
+      contentSize: byteSize,
       byteSize,
+      mimeType: options?.mimeType || (metadata.mimeType as string),
+      storagePath: options?.storagePath || (metadata.storagePath as string),
+      capturedAt: options?.capturedAt || (metadata.capturedAt as string),
+      schemaVersion: 'v8.1.0',
+      evidenceQuality: options?.evidenceQuality || (metadata.evidenceQuality as number),
+      sourceReliability: options?.sourceReliability || (metadata.sourceReliability as number),
+      temporalFreshness: options?.temporalFreshness || (metadata.temporalFreshness as number),
       integrityStatus,
       metadata,
       verified: true, // Actual bytes successfully verified
     });
 
-    const evidenceId = `ev_${validatedInput.aggregateType}_${validatedInput.aggregateId}_${contentHash.slice(0, 12)}`;
+    const evidenceId =
+      options?.customEvidenceId ||
+      buildDeterministicEvidenceId(
+        effectiveSourceType,
+        effectiveSourceId,
+        effectiveSourceVersion,
+        evidenceType,
+        contentHash
+      );
 
     const record: IntelligenceEvidence = {
       evidenceId,
       aggregateType: validatedInput.aggregateType,
       aggregateId: validatedInput.aggregateId,
-      evidenceType: validatedInput.evidenceType,
+      sourceType: validatedInput.sourceType as SourceType,
+      sourceId: validatedInput.sourceId || effectiveSourceId,
+      sourceVersion: validatedInput.sourceVersion || effectiveSourceVersion,
+      evidenceType: validatedInput.evidenceType as EvidenceType,
+      evidenceCategory: validatedInput.evidenceCategory as EvidenceCategory,
       sourceRef: validatedInput.sourceRef,
       sourceReference: validatedInput.sourceReference,
       contentHash: validatedInput.contentHash,
+      contentSize: validatedInput.contentSize,
       byteSize: validatedInput.byteSize,
-      integrityStatus: validatedInput.integrityStatus,
-      metadata: validatedInput.metadata,
+      mimeType: validatedInput.mimeType,
+      storagePath: validatedInput.storagePath,
       createdAt: new Date().toISOString(),
+      capturedAt: validatedInput.capturedAt,
+      schemaVersion: validatedInput.schemaVersion,
+      integrityStatus: validatedInput.integrityStatus as EvidenceIntegrityStatus,
+      metadata: validatedInput.metadata,
       verified: validatedInput.verified,
+      evidenceQuality: validatedInput.evidenceQuality,
+      sourceReliability: validatedInput.sourceReliability,
+      temporalFreshness: validatedInput.temporalFreshness,
     };
 
     this.evidenceStore.set(evidenceId, record);
@@ -102,38 +174,83 @@ export class EvidenceRegistry {
     evidenceType: EvidenceType,
     sourceRef: string,
     metadata: Record<string, unknown> = {},
-    sourceReference?: EvidenceSourceReference
+    sourceReference?: EvidenceSourceReference,
+    options?: RegisterEvidenceOptions
   ): IntelligenceEvidence {
+    // Step 9: Validate against circular AI evidence
+    validateNotCircularAiEvidence({
+      sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
+      evidenceType,
+      metadata,
+      sourceReference,
+    });
+
+    const effectiveSourceType = options?.sourceType || (metadata.sourceType as SourceType) || (aggregateType as SourceType);
+    const effectiveSourceId = options?.sourceId || (metadata.sourceId as string) || aggregateId;
+    const effectiveSourceVersion = options?.sourceVersion || (metadata.sourceVersion as string | number) || sourceReference?.sourceVersion || '1';
+    const effectiveCategory = options?.evidenceCategory || deriveEvidenceCategory(evidenceType);
+
     const validatedInput = EvidenceRegistrationSchema.parse({
       aggregateType,
       aggregateId,
+      sourceType: effectiveSourceType,
+      sourceId: effectiveSourceId,
+      sourceVersion: effectiveSourceVersion,
       evidenceType,
+      evidenceCategory: effectiveCategory,
       sourceRef,
       sourceReference: sourceReference || { uri: sourceRef },
       contentHash: '',
+      contentSize: 0,
       byteSize: 0,
+      mimeType: options?.mimeType || (metadata.mimeType as string),
+      storagePath: options?.storagePath || (metadata.storagePath as string),
+      capturedAt: options?.capturedAt || (metadata.capturedAt as string),
+      schemaVersion: 'v8.1.0',
+      evidenceQuality: options?.evidenceQuality || (metadata.evidenceQuality as number),
+      sourceReliability: options?.sourceReliability || (metadata.sourceReliability as number),
+      temporalFreshness: options?.temporalFreshness || (metadata.temporalFreshness as number),
       integrityStatus: 'reference_only',
       metadata,
       verified: false,
     });
 
     // Stable ID for reference pointer
-    const refHash = computeSha256(`${aggregateId}:${sourceRef}`);
-    const evidenceId = `ev_ref_${validatedInput.aggregateType}_${validatedInput.aggregateId}_${refHash.slice(0, 12)}`;
+    const evidenceId =
+      options?.customEvidenceId ||
+      buildDeterministicEvidenceId(
+        effectiveSourceType,
+        effectiveSourceId,
+        effectiveSourceVersion,
+        evidenceType,
+        `ref_${sourceRef}`
+      );
 
     const record: IntelligenceEvidence = {
       evidenceId,
       aggregateType: validatedInput.aggregateType,
       aggregateId: validatedInput.aggregateId,
-      evidenceType: validatedInput.evidenceType,
+      sourceType: validatedInput.sourceType as SourceType,
+      sourceId: validatedInput.sourceId || effectiveSourceId,
+      sourceVersion: validatedInput.sourceVersion || effectiveSourceVersion,
+      evidenceType: validatedInput.evidenceType as EvidenceType,
+      evidenceCategory: validatedInput.evidenceCategory as EvidenceCategory,
       sourceRef: validatedInput.sourceRef,
       sourceReference: validatedInput.sourceReference,
       contentHash: '',
+      contentSize: 0,
       byteSize: 0,
+      mimeType: validatedInput.mimeType,
+      storagePath: validatedInput.storagePath,
+      createdAt: new Date().toISOString(),
+      capturedAt: validatedInput.capturedAt,
+      schemaVersion: validatedInput.schemaVersion,
       integrityStatus: 'reference_only',
       metadata: validatedInput.metadata,
-      createdAt: new Date().toISOString(),
       verified: false,
+      evidenceQuality: validatedInput.evidenceQuality,
+      sourceReliability: validatedInput.sourceReliability,
+      temporalFreshness: validatedInput.temporalFreshness,
     };
 
     this.evidenceStore.set(evidenceId, record);
@@ -150,40 +267,86 @@ export class EvidenceRegistry {
     sourceRef: string,
     structuredData: unknown,
     metadata: Record<string, unknown> = {},
-    sourceReference?: EvidenceSourceReference
+    sourceReference?: EvidenceSourceReference,
+    options?: RegisterEvidenceOptions
   ): IntelligenceEvidence {
+    // Step 9: Validate against circular AI evidence
+    validateNotCircularAiEvidence({
+      sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
+      evidenceType,
+      metadata,
+      sourceReference,
+    });
+
     const contentHash = computeStructuredDataHash(structuredData);
     const canonicalString = JSON.stringify(structuredData);
     const byteSize = Buffer.byteLength(canonicalString, 'utf8');
 
+    const effectiveSourceType = options?.sourceType || (metadata.sourceType as SourceType) || (aggregateType as SourceType);
+    const effectiveSourceId = options?.sourceId || (metadata.sourceId as string) || aggregateId;
+    const effectiveSourceVersion = options?.sourceVersion || (metadata.sourceVersion as string | number) || sourceReference?.sourceVersion || '1';
+    const effectiveCategory = options?.evidenceCategory || deriveEvidenceCategory(evidenceType);
+
     const validatedInput = EvidenceRegistrationSchema.parse({
       aggregateType,
       aggregateId,
+      sourceType: effectiveSourceType,
+      sourceId: effectiveSourceId,
+      sourceVersion: effectiveSourceVersion,
       evidenceType,
+      evidenceCategory: effectiveCategory,
       sourceRef,
       sourceReference,
       contentHash,
+      contentSize: byteSize,
       byteSize,
+      mimeType: options?.mimeType || 'application/json',
+      storagePath: options?.storagePath || (metadata.storagePath as string),
+      capturedAt: options?.capturedAt || (metadata.capturedAt as string),
+      schemaVersion: 'v8.1.0',
+      evidenceQuality: options?.evidenceQuality || (metadata.evidenceQuality as number),
+      sourceReliability: options?.sourceReliability || (metadata.sourceReliability as number),
+      temporalFreshness: options?.temporalFreshness || (metadata.temporalFreshness as number),
       integrityStatus: 'verified',
       metadata: { ...metadata, isStructuredData: true },
       verified: true,
     });
 
-    const evidenceId = `ev_spec_${validatedInput.aggregateType}_${validatedInput.aggregateId}_${contentHash.slice(0, 12)}`;
+    const evidenceId =
+      options?.customEvidenceId ||
+      buildDeterministicEvidenceId(
+        effectiveSourceType,
+        effectiveSourceId,
+        effectiveSourceVersion,
+        evidenceType,
+        contentHash
+      );
 
     const record: IntelligenceEvidence = {
       evidenceId,
       aggregateType: validatedInput.aggregateType,
       aggregateId: validatedInput.aggregateId,
-      evidenceType: validatedInput.evidenceType,
+      sourceType: validatedInput.sourceType as SourceType,
+      sourceId: validatedInput.sourceId || effectiveSourceId,
+      sourceVersion: validatedInput.sourceVersion || effectiveSourceVersion,
+      evidenceType: validatedInput.evidenceType as EvidenceType,
+      evidenceCategory: validatedInput.evidenceCategory as EvidenceCategory,
       sourceRef: validatedInput.sourceRef,
       sourceReference: validatedInput.sourceReference,
       contentHash: validatedInput.contentHash,
+      contentSize: validatedInput.contentSize,
       byteSize: validatedInput.byteSize,
+      mimeType: validatedInput.mimeType,
+      storagePath: validatedInput.storagePath,
+      createdAt: new Date().toISOString(),
+      capturedAt: validatedInput.capturedAt,
+      schemaVersion: validatedInput.schemaVersion,
       integrityStatus: 'verified',
       metadata: validatedInput.metadata,
-      createdAt: new Date().toISOString(),
       verified: true,
+      evidenceQuality: validatedInput.evidenceQuality,
+      sourceReliability: validatedInput.sourceReliability,
+      temporalFreshness: validatedInput.temporalFreshness,
     };
 
     this.evidenceStore.set(evidenceId, record);
@@ -204,6 +367,7 @@ export class EvidenceRegistry {
     const byteSize = contentBuffer.length;
 
     existing.contentHash = contentHash;
+    existing.contentSize = byteSize;
     existing.byteSize = byteSize;
     existing.integrityStatus = 'verified';
     existing.verified = true;
@@ -252,6 +416,28 @@ export class EvidenceRegistry {
   }
 
   /**
+   * Persists an existing in-memory evidence record to Firestore using transactional boundary.
+   */
+  public async persistToFirestore(
+    evidence: IntelligenceEvidence,
+    db?: FirestoreDbLike | null
+  ): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
+    return persistEvidenceToFirestore({ db, evidence });
+  }
+
+  /**
+   * Registers and immediately persists evidence to Firestore transactionally.
+   */
+  public async registerAndPersist(
+    params: CreateEvidenceParams,
+    db?: FirestoreDbLike | null
+  ): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
+    const record = createEvidenceRecord(params);
+    this.evidenceStore.set(record.evidenceId, record);
+    return persistEvidenceToFirestore({ db, evidence: record });
+  }
+
+  /**
    * Clears in-memory registry (for testing)
    */
   public clear(): void {
@@ -260,3 +446,4 @@ export class EvidenceRegistry {
 }
 
 export const evidenceRegistry = new EvidenceRegistry();
+

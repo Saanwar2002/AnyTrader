@@ -111,3 +111,37 @@ export function buildProvenance(
     sourceContentHash: computeSha256(sourceContent),
   };
 }
+
+/**
+ * Step 8: Lineage from Assertion to Evidence
+ * Full provenance trace structure linking an intelligence extraction back to its supporting evidence chain.
+ */
+export interface EvidenceChainTrace {
+  extractionVersionId: string;
+  aggregateType: string;
+  aggregateId: string;
+  evidenceIds: string[];
+  evidenceCount: number;
+  allVerified: boolean;
+  generatedAt: string;
+}
+
+export function buildEvidenceChainTrace(
+  extractionVersionId: string,
+  aggregateType: string,
+  aggregateId: string,
+  evidenceList: Array<{ evidenceId: string; verified: boolean }>
+): EvidenceChainTrace {
+  const evidenceIds = evidenceList.map((e) => e.evidenceId).sort();
+  const allVerified = evidenceList.length > 0 && evidenceList.every((e) => e.verified);
+  return {
+    extractionVersionId,
+    aggregateType,
+    aggregateId,
+    evidenceIds,
+    evidenceCount: evidenceIds.length,
+    allVerified,
+    generatedAt: new Date().toISOString(),
+  };
+}
+

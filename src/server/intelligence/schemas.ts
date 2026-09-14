@@ -41,6 +41,23 @@ export const StorageManifestSchema = z.object({
   createdAt: z.string().datetime(),
 });
 
+export const SourceTypeSchema = z.enum([
+  'job',
+  'property',
+  'contractor',
+  'quote',
+  'review',
+  'customer_request',
+  'project',
+  'material',
+  'imported_archive',
+  'external_source',
+  'document',
+  'media',
+  'inspection_record',
+  'external_import',
+]);
+
 export const EvidenceSourceReferenceSchema = z.object({
   storagePath: z.string().optional(),
   documentId: z.string().optional(),
@@ -52,13 +69,33 @@ export const EvidenceSourceReferenceSchema = z.object({
 });
 
 export const EvidenceRegistrationSchema = z.object({
-  aggregateType: z.enum(['job', 'property']),
+  aggregateType: z.string().min(1),
   aggregateId: z.string().min(1),
-  evidenceType: z.enum(['image', 'video', 'document', 'user_description', 'structured_spec', 'quote', 'review']),
+  sourceType: SourceTypeSchema.optional(),
+  sourceId: z.string().min(1).optional(),
+  sourceVersion: z.union([z.string(), z.number()]).optional(),
+  evidenceType: z.string().min(1),
+  evidenceCategory: z.enum([
+    'MEDIA',
+    'DOCUMENT',
+    'TEXT',
+    'STRUCTURED_RECORD',
+    'USER_ASSERTION',
+    'SYSTEM_RECORD',
+    'EXTERNAL_IMPORT',
+  ]).or(z.string()).optional(),
   sourceRef: z.string().min(1),
   sourceReference: EvidenceSourceReferenceSchema.optional(),
   contentHash: z.string().default(''),
+  contentSize: z.number().int().nonnegative().optional(),
   byteSize: z.number().int().nonnegative().default(0),
+  mimeType: z.string().optional(),
+  storagePath: z.string().optional(),
+  capturedAt: z.string().optional(),
+  schemaVersion: z.string().default('v8.1.0'),
+  evidenceQuality: z.number().min(0).max(1).optional(),
+  sourceReliability: z.number().min(0).max(1).optional(),
+  temporalFreshness: z.number().min(0).max(1).optional(),
   integrityStatus: z.enum(['verified', 'unverified', 'reference_only', 'hash_pending']).default('unverified'),
   metadata: z.record(z.unknown()).default({}),
   verified: z.boolean().default(false),

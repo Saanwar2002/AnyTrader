@@ -22,6 +22,37 @@ export type CanonicalAggregateType =
 
 export type IntelligenceAggregateType = CanonicalAggregateType | (string & {});
 
+/**
+ * Step 3: Controlled Source Types vocabulary
+ */
+export type CanonicalSourceType =
+  | 'job'
+  | 'property'
+  | 'contractor'
+  | 'quote'
+  | 'review'
+  | 'customer_request'
+  | 'project'
+  | 'material'
+  | 'imported_archive'
+  | 'external_source';
+
+export type SourceType = CanonicalSourceType | (string & {});
+
+/**
+ * Step 2: Evidence Categories / Kinds
+ */
+export type CanonicalEvidenceCategory =
+  | 'MEDIA'
+  | 'DOCUMENT'
+  | 'TEXT'
+  | 'STRUCTURED_RECORD'
+  | 'USER_ASSERTION'
+  | 'SYSTEM_RECORD'
+  | 'EXTERNAL_IMPORT';
+
+export type EvidenceCategory = CanonicalEvidenceCategory | (string & {});
+
 export type IntelligenceEventType =
   | 'JOB_ANALYSIS_COMPLETED'
   | 'PROPERTY_ROLLUP_COMPLETED'
@@ -30,14 +61,26 @@ export type IntelligenceEventType =
   | 'QUALITY_REVIEW_APPLIED'
   | 'INTELLIGENCE_RETRACTED';
 
-export type EvidenceType =
-  | 'image'
+/**
+ * Step 3: Controlled Evidence Types vocabulary
+ */
+export type CanonicalEvidenceType =
+  | 'photo'
   | 'video'
   | 'document'
-  | 'user_description'
-  | 'structured_spec'
+  | 'text'
   | 'quote'
-  | 'review';
+  | 'completion_record'
+  | 'review'
+  | 'inspection_record'
+  | 'structured_record'
+  | 'user_statement'
+  | 'imported_record'
+  | 'image'
+  | 'user_description'
+  | 'structured_spec';
+
+export type EvidenceType = CanonicalEvidenceType | (string & {});
 
 export type TaskStatus = 'pending' | 'processing' | 'succeeded' | 'retrying' | 'dead_letter';
 
@@ -102,15 +145,31 @@ export interface IntelligenceEvidence {
   evidenceId: string;
   aggregateType: IntelligenceAggregateType;
   aggregateId: string;
+  sourceType: SourceType;
+  sourceId: string;
+  sourceVersion: string | number;
   evidenceType: EvidenceType;
+  evidenceCategory?: EvidenceCategory;
+  contentHash: string;       // SHA-256 of raw content (or empty string if reference only)
+  contentSize?: number;      // Size in bytes when known
+  byteSize: number;          // Backward-compatible byte size
+  mimeType?: string;         // MIME type when applicable
+  storagePath?: string;      // Storage path when applicable (media, docs)
+  createdAt: string;         // ISO 8601
+  capturedAt?: string;       // ISO 8601 when known
+  schemaVersion: string;     // Model schema version (e.g. 'v8.1.0')
+  integrityStatus: EvidenceIntegrityStatus;
+  verified: boolean;
+
+  // Step 10: Lightweight Evidence Quality Metadata
+  evidenceQuality?: number;   // 0.0 to 1.0 (or quality score)
+  sourceReliability?: number; // 0.0 to 1.0
+  temporalFreshness?: number; // 0.0 to 1.0
+
+  // Backward-compatibility and contextual references
   sourceRef: string;
   sourceReference?: EvidenceSourceReference;
-  contentHash: string;       // SHA-256 of raw content (or empty string if reference only)
-  byteSize: number;
-  integrityStatus: EvidenceIntegrityStatus;
   metadata: Record<string, unknown>;
-  createdAt: string;
-  verified: boolean;
 }
 
 export interface CanonicalIntelligenceEvent {

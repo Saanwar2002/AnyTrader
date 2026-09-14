@@ -27,6 +27,7 @@ import { computeStructuredDataHash } from './provenance';
 import {
   CanonicalIntelligenceEvent,
   IntelligenceAggregateType,
+  IntelligenceEvidence,
   IntelligenceExtraction,
   JobIntelligence,
   PropertyIntelligence,
@@ -305,6 +306,118 @@ export class ImmutableIntelligenceStore {
   }
 
   /**
+   * Persists an immutable evidence record into `intelligence_evidence/{evidenceId}`.
+   * - Requires db.runTransaction() (Fails closed if unavailable).
+   * - Enforces historical immutability:
+   *   - Identical re-submission (same evidenceId + same contentHash) is idempotent (isNew: false).
+   *   - Conflicting re-submission (same evidenceId + different contentHash) throws [Evidence Immutability Error].
+   */
+  public async persistEvidence(options: {
+    db?: FirestoreDbLike | null;
+    evidence: IntelligenceEvidence;
+  }): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
+    const db = options.db || globalIntelligenceDb;
+    if (!db) {
+      throw new Error(
+        '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
+      );
+    }
+
+    if (typeof db.runTransaction !== 'function') {
+      throw new Error(
+        '[EvidencePersistence Error] Firestore transaction capability (runTransaction) is required for atomic immutable evidence persistence. Operational failure (Fail Closed).'
+      );
+    }
+
+    const { evidence } = options;
+    const docRef = db.collection('intelligence_evidence').doc(evidence.evidenceId);
+
+    return db.runTransaction(async (transaction: any) => {
+      const existingSnap = await transaction.get(docRef);
+
+      if (existingSnap && existingSnap.exists) {
+        const existingData = (
+          typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data
+        ) as IntelligenceEvidence;
+
+        const isIdentical =
+          existingData.contentHash === evidence.contentHash &&
+          existingData.sourceType === evidence.sourceType &&
+          existingData.sourceId === evidence.sourceId &&
+          String(existingData.sourceVersion) === String(evidence.sourceVersion);
+
+        if (isIdentical) {
+          return {
+            evidenceId: evidence.evidenceId,
+            isNew: false,
+            evidence: existingData,
+          };
+        } else {
+          throw new Error(
+            `[Evidence Immutability Error] Cannot mutate historical evidence '${evidence.evidenceId}'. Historical evidence records are append-only. Submit a new evidence record instead.`
+          );
+        }
+      }
+
+      transaction.set(docRef, evidence);
+
+      return {
+        evidenceId: evidence.evidenceId,
+        isNew: true,
+        evidence,
+      };
+    });
+  }
+
+  /**
+   * Retrieves an evidence record by ID. Fails closed if Firestore is unavailable.
+   */
+  public async getEvidenceById(
+    db: FirestoreDbLike | null,
+    evidenceId: string
+  ): Promise<IntelligenceEvidence | null> {
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error(
+        '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
+      );
+    }
+
+    const docSnap = await effectiveDb.collection('intelligence_evidence').doc(evidenceId).get();
+    if (docSnap && docSnap.exists) {
+      return (typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data) as IntelligenceEvidence;
+    }
+    return null;
+  }
+
+  /**
+   * Retrieves all evidence records for an aggregate. Fails closed if Firestore is unavailable.
+   */
+  public async getEvidenceForAggregate(
+    db: FirestoreDbLike | null,
+    aggregateType: string,
+    aggregateId: string
+  ): Promise<IntelligenceEvidence[]> {
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error(
+        '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
+      );
+    }
+
+    const snap = await effectiveDb
+      .collection('intelligence_evidence')
+      .where('aggregateType', '==', aggregateType)
+      .where('aggregateId', '==', aggregateId)
+      .get();
+
+    if (snap && snap.docs) {
+      return snap.docs.map((d: any) => (typeof d.data === 'function' ? d.data() : d.data || d));
+    }
+    return [];
+  }
+
+  /**
    * Attempting an in-place update on a historical extraction is strictly prohibited.
    */
   public async attemptMutateVersion(
@@ -324,4 +437,11 @@ export async function persistImmutableIntelligenceOutput(
   options: PersistIntelligenceOptions
 ): Promise<PersistIntelligenceResult> {
   return immutableIntelligenceStore.persistOutput(options);
+}
+
+export async function persistImmutableEvidence(options: {
+  db?: FirestoreDbLike | null;
+  evidence: IntelligenceEvidence;
+}): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
+  return immutableIntelligenceStore.persistEvidence(options);
 }

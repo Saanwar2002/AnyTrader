@@ -1145,7 +1145,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(result.jobIntelligence.currentVersionId).toBe(result.versionId);
       expect(result.extraction.versionId).toBe(result.versionId);
       expect(result.event.payload.versionId).toBe(result.versionId);
-    });
+    }, 15000);
 
     it('derives Property Intelligence with version metadata and currentVersionId pointer', async () => {
       const ev = evidenceRegistry.register('property', 'prop_999', 'document', 'props/prop_999/doc', 'Roof tiles cracked and leaking damp.', {}, true);

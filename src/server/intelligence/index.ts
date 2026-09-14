@@ -24,6 +24,7 @@ export * from './storageTier';
 export * from './promptDefense';
 export * from './geminiProvider';
 export * from './evidenceRegistry';
+export * from './evidence';
 export * from './intelligenceTaskQueue';
 export * from './jobIntelligence';
 export * from './propertyIntelligence';

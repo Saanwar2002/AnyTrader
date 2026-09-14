@@ -226,6 +226,12 @@ service firebase.storage {
       allow read, write: if isAdmin();
     }
 
+    // 10b. V8.1 Structured Intelligence Evidence Storage
+    // Server/Admin SDK writes directly. Client reads and writes are DENIED.
+    match /intelligence_evidence/{evidenceId}/{allPaths=**} {
+      allow read, write: if isAdmin();
+    }
+
     // 11. Default Deny on all other paths
     match /{allPaths=**} {
       allow read, write: if false;

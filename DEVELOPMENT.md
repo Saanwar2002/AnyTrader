@@ -1,7 +1,22 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 13, 2026)
-- **V8.1 Task 7A — Platform-Wide Immutable Intelligence Foundation & Generic Aggregate Support**:
+## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 9 — Generic Evidence Registry & Evidence Integrity**:
+  - **Core Principle & Lineage Pipeline**: Enforces platform-wide evidence lineage:
+    `SOURCE -> EVIDENCE -> EXTRACTION -> INTELLIGENCE EVENT -> CURRENT INTELLIGENCE PROJECTION`.
+    Every intelligence assertion must trace back to immutable, verified source evidence.
+  - **Generic Platform Evidence Model**: Created `src/server/intelligence/evidence.ts` defining `IntelligenceEvidence` covering jobs, properties, contractors, quotes, reviews, customer requests, documents, external imports, and contractor archives.
+  - **Deterministic Evidence ID Generation**: Created `buildDeterministicEvidenceId` deriving IDs from `sha256(sourceType:sourceId:sourceVersion:evidenceType:contentHash)`. Re-submitting identical evidence operates idempotently without duplication. Conflicting re-submissions (same ID, different content) reject with `[Evidence Immutability Error]`.
+  - **Firestore Transactional Persistence Boundary**: Integrated `persistEvidenceToFirestore` and `EvidenceRepository` using `db.runTransaction` into `/intelligence_evidence/{evidenceId}`. Enforces strict fail-closed guarantees: if Firestore or `runTransaction` is unavailable, persistence throws immediately without in-memory fallback.
+  - **Media & Storage Separation (100 KiB Safety Budget)**: Large binary assets (photos, videos, PDFs) reside exclusively in Firebase Storage (`storagePath: intelligence_evidence/{evidenceId}/...`). Base64 embedding into Firestore documents is strictly rejected (`validateEvidencePayload` enforces a 100 KiB document safety limit).
+  - **Storage Security Hardening (`storage.rules`)**: Restricted `/intelligence_evidence/{evidenceId}/{allPaths=**}` in Firebase Storage to admin-only access (`isAdmin()`), preventing public or unauthenticated access by default.
+  - **"No Evidence, No Assertion" & Anti-Circular AI Guard**:
+    - `assertHasEvidence` prevents intelligence assertions without evidence references.
+    - `validateNotCircularAiEvidence` rejects registering AI extraction outputs (`ai_model`, `ai_output`, `extraction`) as raw source evidence, preventing AI hallucinatory feedback loops.
+    - `buildEvidenceChainTrace` traces extraction versions directly back to supporting evidence IDs.
+  - **Automated Verification (`tests/unit/task9EvidenceRegistry.test.ts`)**: 20 comprehensive unit tests verifying schema validation, deterministic identity, append-only immutability, transactional persistence, fail-closed behavior, media storage separation, anti-circular AI guards, and provenance chain tracing. All 22 test suites (339 tests) pass with 100% success rate.
+
+- **V8.1 Task 8 — Intelligence Persistence Boundary**:
   - **Core Invariants & Immutability**: Historical intelligence extractions (`intelligence_extractions/{versionId}`) are platform-wide, historically immutable, server-side atomically create-only, Firestore-authoritative, and idempotent. SILENT IN-MEMORY FALLBACKS OR IN-PLACE MUTATIONS ARE STRICTLY PROHIBITED.
   - **Firestore-Authoritative Atomic Persistence**: Refactored `ImmutableIntelligenceStore` (`src/server/intelligence/immutableStore.ts`) to use `db.runTransaction` for atomic creation of historical extractions, canonical events (`intelligence_events/{eventId}`), and active summary projections. If `db` is unavailable or null, the store fails closed immediately instead of resorting to in-memory maps.
   - **Generic Aggregate Intelligence Support**: Expanded `IntelligenceAggregateType` in `src/server/intelligence/types.ts` to support generic entity types (`job`, `property`, `contractor`, `quote`, `review`, `material`, `project`, `customer_request`). Implemented `getSummaryCollectionName` dynamically mapping aggregate types to summary collections (`intelligence_jobs`, `intelligence_properties`, `intelligence_contractors`, etc.).
