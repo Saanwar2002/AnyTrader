@@ -348,6 +348,61 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(savedTask.attempts).toBe(1);
     });
 
+    it('prevents claimTaskTransactional from dead-lettering a task owned by another worker with an active lease when attempts >= maxAttempts', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskId = 'task_claim_race_max_attempts_1';
+      const activeLeaseTime = new Date(Date.now() + 60000).toISOString();
+
+      mockDocs.set(taskId, {
+        taskId,
+        status: 'processing',
+        workerId: 'worker_A',
+        leaseId: 'lease_worker_A_123',
+        leaseExpiresAt: activeLeaseTime,
+        attempts: 3,
+        maxAttempts: 3,
+        createdAt: new Date().toISOString(),
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => {
+                  mockDocs.set(id, { ...mockDocs.get(id), ...data });
+                },
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueB = new IntelligenceTaskQueue();
+      queueB.setFirestoreDb(mockDb as any);
+
+      // Worker B attempts to claim Worker A's actively running task whose attempts reached maxAttempts
+      const claimedB = await queueB.claimTaskTransactional(taskId, 'worker_B', 60000);
+
+      // Worker B MUST NOT claim the task, AND MUST NOT modify or dead-letter Worker A's task
+      expect(claimedB).toBe(false);
+
+      const currentTask = mockDocs.get(taskId);
+      expect(currentTask.status).toBe('processing');
+      expect(currentTask.workerId).toBe('worker_A');
+      expect(currentTask.leaseId).toBe('lease_worker_A_123');
+      expect(currentTask.errorCode).toBeUndefined();
+    });
+
     it('recovers stale leases atomically and sets status to retrying or dead_letter', async () => {
       const mockDocs = new Map<string, any>();
       const pastExpiredLease = new Date(Date.now() - 10000).toISOString();

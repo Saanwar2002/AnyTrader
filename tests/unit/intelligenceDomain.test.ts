@@ -617,6 +617,43 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(result.status).toBe('processing');
     });
 
+    it('prevents claimTaskTransactional from dead-lettering a task owned by another worker with active lease when attempts >= maxAttempts', async () => {
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_race_max_attempts',
+        'idemp_race_max_attempts'
+      );
+
+      const claimedByA = await intelligenceTaskQueue.claimTaskTransactional(
+        task.taskId,
+        'worker_a',
+        60000
+      );
+      expect(claimedByA).toBe(true);
+
+      const taskRef = (intelligenceTaskQueue as any).firestoreDb.collection('intelligence_tasks').doc(task.taskId);
+      await taskRef.update({
+        attempts: 3,
+        maxAttempts: 3,
+        status: 'processing',
+        workerId: 'worker_a',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+      });
+
+      const claimedByB = await intelligenceTaskQueue.claimTaskTransactional(
+        task.taskId,
+        'worker_b',
+        60000
+      );
+      expect(claimedByB).toBe(false);
+
+      const updatedTask = await intelligenceTaskQueue.getTaskAsync(task.taskId);
+      expect(updatedTask?.status).toBe('processing');
+      expect(updatedTask?.workerId).toBe('worker_a');
+      expect(updatedTask?.errorCode).toBeUndefined();
+    });
+
     it('rejects illegal task state transitions via isValidTaskStateTransition', () => {
       expect(isValidTaskStateTransition('succeeded', 'processing')).toBe(false);
       expect(isValidTaskStateTransition('succeeded', 'pending')).toBe(false);

@@ -389,18 +389,6 @@ export class IntelligenceTaskQueue {
           return false;
         }
 
-        const maxAttempts = data.maxAttempts || this.maxRetries;
-        if ((data.attempts || 0) >= maxAttempts) {
-          // Transactionally move to dead_letter if max attempts reached
-          transaction.update(taskRef, {
-            status: 'dead_letter',
-            errorCode: 'MAX_RETRIES_EXCEEDED',
-            lastError: `Exceeded max attempts (${data.attempts}/${maxAttempts})`,
-            updatedAt: nowIso,
-          });
-          return false;
-        }
-
         const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= now : true;
         const isRetryDue = !data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now;
 
@@ -410,6 +398,18 @@ export class IntelligenceTaskQueue {
           (data.status === 'processing' && isLeaseExpired);
 
         if (!canClaim) {
+          return false;
+        }
+
+        const maxAttempts = data.maxAttempts || this.maxRetries;
+        if ((data.attempts || 0) >= maxAttempts) {
+          // Transactionally move to dead_letter if max attempts reached
+          transaction.update(taskRef, {
+            status: 'dead_letter',
+            errorCode: 'MAX_RETRIES_EXCEEDED',
+            lastError: `Exceeded max attempts (${data.attempts}/${maxAttempts})`,
+            updatedAt: nowIso,
+          });
           return false;
         }
 
