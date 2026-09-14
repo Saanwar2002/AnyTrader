@@ -37,6 +37,7 @@ import {
   controlledBackfillEngine,
   evidenceRegistry,
   intelligenceTaskQueue,
+  immutableIntelligenceStore,
   buildIdempotencyKey
 } from "./src/server/intelligence/index.ts";
 import {
@@ -124,10 +125,17 @@ export function registerIntelligenceTaskHandlers(): void {
     if (!job) throw new Error("Missing job payload for extraction");
     const result = await jobIntelligenceService.deriveJobIntelligence(job);
     if (db) {
-      await db.collection("intelligence_jobs").doc(job.jobId).set(result.jobIntelligence, { merge: true });
-      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+      await immutableIntelligenceStore.persistOutput({
+        db,
+        aggregateType: "job",
+        aggregateId: job.jobId,
+        versionId: result.versionId,
+        extraction: result.extraction,
+        event: result.event,
+        summaryProjection: result.jobIntelligence,
+      });
     }
-    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId };
+    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId, versionId: result.versionId };
   });
 
   intelligenceTaskQueue.registerHandler("property_rollup", async (task) => {
@@ -135,10 +143,17 @@ export function registerIntelligenceTaskHandlers(): void {
     if (!property) throw new Error("Missing property payload for rollup");
     const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
     if (db) {
-      await db.collection("intelligence_properties").doc(property.propertyId).set(result.propertyIntelligence, { merge: true });
-      await db.collection("intelligence_events").doc(result.event.eventId).set(result.event);
+      await immutableIntelligenceStore.persistOutput({
+        db,
+        aggregateType: "property",
+        aggregateId: property.propertyId,
+        versionId: result.versionId,
+        extraction: result.extraction,
+        event: result.event,
+        summaryProjection: result.propertyIntelligence,
+      });
     }
-    return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId };
+    return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId, versionId: result.versionId };
   });
 }
 
@@ -4619,8 +4634,11 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       });
 
       if (db) {
-        await db.collection("intelligence_quality").doc(reviewOutcome.review.qualityId).set(reviewOutcome.review);
-        await db.collection("intelligence_events").doc(reviewOutcome.auditEvent.eventId).set(reviewOutcome.auditEvent);
+        await immutableIntelligenceStore.persistQualityReview({
+          db,
+          review: reviewOutcome.review,
+          auditEvent: reviewOutcome.auditEvent,
+        });
       }
 
       res.json({

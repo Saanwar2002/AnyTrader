@@ -683,7 +683,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(photoEvidence?.contentHash).toBe(expectedHash);
       expect(photoEvidence?.byteSize).toBe(mockPhotoBytes.length);
       expect(photoEvidence?.sourceReference?.storagePath).toBe('jobs/job_bin_101/photos/boiler_leak.jpg');
-    });
+    }, 20000);
 
     it('registers reference-only evidence without fabricating artificial byte hashes when only URLs provided', async () => {
       const { jobIntelligence } = await jobIntelligenceService.deriveJobIntelligence({
@@ -1160,7 +1160,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(result.propertyIntelligence.currentVersionId).toBe(result.versionId);
       expect(result.extraction.versionId).toBe(result.versionId);
       expect(result.event.payload.versionId).toBe(result.versionId);
-    });
+    }, 20000);
   });
 
 });

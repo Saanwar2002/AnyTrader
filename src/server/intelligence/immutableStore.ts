@@ -30,6 +30,7 @@ import {
   IntelligenceExtraction,
   JobIntelligence,
   PropertyIntelligence,
+  QualityReview,
 } from './types';
 
 export interface FirestoreDbLike {
@@ -265,6 +266,42 @@ export class ImmutableIntelligenceStore {
       return typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data;
     }
     return null;
+  }
+
+  /**
+   * Persists an admin quality review and its associated historical audit event transactionally.
+   * - `intelligence_quality/{qualityId}` stores the quality review record.
+   * - `intelligence_events/{eventId}` stores the immutable canonical audit event.
+   * - Requires `db.runTransaction()` (Fails closed if unavailable).
+   */
+  public async persistQualityReview(options: {
+    db?: FirestoreDbLike | null;
+    review: QualityReview;
+    auditEvent: CanonicalIntelligenceEvent;
+  }): Promise<{ qualityId: string; eventId: string }> {
+    const db = options.db || globalIntelligenceDb;
+    if (!db) {
+      throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
+    }
+
+    if (typeof db.runTransaction !== 'function') {
+      throw new Error(
+        '[ImmutableStore] Firestore transaction capability (runTransaction) is required for quality review persistence. Operational failure (Fail Closed).'
+      );
+    }
+
+    const qualityRef = db.collection('intelligence_quality').doc(options.review.qualityId);
+    const eventRef = db.collection('intelligence_events').doc(options.auditEvent.eventId);
+
+    await db.runTransaction(async (transaction: any) => {
+      transaction.set(qualityRef, options.review);
+      transaction.set(eventRef, options.auditEvent);
+    });
+
+    return {
+      qualityId: options.review.qualityId,
+      eventId: options.auditEvent.eventId,
+    };
   }
 
   /**
