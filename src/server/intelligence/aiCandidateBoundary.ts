@@ -27,6 +27,7 @@ import {
 import {
   CanonicalIntelligenceInput,
   CanonicalIntelligence,
+  IntelligenceAggregateType,
 } from './types';
 import { canonicalizeIntelligence } from './canonicalizer';
 import { EvidenceLineageValidator, evidenceLineageValidator } from './lineageValidator';
@@ -40,7 +41,7 @@ export class AICandidateSecurityError extends Error {
 }
 
 export interface TrustedServerContext {
-  aggregateType: 'job' | 'property' | 'trader' | 'quote' | 'review';
+  aggregateType: IntelligenceAggregateType;
   aggregateId: string;
   sourceId: string;
   sourceVersion?: string;
@@ -52,7 +53,6 @@ export interface TrustedServerContext {
 }
 
 export interface PipelineOptions {
-  skipLineageCheck?: boolean;
   firestoreDb?: any;
   persistToStore?: boolean;
 }
@@ -226,8 +226,8 @@ export async function processAICandidateToCanonical(
   // Step 1 & 2: Structural & Schema validation + Attach server-owned metadata
   const canonicalInput = validateAndSanitizeAICandidate(rawInput, serverContext);
 
-  // Step 3: Evidence Lineage Validation against Firestore Evidence Registry (if DB provided and lineage check enabled)
-  if (!options?.skipLineageCheck && options?.firestoreDb) {
+  // Step 3: Evidence Lineage Validation against Firestore Evidence Registry (if DB provided)
+  if (options?.firestoreDb) {
     try {
       await evidenceLineageValidator.validateLineage(
         { ...canonicalInput, evidenceIds: canonicalInput.evidenceIds || [] },

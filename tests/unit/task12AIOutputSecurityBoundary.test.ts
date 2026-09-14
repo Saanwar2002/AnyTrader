@@ -452,7 +452,6 @@ describe('Task 12: AI Output Security Boundary Unit Test Suite', () => {
     };
 
     const result = await processAICandidateToCanonical(validRawCandidate, serverContext, {
-      skipLineageCheck: false,
       firestoreDb: mockStoreDb,
       persistToStore: true,
     });
@@ -462,5 +461,107 @@ describe('Task 12: AI Output Security Boundary Unit Test Suite', () => {
     expect(result.canonical.contentHash).toBeDefined();
     expect(result.canonical.aggregateId).toBe('job_roof_sec_101');
     expect(result.persisted).toBe(true);
+  });
+
+  // =========================================================================
+  // TEST 17: Lineage bypass options do not exist & missing evidence is rejected
+  // =========================================================================
+  it('TEST 17: Attempting to bypass evidence lineage validation is rejected when evidence is missing', async () => {
+    const candidateWithMissingEvidence = {
+      domain: 'roofing',
+      observations: [
+        {
+          description: 'Slipped slate tile',
+          evidenceIds: ['ev_nonexistent_999'],
+        },
+      ],
+    };
+
+    const mockStoreDb = {
+      collection: (colName: string) => ({
+        doc: (docId: string) => ({
+          id: docId,
+          path: `${colName}/${docId}`,
+          get: async () => ({ exists: false, data: () => null }),
+        }),
+      }),
+    };
+
+    // Even if a caller attempts to pass a legacy bypass option cast as any, lineage check runs and fails
+    await expect(
+      processAICandidateToCanonical(candidateWithMissingEvidence, serverContext, {
+        firestoreDb: mockStoreDb,
+        skipLineageCheck: true,
+      } as any)
+    ).rejects.toThrow(AICandidateSecurityError);
+  });
+
+  // =========================================================================
+  // TEST 18: Platform-wide aggregate context representation (contractor, material, project, customer_request)
+  // =========================================================================
+  it('TEST 18: Platform-wide aggregates (contractor, material, project, customer_request) are supported safely', async () => {
+    const aggregateTypes: Array<'contractor' | 'material' | 'project' | 'customer_request'> = [
+      'contractor',
+      'material',
+      'project',
+      'customer_request',
+    ];
+
+    for (const aggType of aggregateTypes) {
+      const aggCtx: TrustedServerContext = {
+        aggregateType: aggType,
+        aggregateId: `${aggType}_id_1001`,
+        sourceId: `user_source_${aggType}`,
+        sourceVersion: 'v1',
+        pipelineVersion: 'v8.1.0',
+        modelVersion: 'gemini-2.5-flash',
+      };
+
+      const candidate = {
+        domain: aggType,
+        observations: [
+          {
+            description: `Observation for aggregate ${aggType}`,
+            evidenceIds: [`ev_valid_${aggType}_1`],
+          },
+        ],
+      };
+
+      // 1. validateAndSanitizeAICandidate correctly attaches server metadata
+      const sanitized = validateAndSanitizeAICandidate(candidate, aggCtx);
+      expect(sanitized.aggregateType).toBe(aggType);
+      expect(sanitized.aggregateId).toBe(`${aggType}_id_1001`);
+      expect(sanitized.provenance?.source).toBe(`user_source_${aggType}`);
+
+      // 2. processAICandidateToCanonical verifies lineage with mock DB
+      const mockStoreDb = {
+        collection: (colName: string) => ({
+          doc: (docId: string) => ({
+            id: docId,
+            path: `${colName}/${docId}`,
+            get: async () => ({
+              exists: true,
+              data: () => ({
+                evidenceId: `ev_valid_${aggType}_1`,
+                aggregateType: aggType,
+                aggregateId: `${aggType}_id_1001`,
+                integrityStatus: 'verified',
+                verified: true,
+                contentHash: 'b'.repeat(64),
+                byteSize: 200,
+              }),
+            }),
+          }),
+        }),
+      };
+
+      const res = await processAICandidateToCanonical(candidate, aggCtx, {
+        firestoreDb: mockStoreDb,
+      });
+
+      expect(res.canonical.aggregateType).toBe(aggType);
+      expect(res.canonical.aggregateId).toBe(`${aggType}_id_1001`);
+      expect(res.canonical.provenance.source).toBe(`user_source_${aggType}`);
+    }
   });
 });

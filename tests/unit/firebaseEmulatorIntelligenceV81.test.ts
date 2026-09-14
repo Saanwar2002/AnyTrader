@@ -3197,6 +3197,147 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(res2.canonical.canonicalId).toBe(res1.canonical.canonicalId);
       expect(res2.canonical.contentHash).toBe(res1.canonical.contentHash);
     });
+
+    it('Task 12A Emulator Invariant 1: Caller attempting skipLineageCheck on missing evidence fails hard on Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_1', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const rawCandidate = {
+        domain: 'roofing',
+        observations: [
+          {
+            description: 'Unbacked observation',
+            evidenceIds: ['ev_missing_emu_12a'],
+          },
+        ],
+      };
+
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: 'job_t12a_missing_1',
+        sourceId: 'usr_homeowner_t12a',
+      };
+
+      await expect(
+        processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          skipLineageCheck: true,
+        } as any)
+      ).rejects.toThrow(AICandidateSecurityError);
+    });
+
+    it('Task 12A Emulator Invariant 2: Platform-wide aggregate types (contractor, material, project, customer_request) persist to real Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_2', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const platformAggs: Array<'contractor' | 'material' | 'project' | 'customer_request'> = [
+        'contractor',
+        'material',
+        'project',
+        'customer_request',
+      ];
+
+      for (const aggType of platformAggs) {
+        const aggId = `${aggType}_emu_id_1`;
+        const evId = `ev_${aggType}_emu_1`;
+        const contentHash = 'c'.repeat(64);
+
+        await setDoc(doc(adminDb, 'intelligence_evidence', evId), {
+          evidenceId: evId,
+          aggregateType: aggType,
+          aggregateId: aggId,
+          sourceType: 'user_assertion',
+          sourceId: `usr_${aggType}_owner`,
+          sourceVersion: 'v1',
+          contentHash,
+          byteSize: 1024,
+          integrityStatus: 'verified',
+          verified: true,
+          createdAt: new Date().toISOString(),
+        });
+
+        const rawCandidate = {
+          domain: aggType,
+          observations: [
+            {
+              description: `Emulator test observation for ${aggType}`,
+              evidenceIds: [evId],
+            },
+          ],
+        };
+
+        const serverContext: TrustedServerContext = {
+          aggregateType: aggType,
+          aggregateId: aggId,
+          sourceId: `usr_${aggType}_owner`,
+          sourceVersion: 'v1',
+        };
+
+        const res = await processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        });
+
+        expect(res.persisted).toBe(true);
+        expect(res.canonical.aggregateType).toBe(aggType);
+        expect(res.canonical.aggregateId).toBe(aggId);
+
+        // Verify record created in Firestore emulator under intelligence_extractions
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', res.canonical.canonicalId));
+        expect(extSnap.exists()).toBe(true);
+        expect(extSnap.data()?.aggregateType).toBe(aggType);
+      }
+    });
   });
 });
 
