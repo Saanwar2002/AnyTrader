@@ -3338,6 +3338,18 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(extSnap.data()?.aggregateType).toBe(aggType);
       }
     });
+
+    it('Task 12A Emulator Invariant 3: Invoking processAICandidateToCanonical without firestoreDb throws AICandidateSecurityError', async () => {
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: 'job_emu_no_db_1',
+        sourceId: 'usr_homeowner_no_db',
+      };
+
+      await expect(
+        (processAICandidateToCanonical as any)({ domain: 'roofing', observations: [] }, serverContext)
+      ).rejects.toThrow(/Firestore DB reference is required/i);
+    });
   });
 });
 

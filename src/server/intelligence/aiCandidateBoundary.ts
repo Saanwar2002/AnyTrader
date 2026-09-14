@@ -53,7 +53,7 @@ export interface TrustedServerContext {
 }
 
 export interface PipelineOptions {
-  firestoreDb?: any;
+  firestoreDb: any;
   persistToStore?: boolean;
 }
 
@@ -221,23 +221,25 @@ export function validateAndSanitizeAICandidate(
 export async function processAICandidateToCanonical(
   rawInput: unknown,
   serverContext: TrustedServerContext,
-  options?: PipelineOptions
+  options: PipelineOptions
 ): Promise<{ canonical: CanonicalIntelligence; persisted: boolean }> {
+  if (!options || !options.firestoreDb) {
+    throw new AICandidateSecurityError('Firestore DB reference is required to validate evidence lineage');
+  }
+
   // Step 1 & 2: Structural & Schema validation + Attach server-owned metadata
   const canonicalInput = validateAndSanitizeAICandidate(rawInput, serverContext);
 
-  // Step 3: Evidence Lineage Validation against Firestore Evidence Registry (if DB provided)
-  if (options?.firestoreDb) {
-    try {
-      await evidenceLineageValidator.validateLineage(
-        { ...canonicalInput, evidenceIds: canonicalInput.evidenceIds || [] },
-        options.firestoreDb
-      );
-    } catch (err: any) {
-      throw new AICandidateSecurityError(
-        `Evidence lineage validation failed: ${err.message}`
-      );
-    }
+  // Step 3: Evidence Lineage Validation against Firestore Evidence Registry (Authoritative)
+  try {
+    await evidenceLineageValidator.validateLineage(
+      { ...canonicalInput, evidenceIds: canonicalInput.evidenceIds || [] },
+      options.firestoreDb
+    );
+  } catch (err: any) {
+    throw new AICandidateSecurityError(
+      `Evidence lineage validation failed: ${err.message}`
+    );
   }
 
   // Step 4: Canonicalization (Confidence calibration, cryptographic digest, deterministic sorting)
@@ -245,7 +247,7 @@ export async function processAICandidateToCanonical(
 
   // Step 5: Persistence to Immutable Intelligence Store
   let persisted = false;
-  if (options?.persistToStore && options?.firestoreDb) {
+  if (options.persistToStore) {
     await persistCanonicalIntelligence({
       db: options.firestoreDb,
       canonical,

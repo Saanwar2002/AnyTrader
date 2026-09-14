@@ -564,4 +564,23 @@ describe('Task 12: AI Output Security Boundary Unit Test Suite', () => {
       expect(res.canonical.provenance.source).toBe(`user_source_${aggType}`);
     }
   });
+
+  // =========================================================================
+  // TEST 19: Calling processAICandidateToCanonical without firestoreDb fails hard
+  // =========================================================================
+  it('TEST 19: Calling processAICandidateToCanonical without firestoreDb throws AICandidateSecurityError', async () => {
+    const validCandidate = {
+      domain: 'roofing',
+      observations: [],
+    };
+
+    // Calling without options or without options.firestoreDb must fail hard
+    await expect(
+      (processAICandidateToCanonical as any)(validCandidate, serverContext)
+    ).rejects.toThrow(/Firestore DB reference is required/i);
+
+    await expect(
+      (processAICandidateToCanonical as any)(validCandidate, serverContext, {})
+    ).rejects.toThrow(/Firestore DB reference is required/i);
+  });
 });
