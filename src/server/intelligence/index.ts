@@ -32,3 +32,7 @@ export * from './qualityReview';
 export * from './backfillEngine';
 export * from './immutableStore';
 export * from './lineageValidator';
+export * from './canonicalVocabulary';
+export * from './canonicalSchema';
+export * from './canonicalizer';
+

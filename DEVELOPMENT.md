@@ -207,6 +207,28 @@ PASS / FAIL
 - **Security Rules Gate**: Must pass all 44 live emulator tests before proceeding to general unit suites.
 - **Build Release Gate**: Final step compiles bundle to `dist/server.cjs` and `dist/index.html`. Any failure blocks merging or deployment.
 
+## 🧠 ANYTRADER V8.1 — TASK 11: CANONICAL INTELLIGENCE NORMALIZATION & SCHEMA ENFORCEMENT (September 14, 2026)
+- **Status**: **PASSED (100% PASS)**
+- **Architecture**: Established platform-wide canonical intelligence normalization and schema enforcement sitting on top of `SOURCE → EVIDENCE → LINEAGE VALIDATION → IMMUTABLE INTELLIGENCE`.
+- **Key Modules Implemented**:
+  1. **Canonical Schema (`src/server/intelligence/canonicalSchema.ts`)**:
+     - Strongly validated Zod schema (`CanonicalIntelligenceSchema`) modeling facts vs. inferences.
+     - `observations`: Explicit factual observations directly backed by physical/media/telemetry evidence.
+     - `inferences`: AI/model inferences (risks, recommendations, diagnoses) with explicit confidence scores, hypotheses, reasoning, and supporting evidence references.
+     - `conditions`, `problems`, `interventions`, `outcomes`: Strongly typed domain components with benchmark cost estimates and severity ratings.
+     - Strict lineage enforcement in schema validation via Zod `superRefine`: all sub-elements' evidence references must exist in the root `evidenceIds` list.
+     - Enforces "No evidence, no assertion" rule: non-empty evidence backing is strictly required.
+  2. **Controlled Vocabulary & Normalization (`src/server/intelligence/canonicalVocabulary.ts`)**:
+     - Deterministic dictionary-based code normalization for domains, components, and condition classifications (e.g. `combi boiler` → `boiler`, `fuse box` → `electrical_panel`, `cracked` → `damaged`).
+     - Extensible runtime registration (`registerCanonicalComponent`, `registerCanonicalCondition`, `registerCanonicalDomain`) supporting arbitrary future platform aggregate types (e.g., telecoms infrastructure, fleet machinery, solar arrays).
+  3. **Deterministic Canonicalizer (`src/server/intelligence/canonicalizer.ts`)**:
+     - `canonicalizeIntelligence(input)`: Generates deterministic content hashes (SHA-256) and version IDs regardless of input key ordering or array permutations.
+     - `persistCanonicalIntelligence({ db, canonical })`: Validates evidence lineage via `EvidenceLineageValidator` and writes atomically to `ImmutableIntelligenceStore`, persisting extraction records to `intelligence_extractions/{versionId}`, events to `intelligence_events/{eventId}`, and projection pointers to `intelligence_<aggregateType>s/{aggregateId}`.
+- **Verification & Test Coverage**:
+  - `tests/unit/task11CanonicalIntelligence.test.ts`: 12/12 passing unit tests verifying valid canonicalization, missing evidence rejection, partial-knowledge fact-only persistence, deterministic sorting/hashing, extensible future domains, and controlled vocabulary.
+  - `tests/unit/firebaseEmulatorIntelligenceV81.test.ts`: Added live Firebase Emulator test invariants verifying persistence, atomic projection pointer updates, lineage enforcement, and unauthenticated/non-admin client write blocks.
+  - **Full Automated Test Suite**: **373/373 Tests Passed** across 25 Test Suites. Zero TypeScript/linting errors. Clean production build.
+
 ## 🏆 V8.0 FINAL VERIFICATION — SECURITY BOUNDARY & RELEASE GATE (September 11, 2026)
 - **Status**: **PASSED (100% PASS)**
 - **Firebase Local Emulator Executed**: Yes — 44/44 Live Firebase Security Rules Tests Executed & Passed under OpenJDK Java 21 JRE & project-local `firebase-tools`.

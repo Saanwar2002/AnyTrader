@@ -53,13 +53,17 @@ export type CanonicalEvidenceCategory =
 
 export type EvidenceCategory = CanonicalEvidenceCategory | (string & {});
 
-export type IntelligenceEventType =
+export type CanonicalIntelligenceEventType =
   | 'JOB_ANALYSIS_COMPLETED'
   | 'PROPERTY_ROLLUP_COMPLETED'
   | 'EVIDENCE_INGESTED'
   | 'EXTRACTION_VALIDATED'
   | 'QUALITY_REVIEW_APPLIED'
-  | 'INTELLIGENCE_RETRACTED';
+  | 'INTELLIGENCE_RETRACTED'
+  | 'CANONICAL_INTELLIGENCE_NORMALIZED';
+
+export type IntelligenceEventType = CanonicalIntelligenceEventType | (string & {});
+
 
 /**
  * Step 3: Controlled Evidence Types vocabulary
@@ -363,3 +367,140 @@ export interface QualityReview {
     hash: string;
   };
 }
+
+// ==========================================
+// Task 11: Canonical Intelligence Normalized Types
+// ==========================================
+
+export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
+export type UrgencyLevel = 'immediate' | 'medium_term' | 'planned';
+export type OutcomeStatus = 'resolved' | 'partially_resolved' | 'failed' | 'pending' | (string & {});
+
+/**
+ * Source-backed factual observation directly derived from evidence.
+ */
+export interface CanonicalObservation {
+  observationId: string;
+  component?: string;
+  condition?: string;
+  description: string;
+  evidenceIds: string[];
+  capturedAt?: string;
+  sourceField?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * AI/Model hypothesis, risk assessment, or recommended action with confidence scoring.
+ * Explicitly distinct from factual observations.
+ */
+export interface CanonicalInference {
+  inferenceId: string;
+  type: 'problem' | 'intervention' | 'outcome' | 'risk' | 'recommendation' | (string & {});
+  targetComponent?: string;
+  hypothesis: string;
+  confidence: number; // 0.0 to 1.0
+  reasoning?: string;
+  supportingEvidenceIds: string[];
+  supportingObservationIds?: string[];
+  severity?: SeverityLevel;
+  urgency?: UrgencyLevel;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Canonical problem assertion (traceable to supporting evidence).
+ */
+export interface CanonicalProblem {
+  problemCode?: string;
+  description: string;
+  severity?: SeverityLevel;
+  component?: string;
+  evidenceIds: string[];
+  inferenceId?: string;
+}
+
+/**
+ * Canonical intervention / remediation action (traceable to supporting evidence).
+ */
+export interface CanonicalIntervention {
+  interventionCode?: string;
+  description: string;
+  urgency?: UrgencyLevel;
+  component?: string;
+  estimatedBenchmarkCost?: {
+    min: number;
+    max: number;
+    currency?: string;
+  };
+  evidenceIds: string[];
+  inferenceId?: string;
+}
+
+/**
+ * Canonical outcome assertion (traceable to supporting evidence).
+ */
+export interface CanonicalOutcome {
+  outcomeCode?: string;
+  description: string;
+  component?: string;
+  status?: OutcomeStatus;
+  evidenceIds: string[];
+}
+
+/**
+ * Canonical condition descriptor (traceable to supporting evidence).
+ */
+export interface CanonicalCondition {
+  condition: string;
+  severity?: SeverityLevel;
+  component?: string;
+  evidenceIds: string[];
+}
+
+/**
+ * Full Canonical Intelligence Document.
+ * Platform-wide, versioned, provenance-anchored, and immutable.
+ */
+export interface CanonicalIntelligence {
+  canonicalId: string;
+  aggregateType: IntelligenceAggregateType;
+  aggregateId: string;
+  domain: string;
+  category?: string;
+  component?: string;
+  observations: CanonicalObservation[];
+  conditions?: CanonicalCondition[];
+  problems?: CanonicalProblem[];
+  interventions?: CanonicalIntervention[];
+  outcomes?: CanonicalOutcome[];
+  inferences: CanonicalInference[];
+  evidenceIds: string[];
+  confidence: ConfidenceScores;
+  provenance: Provenance;
+  schemaVersion: string;
+  pipelineVersion: string;
+  modelVersion: string;
+  promptVersion: string;
+  sourceVersion: string | number;
+  generatedAt: string;
+  contentHash?: string;
+}
+
+export type CanonicalIntelligenceInput = Partial<
+  Omit<CanonicalIntelligence, 'canonicalId' | 'schemaVersion' | 'pipelineVersion' | 'generatedAt'>
+> & {
+  aggregateType: IntelligenceAggregateType;
+  aggregateId: string;
+  domain: string;
+  evidenceIds?: string[];
+  confidence?: Partial<ConfidenceScores> | ConfidenceScores;
+  provenance?: Partial<Provenance> | Provenance;
+  schemaVersion?: string;
+  pipelineVersion?: string;
+  modelVersion?: string;
+  promptVersion?: string;
+  sourceVersion?: string | number;
+  generatedAt?: string;
+};
+

@@ -66,6 +66,12 @@ import {
 import {
   buildVersionId,
 } from '../../src/server/intelligence/provenance';
+import {
+  canonicalizeIntelligence,
+  persistCanonicalIntelligence,
+} from '../../src/server/intelligence/canonicalizer';
+import { CanonicalIntelligenceInput } from '../../src/server/intelligence/types';
+
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
@@ -2646,4 +2652,189 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(docSnap.data()?.versionId).toBe(versionId);
     });
   });
+
+  describe('Task 11: Canonical Intelligence Normalization & Schema Enforcement Emulator Suite', () => {
+    it('Task 11 Invariant 1: Admin can persist canonical intelligence into live Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_task11', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const evidenceId = 'ev_emu_t11_roof_1';
+      const jobId = 'job_emu_t11_101';
+
+      // Seed real evidence in Firestore emulator
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+        evidenceId,
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceType: 'job',
+        sourceId: jobId,
+        sourceVersion: 1,
+        evidenceType: 'photo',
+        evidenceCategory: 'MEDIA',
+        sourceRef: 'photos/roof_t11.jpg',
+        contentHash: createHash('sha256').update('photo_bytes_t11').digest('hex'),
+        contentSize: 4096,
+        byteSize: 4096,
+        schemaVersion: 'v8.1.0',
+        integrityStatus: 'verified',
+        verified: true,
+        metadata: {},
+        createdAt: new Date().toISOString(),
+      });
+
+      const canonical = canonicalizeIntelligence({
+        aggregateType: 'job',
+        aggregateId: jobId,
+        domain: 'roofing',
+        category: 'Roof Repair',
+        component: 'flat roof',
+        observations: [
+          {
+            observationId: 'obs_t11_1',
+            component: 'roof',
+            condition: 'damaged',
+            description: 'Slipped slate tile near chimney stack',
+            evidenceIds: [evidenceId],
+          },
+        ],
+        inferences: [
+          {
+            inferenceId: 'inf_t11_1',
+            type: 'problem',
+            targetComponent: 'roof',
+            hypothesis: 'Chimney flashing compromised, moisture penetrating loft timbers',
+            confidence: 0.86,
+            supportingEvidenceIds: [evidenceId],
+            severity: 'high',
+            urgency: 'immediate',
+          },
+        ],
+        evidenceIds: [evidenceId],
+        schemaVersion: 'v8.1.0',
+      });
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const persistResult = await persistCanonicalIntelligence({
+        db: storeDb,
+        canonical,
+      });
+
+      expect(persistResult.isNew).toBe(true);
+      expect(persistResult.versionId).toBe(canonical.canonicalId);
+
+      // Verify extraction read from emulator
+      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', canonical.canonicalId));
+      expect(extSnap.exists()).toBe(true);
+      expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
+      expect(extSnap.data()?.structuredCandidate?.component).toBe('roof');
+      expect(extSnap.data()?.structuredCandidate?.observations?.length).toBe(1);
+
+      // Verify active projection pointer in Firestore emulator
+      const ptrSnap = await getDoc(doc(adminDb, 'intelligence_jobs', jobId));
+      expect(ptrSnap.exists()).toBe(true);
+      expect(ptrSnap.data()?.currentVersionId).toBe(canonical.canonicalId);
+      expect(ptrSnap.data()?.domain).toBe('roofing');
+    });
+
+    it('Task 11 Invariant 2: Direct unauthenticated and non-admin client writes to /intelligence_extractions are blocked', async () => {
+      const unauthDb = testEnv!.unauthenticatedContext().firestore();
+      const customerDb = testEnv!.authenticatedContext('cust_user', { role: 'customer' }).firestore();
+
+      await assertFails(
+        setDoc(doc(unauthDb, 'intelligence_extractions', 'hack_version_1'), {
+          extractionId: 'hack_version_1',
+          aggregateType: 'job',
+          aggregateId: 'job_hack',
+        })
+      );
+
+      await assertFails(
+        setDoc(doc(customerDb, 'intelligence_extractions', 'hack_version_2'), {
+          extractionId: 'hack_version_2',
+          aggregateType: 'job',
+          aggregateId: 'job_hack',
+        })
+      );
+    });
+
+    it('Task 11 Invariant 3: Lineage check against live emulator rejects canonical persistence when evidence is missing', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_task11_missing', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const missingEvidenceId = 'ev_emu_missing_999';
+      const jobId = 'job_emu_t11_102';
+
+      const canonical = canonicalizeIntelligence({
+        aggregateType: 'job',
+        aggregateId: jobId,
+        domain: 'plumbing',
+        observations: [
+          {
+            observationId: 'obs_t11_ghost',
+            description: 'Pinhole pipe leak',
+            evidenceIds: [missingEvidenceId],
+          },
+        ],
+        evidenceIds: [missingEvidenceId],
+        schemaVersion: 'v8.1.0',
+      });
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      await expect(
+        persistCanonicalIntelligence({
+          db: storeDb,
+          canonical,
+        })
+      ).rejects.toThrow(/does not exist in authoritative Firestore store/i);
+    });
+  });
 });
+
