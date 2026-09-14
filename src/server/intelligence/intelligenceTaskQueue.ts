@@ -23,7 +23,7 @@ export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unk
 
 export interface FirestoreTaskDb {
   collection(name: string): any;
-  runTransaction?<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
+  runTransaction<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
 }
 
 export type ErrorClassification = 'RETRYABLE' | 'NON_RETRYABLE';
@@ -317,42 +317,10 @@ export class IntelligenceTaskQueue {
     const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
     try {
-      if (typeof this.firestoreDb.runTransaction === 'function') {
-        const task = await this.firestoreDb.runTransaction(async (transaction: any) => {
-          const existing = await transaction.get(taskRef);
-          if (existing && existing.exists) {
-            return existing.data() as IntelligenceTask;
-          }
-
-          const newTask: IntelligenceTask = {
-            taskId,
-            taskType,
-            aggregateType,
-            aggregateId,
-            idempotencyKey,
-            status: 'pending',
-            attempts: 0,
-            maxAttempts: this.maxRetries,
-            createdAt: now,
-            updatedAt: now,
-            nextAttemptAt: now,
-            payload,
-          };
-
-          transaction.set(taskRef, newTask);
-          return newTask;
-        });
-
-        this.tasks.set(task.taskId, task);
-        this.idempotencyIndex.set(idempotencyKey, task.taskId);
-        return task;
-      } else {
-        const existingDoc = await taskRef.get();
-        if (existingDoc && existingDoc.exists) {
-          const data = existingDoc.data() as IntelligenceTask;
-          this.tasks.set(data.taskId, data);
-          this.idempotencyIndex.set(idempotencyKey, data.taskId);
-          return data;
+      const task = await this.firestoreDb.runTransaction(async (transaction: any) => {
+        const existing = await transaction.get(taskRef);
+        if (existing && existing.exists) {
+          return existing.data() as IntelligenceTask;
         }
 
         const newTask: IntelligenceTask = {
@@ -370,11 +338,13 @@ export class IntelligenceTaskQueue {
           payload,
         };
 
-        await taskRef.set(newTask);
-        this.tasks.set(taskId, newTask);
-        this.idempotencyIndex.set(idempotencyKey, taskId);
+        transaction.set(taskRef, newTask);
         return newTask;
-      }
+      });
+
+      this.tasks.set(task.taskId, task);
+      this.idempotencyIndex.set(idempotencyKey, task.taskId);
+      return task;
     } catch (err: any) {
       console.error(`[IntelligenceTaskQueue] Enqueue async Firestore error for ${taskId}:`, err?.message || err);
       throw err;
@@ -393,10 +363,6 @@ export class IntelligenceTaskQueue {
   ): Promise<boolean> {
     if (!this.firestoreDb) {
       throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
-    }
-
-    if (typeof this.firestoreDb.runTransaction !== 'function') {
-      throw new Error("[IntelligenceTaskQueue] Firestore instance does not support runTransaction");
     }
 
     const now = Date.now();
@@ -555,61 +521,40 @@ export class IntelligenceTaskQueue {
           const taskId = doc.id;
           const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
-          if (typeof this.firestoreDb.runTransaction === 'function') {
-            try {
-              const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
-                const currentSnap = await transaction.get(taskRef);
-                if (!currentSnap || !currentSnap.exists) return null;
+          try {
+            const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
+              const currentSnap = await transaction.get(taskRef);
+              if (!currentSnap || !currentSnap.exists) return null;
 
-                const task = currentSnap.data() as IntelligenceTask;
-                if (task.status !== 'processing') return null;
+              const task = currentSnap.data() as IntelligenceTask;
+              if (task.status !== 'processing') return null;
 
-                const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
-                if (!isExpired) return null;
+              const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
+              if (!isExpired) return null;
 
-                const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
-                const updates: Partial<IntelligenceTask> = {
-                  status: nextStatus,
-                  nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
-                  nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
-                  lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
-                  errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
-                  leaseId: undefined,
-                  leaseExpiresAt: undefined,
-                  workerId: undefined,
-                  updatedAt: nowIso,
-                };
-
-                transaction.update(taskRef, updates);
-                return { ...task, ...updates };
-              });
-
-              if (recoveredTask) {
-                this.tasks.set(taskId, recoveredTask);
-                recovered.push(recoveredTask);
-              }
-            } catch (txErr) {
-              console.warn(`[IntelligenceTaskQueue] Transaction recovery error for task ${taskId}:`, txErr);
-            }
-          } else {
-            const task = doc.data() as IntelligenceTask;
-            const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
-
-            if (isExpired) {
               const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
               const updates: Partial<IntelligenceTask> = {
                 status: nextStatus,
                 nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
+                nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
                 lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
                 errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+                leaseId: undefined,
+                leaseExpiresAt: undefined,
+                workerId: undefined,
                 updatedAt: nowIso,
               };
 
-              await taskRef.update(updates);
-              const merged = { ...task, ...updates };
-              this.tasks.set(taskId, merged);
-              recovered.push(merged);
+              transaction.update(taskRef, updates);
+              return { ...task, ...updates };
+            });
+
+            if (recoveredTask) {
+              this.tasks.set(taskId, recoveredTask);
+              recovered.push(recoveredTask);
             }
+          } catch (txErr) {
+            console.warn(`[IntelligenceTaskQueue] Transaction recovery error for task ${taskId}:`, txErr);
           }
         }
       }
@@ -694,21 +639,26 @@ export class IntelligenceTaskQueue {
     const handler = this.handlers.get(task.taskType);
 
     if (!handler) {
-      task.status = 'dead_letter';
-      task.errorCode = 'MISSING_HANDLER';
-      task.lastError = `No handler registered for task type: ${task.taskType}`;
-      task.error = {
-        classification: 'NON_RETRYABLE',
-        message: task.lastError,
+      const missingError = {
+        classification: 'NON_RETRYABLE' as const,
+        message: `No handler registered for task type: ${task.taskType}`,
         timestamp: new Date().toISOString(),
       };
-      task.updatedAt = new Date().toISOString();
-      await taskRef.update({
-        status: task.status,
-        errorCode: task.errorCode,
-        lastError: task.lastError,
-        error: task.error,
-        updatedAt: task.updatedAt,
+      const nowIso = new Date().toISOString();
+      task.status = 'dead_letter';
+      task.errorCode = 'MISSING_HANDLER';
+      task.lastError = missingError.message;
+      task.error = missingError;
+      task.updatedAt = nowIso;
+
+      await this.firestoreDb.runTransaction(async (transaction: any) => {
+        transaction.update(taskRef, {
+          status: 'dead_letter',
+          errorCode: 'MISSING_HANDLER',
+          lastError: missingError.message,
+          error: missingError,
+          updatedAt: nowIso,
+        });
       });
       this.tasks.set(taskId, task);
       return task;
@@ -740,42 +690,29 @@ export class IntelligenceTaskQueue {
       const nowIso = new Date().toISOString();
       const durationMs = Date.now() - startTime;
 
-      // SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION
-      if (typeof this.firestoreDb.runTransaction === 'function') {
-        await this.firestoreDb.runTransaction(async (transaction: any) => {
-          const docSnap = await transaction.get(taskRef);
-          if (!docSnap || !docSnap.exists) {
-            throw new OwnershipLostError(taskId, effectiveWorkerId);
-          }
-          const data = docSnap.data() as IntelligenceTask;
+      // SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
+      await this.firestoreDb.runTransaction(async (transaction: any) => {
+        const docSnap = await transaction.get(taskRef);
+        if (!docSnap || !docSnap.exists) {
+          throw new OwnershipLostError(taskId, effectiveWorkerId);
+        }
+        const data = docSnap.data() as IntelligenceTask;
 
-          if (data.status !== 'processing' || data.workerId !== effectiveWorkerId || (data.leaseId && data.leaseId !== activeLeaseId)) {
-            throw new OwnershipLostError(taskId, effectiveWorkerId);
-          }
+        if (data.status !== 'processing' || data.workerId !== effectiveWorkerId || (data.leaseId && data.leaseId !== activeLeaseId)) {
+          throw new OwnershipLostError(taskId, effectiveWorkerId);
+        }
 
-          transaction.update(taskRef, {
-            status: 'succeeded',
-            completedAt: nowIso,
-            processingDurationMs: durationMs,
-            updatedAt: nowIso,
-            payload: { ...data.payload, ...result },
-            workerId: null,
-            leaseId: null,
-            leaseExpiresAt: null,
-          });
-        });
-      } else {
-        await taskRef.update({
+        transaction.update(taskRef, {
           status: 'succeeded',
           completedAt: nowIso,
           processingDurationMs: durationMs,
           updatedAt: nowIso,
-          payload: { ...task.payload, ...result },
+          payload: { ...data.payload, ...result },
           workerId: null,
           leaseId: null,
           leaseExpiresAt: null,
         });
-      }
+      });
 
       task.status = 'succeeded';
       task.completedAt = nowIso;
@@ -812,45 +749,25 @@ export class IntelligenceTaskQueue {
 
       const classificationValue = isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.classification;
 
-      // FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION
+      // FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       try {
-        if (typeof this.firestoreDb.runTransaction === 'function') {
-          await this.firestoreDb.runTransaction(async (transaction: any) => {
-            const docSnap = await transaction.get(taskRef);
-            if (!docSnap || !docSnap.exists) return;
-            const data = docSnap.data() as IntelligenceTask;
+        await this.firestoreDb.runTransaction(async (transaction: any) => {
+          const docSnap = await transaction.get(taskRef);
+          if (!docSnap || !docSnap.exists) return;
+          const data = docSnap.data() as IntelligenceTask;
 
-            if (data.status !== 'processing' || data.workerId !== effectiveWorkerId) {
-              console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during failure finalization. Aborting state write.`);
-              return;
-            }
+          if (data.status !== 'processing' || data.workerId !== effectiveWorkerId) {
+            console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during failure finalization. Aborting state write.`);
+            return;
+          }
 
-            transaction.update(taskRef, {
-              status: newStatus,
-              processingDurationMs: durationMs,
-              lastError: errorInfo.message,
-              errorCode: isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.code,
-              error: {
-                classification: classificationValue,
-                message: errorInfo.message,
-                timestamp: nowIso,
-              },
-              updatedAt: nowIso,
-              workerId: null,
-              leaseId: null,
-              leaseExpiresAt: null,
-              nextAttemptAt: nextAttemptAt || null,
-              nextRetryAt: nextAttemptAt || null,
-            });
-          });
-        } else {
-          await taskRef.update({
+          transaction.update(taskRef, {
             status: newStatus,
             processingDurationMs: durationMs,
             lastError: errorInfo.message,
             errorCode: isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.code,
             error: {
-              classification: errorInfo.classification,
+              classification: classificationValue,
               message: errorInfo.message,
               timestamp: nowIso,
             },
@@ -861,7 +778,7 @@ export class IntelligenceTaskQueue {
             nextAttemptAt: nextAttemptAt || null,
             nextRetryAt: nextAttemptAt || null,
           });
-        }
+        });
       } catch (finalErr) {
         console.error(`[IntelligenceTaskQueue] Error persisting failure state for task ${taskId}:`, finalErr);
         throw finalErr;

@@ -891,6 +891,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
             }),
           }),
         }),
+        runTransaction: async () => {
+          throw new Error('Firestore connection timeout / permission denied');
+        },
       };
 
       intelligenceTaskQueue.setFirestoreDb(failingDb);
@@ -949,6 +952,14 @@ describe('V8.1 Structured Intelligence Foundation', () => {
             }),
           }),
         }),
+        runTransaction: async <T>(txFunc: (tx: any) => Promise<T>): Promise<T> => {
+          const tx = {
+            get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any) => ref.set(data),
+            update: (ref: any, data: any) => ref.set(data),
+          };
+          return await txFunc(tx);
+        },
       };
 
       intelligenceTaskQueue.setFirestoreDb(mockDb);

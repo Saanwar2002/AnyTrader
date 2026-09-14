@@ -39,7 +39,7 @@ import {
 export interface FirestoreDbLike {
   collection(name: string): any;
   batch?(): any;
-  runTransaction?<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
+  runTransaction<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
 }
 
 export interface PersistIntelligenceOptions {
