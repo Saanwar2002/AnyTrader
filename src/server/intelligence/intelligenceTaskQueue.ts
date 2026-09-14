@@ -1,20 +1,23 @@
 /**
- * AnyTrader V8.1 — Async Intelligence Task Queue & Orchestration
+ * AnyTrader V8.1 — Async Intelligence Task Queue & Orchestration (Hardened Task 13)
  * 
- * Invariants:
+ * Invariants & Core Architecture:
  * - Asynchronous execution: Never blocks core user transactions.
  * - Authoritative Firestore: Firestore task record is the single source of truth in production.
  * - Atomic claiming: Worker claims task transactionally via Firestore runTransaction.
  * - Stale task recovery: Processing tasks with expired leases are safely reclaimed transactionally.
+ * - Ownership verification: Worker verifies active lease ownership before success/failure finalization.
+ * - Bounded retries & backoff: Exponential backoff, maximum retries bounded by task configuration.
+ * - Error classification: Non-retryable errors (security, schema, lineage validation) fail fast to dead_letter.
+ * - Bounded concurrency: Configurable maxConcurrency limit prevents worker overload and AI retry storms.
  * - Deterministic durable idempotency: Document ID derived from idempotency key eliminates creation race window.
- * - Worker discovery: Worker discovers pending/retrying tasks directly from Firestore after restart.
+ * - Fail-Closed: Zero in-memory authority. Throws if Firestore database instance is missing or failing.
  * - Lifecycle: pending -> processing -> succeeded | retrying -> dead_letter
- * - Bounded retries: Exponential backoff, maximum 3 attempts by default.
- * - Zero Silent Failure: Critical Firestore writes throw/propagate rather than falsely succeeding.
  */
 
 import { createHash } from 'node:crypto';
 import { IntelligenceTask, TaskStatus, TaskType, IntelligenceAggregateType } from './types';
+import { AICandidateSecurityError } from './aiCandidateBoundary';
 
 export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unknown>>;
 
@@ -23,90 +26,171 @@ export interface FirestoreTaskDb {
   runTransaction?<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
 }
 
+export type ErrorClassification = 'RETRYABLE' | 'NON_RETRYABLE';
+
+export class OwnershipLostError extends Error {
+  constructor(public readonly taskId: string, public readonly workerId: string) {
+    super(`[IntelligenceTaskQueue] Worker '${workerId}' lost lease ownership for task '${taskId}'. Finalization aborted.`);
+    this.name = 'OwnershipLostError';
+  }
+}
+
 /**
  * Derives a deterministic Firestore document ID from the idempotency key.
- * This guarantees atomic uniqueness at the database layer.
+ * Guarantees atomic uniqueness at the database layer.
  */
 export function taskDocumentId(idempotencyKey: string): string {
   const digest = createHash('sha256').update(idempotencyKey).digest('hex');
   return `idem_${digest.slice(0, 32)}`;
 }
 
+/**
+ * Validates task status transitions according to the explicit task state machine.
+ */
+export function isValidTaskStateTransition(currentStatus: TaskStatus | string, targetStatus: TaskStatus): boolean {
+  if (currentStatus === 'succeeded' || currentStatus === 'dead_letter' || currentStatus === 'cancelled') {
+    return false; // Terminal states cannot transition
+  }
+  if (currentStatus === 'pending' && targetStatus === 'processing') return true;
+  if (currentStatus === 'retrying' && (targetStatus === 'processing' || targetStatus === 'dead_letter')) return true;
+  if (currentStatus === 'processing') {
+    if (targetStatus === 'succeeded' || targetStatus === 'retrying' || targetStatus === 'dead_letter' || targetStatus === 'processing') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Classifies processing errors into RETRYABLE vs NON_RETRYABLE based on error type and message.
+ */
+export function classifyTaskError(err: unknown): {
+  classification: ErrorClassification;
+  code: string;
+  message: string;
+} {
+  if (!err) {
+    return { classification: 'RETRYABLE', code: 'UNKNOWN_ERROR', message: 'Unknown error occurred' };
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : '';
+  const code = (err as any)?.code || (err as any)?.errorCode || name || 'UNKNOWN_ERROR';
+
+  // Security, lineage validation, schema validation, or missing handlers are strictly NON_RETRYABLE
+  if (
+    err instanceof AICandidateSecurityError ||
+    name === 'AICandidateSecurityError' ||
+    name === 'LineageValidationError' ||
+    name === 'ZodError' ||
+    message.includes('Lineage validation failed') ||
+    message.includes('Firestore DB reference is required') ||
+    message.includes('No evidence provided') ||
+    message.includes('Missing required evidence') ||
+    message.includes('No handler registered') ||
+    message.includes('INVALID_PAYLOAD') ||
+    message.includes('MISSING_EVIDENCE') ||
+    message.includes('SECURITY_VIOLATION') ||
+    code === 'PERMISSION_DENIED' ||
+    code === 'INVALID_ARGUMENT' ||
+    code === 'MISSING_HANDLER'
+  ) {
+    return {
+      classification: 'NON_RETRYABLE',
+      code: code !== 'UNKNOWN_ERROR' ? code : 'SECURITY_OR_VALIDATION_FAILURE',
+      message,
+    };
+  }
+
+  // Rate limits, network glitches, or 503 service unavailable are RETRYABLE
+  if (
+    message.includes('429') ||
+    message.includes('RESOURCE_EXHAUSTED') ||
+    message.includes('rate limit') ||
+    message.includes('503') ||
+    message.includes('UNAVAILABLE') ||
+    message.includes('DEADLINE_EXCEEDED') ||
+    message.includes('timeout') ||
+    message.includes('econnreset') ||
+    message.includes('etimedout')
+  ) {
+    return {
+      classification: 'RETRYABLE',
+      code: code !== 'UNKNOWN_ERROR' ? code : 'TRANSIENT_SERVICE_ERROR',
+      message,
+    };
+  }
+
+  return {
+    classification: 'RETRYABLE',
+    code: code !== 'UNKNOWN_ERROR' ? code : 'PROCESSING_ERROR',
+    message,
+  };
+}
+
 export class IntelligenceTaskQueue {
-  /**
-   * Local in-memory cache for fast lookups.
-   * NEVER authoritative in production when Firestore is configured.
-   */
   private tasks = new Map<string, IntelligenceTask>();
-  private idempotencyIndex = new Map<string, string>(); // idempotencyKey -> taskId
+  private idempotencyIndex = new Map<string, string>();
   private handlers = new Map<TaskType, TaskHandler>();
   private isWorkerRunning = false;
   private workerIntervalTimer: NodeJS.Timeout | null = null;
   private firestoreDb: FirestoreTaskDb | null = null;
   private workerId: string;
+  private maxConcurrency: number;
+  private activeTaskIds = new Set<string>();
 
   constructor(
     private maxRetries: number = 3,
     private defaultLeaseDurationMs: number = 300000, // 5 minutes
-    workerId?: string
+    workerId?: string,
+    maxConcurrency: number = 5
   ) {
     this.workerId = workerId || `worker_${Math.random().toString(36).slice(2, 8)}`;
+    this.maxConcurrency = Math.max(1, Math.min(maxConcurrency, 50));
   }
 
-  /**
-   * Gets the worker identifier for this queue instance
-   */
   public getWorkerId(): string {
     return this.workerId;
   }
 
-  /**
-   * Sets the worker identifier for this queue instance
-   */
   public setWorkerId(id: string): void {
     this.workerId = id;
   }
 
-  /**
-   * Sets the authoritative Firestore database instance for durable task persistence
-   */
+  public getMaxConcurrency(): number {
+    return this.maxConcurrency;
+  }
+
+  public setMaxConcurrency(limit: number): void {
+    if (typeof limit === 'number' && limit > 0) {
+      this.maxConcurrency = Math.max(1, Math.min(Math.floor(limit), 50));
+    }
+  }
+
+  public getActiveTaskCount(): number {
+    return this.activeTaskIds.size;
+  }
+
   public setFirestoreDb(db: FirestoreTaskDb | null): void {
     this.firestoreDb = db;
   }
 
-  /**
-   * Gets the current Firestore database instance
-   */
   public getFirestoreDb(): FirestoreTaskDb | null {
     return this.firestoreDb;
   }
 
-  /**
-   * Registers a task handler for a specific task type
-   */
   public registerHandler(type: TaskType, handler: TaskHandler): void {
     this.handlers.set(type, handler);
   }
 
-  /**
-   * Checks if a handler is registered for the specified task type
-   */
   public hasHandler(type: TaskType): boolean {
     return this.handlers.has(type);
   }
 
-  /**
-   * Gets list of registered handler task types
-   */
   public getRegisteredHandlers(): TaskType[] {
     return Array.from(this.handlers.keys());
   }
 
-  /**
-   * Starts the background worker loop discovering runnable tasks from Firestore.
-   * Fails closed if Firestore database instance is not configured.
-   * Idempotent if worker is already running.
-   */
   public startWorker(pollIntervalMs: number = 5000): void {
     if (this.workerIntervalTimer) return;
     if (!this.firestoreDb) {
@@ -119,16 +203,10 @@ export class IntelligenceTaskQueue {
     }, pollIntervalMs);
   }
 
-  /**
-   * Returns whether the background worker is currently running
-   */
   public isWorkerActive(): boolean {
     return this.workerIntervalTimer !== null;
   }
 
-  /**
-   * Stops the background worker loop
-   */
   public stopWorker(): void {
     if (this.workerIntervalTimer) {
       clearInterval(this.workerIntervalTimer);
@@ -141,7 +219,7 @@ export class IntelligenceTaskQueue {
    */
   public async getRunnableTasksFromFirestore(limit = 10): Promise<IntelligenceTask[]> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     const nowIso = new Date().toISOString();
@@ -186,32 +264,34 @@ export class IntelligenceTaskQueue {
   }
 
   /**
-   * Drains runnable tasks directly from Firestore
-   */
-  private async drainFromFirestore(): Promise<void> {
-    const tasks = await this.getRunnableTasksFromFirestore(10);
-    for (const task of tasks) {
-      try {
-        await this.executeTask(task.taskId);
-      } catch (error) {
-        console.error(`[IntelligenceTaskQueue] Worker failed for task ${task.taskId}:`, error);
-      }
-    }
-  }
-
-  /**
-   * Worker tick combining stale lease recovery and task draining
+   * Worker tick combining stale lease recovery and task draining with concurrency bounds.
    */
   public async workerTick(): Promise<void> {
-    if (!this.firestoreDb) {
-      return;
-    }
+    if (!this.firestoreDb) return;
     if (this.isWorkerRunning) return;
     this.isWorkerRunning = true;
 
     try {
       await this.recoverStaleTasksAsync();
-      await this.drainFromFirestore();
+      
+      const availableSlots = this.maxConcurrency - this.activeTaskIds.size;
+      if (availableSlots <= 0) return;
+
+      const tasks = await this.getRunnableTasksFromFirestore(availableSlots);
+      const pendingTasks = tasks.filter((t) => !this.activeTaskIds.has(t.taskId));
+
+      await Promise.all(
+        pendingTasks.map(async (t) => {
+          this.activeTaskIds.add(t.taskId);
+          try {
+            await this.executeTask(t.taskId);
+          } catch (err) {
+            console.error(`[IntelligenceTaskQueue] Worker tick error processing task ${t.taskId}:`, err);
+          } finally {
+            this.activeTaskIds.delete(t.taskId);
+          }
+        })
+      );
     } finally {
       this.isWorkerRunning = false;
     }
@@ -229,7 +309,7 @@ export class IntelligenceTaskQueue {
     payload: Record<string, unknown> = {}
   ): Promise<IntelligenceTask> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     const taskId = taskDocumentId(idempotencyKey);
@@ -267,7 +347,6 @@ export class IntelligenceTaskQueue {
         this.idempotencyIndex.set(idempotencyKey, task.taskId);
         return task;
       } else {
-        // Fallback if runTransaction not implemented
         const existingDoc = await taskRef.get();
         if (existingDoc && existingDoc.exists) {
           const data = existingDoc.data() as IntelligenceTask;
@@ -309,18 +388,20 @@ export class IntelligenceTaskQueue {
   public async claimTaskTransactional(
     taskId: string,
     workerId: string = this.workerId,
-    leaseDurationMs: number = this.defaultLeaseDurationMs
+    leaseDurationMs: number = this.defaultLeaseDurationMs,
+    customLeaseId?: string
   ): Promise<boolean> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     if (typeof this.firestoreDb.runTransaction !== 'function') {
-      throw new Error("Firestore instance does not support runTransaction");
+      throw new Error("[IntelligenceTaskQueue] Firestore instance does not support runTransaction");
     }
 
     const now = Date.now();
     const nowIso = new Date(now).toISOString();
+    const leaseId = customLeaseId || `lease_${now}_${Math.random().toString(36).slice(2, 8)}`;
     const leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
     const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
@@ -333,7 +414,7 @@ export class IntelligenceTaskQueue {
 
         const data = docSnap.data() as IntelligenceTask;
 
-        // Completed, dead-letter, or cancelled tasks cannot be claimed
+        // Terminal or cancelled tasks cannot be claimed
         if (
           data.status === 'succeeded' ||
           data.status === 'dead_letter' ||
@@ -344,14 +425,22 @@ export class IntelligenceTaskQueue {
 
         const maxAttempts = data.maxAttempts || this.maxRetries;
         if ((data.attempts || 0) >= maxAttempts) {
+          // Transactionally move to dead_letter if max attempts reached
+          transaction.update(taskRef, {
+            status: 'dead_letter',
+            errorCode: 'MAX_RETRIES_EXCEEDED',
+            lastError: `Exceeded max attempts (${data.attempts}/${maxAttempts})`,
+            updatedAt: nowIso,
+          });
           return false;
         }
 
         const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= now : true;
+        const isRetryDue = !data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now;
 
         const canClaim =
           data.status === 'pending' ||
-          (data.status === 'retrying' && (!data.nextAttemptAt || new Date(data.nextAttemptAt).getTime() <= now)) ||
+          (data.status === 'retrying' && isRetryDue) ||
           (data.status === 'processing' && isLeaseExpired);
 
         if (!canClaim) {
@@ -364,6 +453,8 @@ export class IntelligenceTaskQueue {
           attempts: newAttempts,
           startedAt: nowIso,
           workerId: workerId,
+          leaseId: leaseId,
+          leaseAcquiredAt: nowIso,
           leaseExpiresAt: leaseExpiresAt,
           updatedAt: nowIso,
         });
@@ -389,6 +480,8 @@ export class IntelligenceTaskQueue {
         local.attempts = (local.attempts || 0) + 1;
         local.startedAt = nowIso;
         local.workerId = workerId;
+        local.leaseId = leaseId;
+        local.leaseAcquiredAt = nowIso;
         local.leaseExpiresAt = leaseExpiresAt;
         local.updatedAt = nowIso;
         this.tasks.set(taskId, local);
@@ -401,9 +494,8 @@ export class IntelligenceTaskQueue {
     }
   }
 
-
   /**
-   * Recovers stale tasks synchronously (memory cache only)
+   * Recovers stale tasks synchronously (memory cache sync helper).
    */
   public recoverStaleTasks(leaseTimeoutMs: number = this.defaultLeaseDurationMs): IntelligenceTask[] {
     const now = Date.now();
@@ -428,6 +520,9 @@ export class IntelligenceTaskQueue {
             task.lastError = 'Exceeded attempts during stale lease recovery';
             task.errorCode = 'STALE_LEASE_EXHAUSTED';
           }
+          task.workerId = undefined;
+          task.leaseId = undefined;
+          task.leaseExpiresAt = undefined;
           task.updatedAt = new Date(now).toISOString();
           recovered.push(task);
         }
@@ -442,7 +537,7 @@ export class IntelligenceTaskQueue {
    */
   public async recoverStaleTasksAsync(leaseTimeoutMs: number = this.defaultLeaseDurationMs): Promise<IntelligenceTask[]> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     const now = Date.now();
@@ -479,6 +574,7 @@ export class IntelligenceTaskQueue {
                   nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
                   lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
                   errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+                  leaseId: undefined,
                   leaseExpiresAt: undefined,
                   workerId: undefined,
                   updatedAt: nowIso,
@@ -524,20 +620,16 @@ export class IntelligenceTaskQueue {
     }
   }
 
-  /**
-   * Retrieves a task by ID (memory cache)
-   */
   public getTask(taskId: string): IntelligenceTask | undefined {
     return this.tasks.get(taskId);
   }
 
   /**
    * Retrieves a task by ID asynchronously with authoritative Firestore lookup.
-   * Throws if Firestore is not ready or if Firestore read fails.
    */
   public async getTaskAsync(taskId: string): Promise<IntelligenceTask | undefined> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     try {
@@ -561,17 +653,11 @@ export class IntelligenceTaskQueue {
     }
   }
 
-  /**
-   * Retrieves a task by its deterministic idempotency key (memory cache)
-   */
   public getByIdempotencyKey(key: string): IntelligenceTask | undefined {
     const taskId = this.idempotencyIndex.get(key) || taskDocumentId(key);
     return this.tasks.get(taskId);
   }
 
-  /**
-   * Retrieves a task by its deterministic idempotency key asynchronously from Firestore
-   */
   public async getByIdempotencyKeyAsync(key: string): Promise<IntelligenceTask | undefined> {
     const taskId = taskDocumentId(key);
     return this.getTaskAsync(taskId);
@@ -579,28 +665,20 @@ export class IntelligenceTaskQueue {
 
   /**
    * Executes a single task step through its handler with authoritative Firestore lease & ownership gating.
-   * 
-   * Invariants:
-   * - A worker MUST NEVER execute a task merely because it knows the taskId.
-   * - Execution is only allowed if the task is successfully claimed or already legitimately owned
-   *   by the executing worker with an active lease.
-   * - If the claim fails (e.g. active lease owned by another worker, completed, retry not due),
-   *   the handler MUST NOT execute.
-   * - No force or bypass parameter exists.
    */
   public async executeTask(
     taskId: string,
     workerId?: string
   ): Promise<IntelligenceTask> {
     if (!this.firestoreDb) {
-      throw new Error("Firestore task store is not ready");
+      throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
     }
 
     const effectiveWorkerId = (typeof workerId === 'string' && workerId) ? workerId : this.workerId;
     let task = await this.getTaskAsync(taskId);
 
     if (!task) {
-      throw new Error(`[TaskQueue Error] Task ${taskId} not found`);
+      throw new Error(`[IntelligenceTaskQueue Error] Task ${taskId} not found`);
     }
 
     // Terminal or cancelled tasks must never execute
@@ -612,18 +690,20 @@ export class IntelligenceTaskQueue {
       return task;
     }
 
+    const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
     const handler = this.handlers.get(task.taskType);
+
     if (!handler) {
       task.status = 'dead_letter';
       task.errorCode = 'MISSING_HANDLER';
       task.lastError = `No handler registered for task type: ${task.taskType}`;
       task.error = {
-        classification: 'MISSING_HANDLER',
+        classification: 'NON_RETRYABLE',
         message: task.lastError,
         timestamp: new Date().toISOString(),
       };
       task.updatedAt = new Date().toISOString();
-      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
+      await taskRef.update({
         status: task.status,
         errorCode: task.errorCode,
         lastError: task.lastError,
@@ -634,8 +714,9 @@ export class IntelligenceTaskQueue {
       return task;
     }
 
+    const claimLeaseId = `lease_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     // Lease & Ownership verification:
-    // If the task is already processing, execution is allowed ONLY if the current worker legitimately owns the active lease.
     const now = Date.now();
     const isOwnerWithActiveLease =
       task.status === 'processing' &&
@@ -644,113 +725,161 @@ export class IntelligenceTaskQueue {
       new Date(task.leaseExpiresAt).getTime() > now;
 
     if (!isOwnerWithActiveLease) {
-      // Must atomically claim the task in Firestore before handler can execute.
-      const claimed = await this.claimTaskTransactional(taskId, effectiveWorkerId, this.defaultLeaseDurationMs);
+      const claimed = await this.claimTaskTransactional(taskId, effectiveWorkerId, this.defaultLeaseDurationMs, claimLeaseId);
       if (!claimed) {
-        // A failed claim MUST mean: DO NOT EXECUTE THE HANDLER.
         return (await this.getTaskAsync(taskId)) || task;
       }
       task = (await this.getTaskAsync(taskId)) || task;
     }
 
-    // Final boundary guard: Handler invocation occurs ONLY after verified ownership and active lease.
-    const verifiedNow = Date.now();
-    const verifiedOwner =
-      task.status === 'processing' &&
-      task.workerId === effectiveWorkerId &&
-      !!task.leaseExpiresAt &&
-      new Date(task.leaseExpiresAt).getTime() > verifiedNow;
-
-    if (!verifiedOwner) {
-      return task;
-    }
-
+    const activeLeaseId = task.leaseId || claimLeaseId;
     const startTime = Date.now();
 
     try {
       const result = await handler(task);
       const nowIso = new Date().toISOString();
+      const durationMs = Date.now() - startTime;
+
+      // SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION
+      if (typeof this.firestoreDb.runTransaction === 'function') {
+        await this.firestoreDb.runTransaction(async (transaction: any) => {
+          const docSnap = await transaction.get(taskRef);
+          if (!docSnap || !docSnap.exists) {
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
+          }
+          const data = docSnap.data() as IntelligenceTask;
+
+          if (data.status !== 'processing' || data.workerId !== effectiveWorkerId || (data.leaseId && data.leaseId !== activeLeaseId)) {
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
+          }
+
+          transaction.update(taskRef, {
+            status: 'succeeded',
+            completedAt: nowIso,
+            processingDurationMs: durationMs,
+            updatedAt: nowIso,
+            payload: { ...data.payload, ...result },
+            workerId: null,
+            leaseId: null,
+            leaseExpiresAt: null,
+          });
+        });
+      } else {
+        await taskRef.update({
+          status: 'succeeded',
+          completedAt: nowIso,
+          processingDurationMs: durationMs,
+          updatedAt: nowIso,
+          payload: { ...task.payload, ...result },
+          workerId: null,
+          leaseId: null,
+          leaseExpiresAt: null,
+        });
+      }
+
       task.status = 'succeeded';
-      task.payload = { ...task.payload, ...result };
       task.completedAt = nowIso;
-      task.processingDurationMs = Date.now() - startTime;
+      task.processingDurationMs = durationMs;
       task.updatedAt = nowIso;
+      task.payload = { ...task.payload, ...result };
       delete task.nextAttemptAt;
       delete task.nextRetryAt;
       delete task.leaseExpiresAt;
-
-      // Durable Firestore update - throw if fails so false success is not reported
-      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-        status: 'succeeded',
-        completedAt: task.completedAt,
-        processingDurationMs: task.processingDurationMs,
-        updatedAt: task.updatedAt,
-        payload: task.payload,
-      });
-
+      delete task.leaseId;
+      delete task.workerId;
       this.tasks.set(taskId, task);
       return task;
     } catch (err) {
-      const duration = Date.now() - startTime;
-      task.processingDurationMs = duration;
-      const errorMsg = (err as Error).message || 'Unknown processing error';
-      task.lastError = errorMsg;
-      task.errorCode = 'PROCESSING_ERROR';
-
-      if (task.attempts < task.maxAttempts) {
-        task.status = 'retrying';
-        const backoffSec = Math.pow(2, task.attempts);
-        task.nextAttemptAt = new Date(Date.now() + backoffSec * 1000).toISOString();
-        task.nextRetryAt = task.nextAttemptAt;
-        task.error = {
-          classification: 'TRANSIENT_FAILURE',
-          message: errorMsg,
-          timestamp: new Date().toISOString(),
-        };
-      } else {
-        task.status = 'dead_letter';
-        delete task.nextAttemptAt;
-        delete task.nextRetryAt;
-        task.errorCode = 'MAX_RETRIES_EXCEEDED';
-        task.error = {
-          classification: 'MAX_RETRIES_EXCEEDED',
-          message: `Exceeded ${task.maxAttempts} attempts. Last error: ${errorMsg}`,
-          timestamp: new Date().toISOString(),
-        };
+      if (err instanceof OwnershipLostError) {
+        console.warn(`[IntelligenceTaskQueue] ${err.message}`);
+        return (await this.getTaskAsync(taskId)) || task;
       }
-      task.updatedAt = new Date().toISOString();
-      delete task.leaseExpiresAt;
-      delete task.workerId;
 
-      await this.firestoreDb.collection('intelligence_tasks').doc(taskId).update({
-        status: task.status,
-        attempts: task.attempts,
-        nextAttemptAt: task.nextAttemptAt || null,
-        lastError: task.lastError,
-        errorCode: task.errorCode,
-        error: task.error,
-        updatedAt: task.updatedAt,
-        workerId: null,
-      });
+      const durationMs = Date.now() - startTime;
+      const errorInfo = classifyTaskError(err);
+      const attempts = task.attempts || 1;
+      const maxAttempts = task.maxAttempts || this.maxRetries;
+      const isNonRetryable = errorInfo.classification === 'NON_RETRYABLE';
+      const isExhausted = attempts >= maxAttempts;
+      const newStatus: TaskStatus = (isNonRetryable || isExhausted) ? 'dead_letter' : 'retrying';
+      const nowIso = new Date().toISOString();
 
-      this.tasks.set(taskId, task);
+      let nextAttemptAt: string | undefined = undefined;
+      if (newStatus === 'retrying') {
+        const delaySec = Math.min(2 * Math.pow(2, attempts - 1), 300);
+        nextAttemptAt = new Date(Date.now() + delaySec * 1000).toISOString();
+      }
+
+      const classificationValue = isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.classification;
+
+      // FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION
+      try {
+        if (typeof this.firestoreDb.runTransaction === 'function') {
+          await this.firestoreDb.runTransaction(async (transaction: any) => {
+            const docSnap = await transaction.get(taskRef);
+            if (!docSnap || !docSnap.exists) return;
+            const data = docSnap.data() as IntelligenceTask;
+
+            if (data.status !== 'processing' || data.workerId !== effectiveWorkerId) {
+              console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during failure finalization. Aborting state write.`);
+              return;
+            }
+
+            transaction.update(taskRef, {
+              status: newStatus,
+              processingDurationMs: durationMs,
+              lastError: errorInfo.message,
+              errorCode: isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.code,
+              error: {
+                classification: classificationValue,
+                message: errorInfo.message,
+                timestamp: nowIso,
+              },
+              updatedAt: nowIso,
+              workerId: null,
+              leaseId: null,
+              leaseExpiresAt: null,
+              nextAttemptAt: nextAttemptAt || null,
+              nextRetryAt: nextAttemptAt || null,
+            });
+          });
+        } else {
+          await taskRef.update({
+            status: newStatus,
+            processingDurationMs: durationMs,
+            lastError: errorInfo.message,
+            errorCode: isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.code,
+            error: {
+              classification: errorInfo.classification,
+              message: errorInfo.message,
+              timestamp: nowIso,
+            },
+            updatedAt: nowIso,
+            workerId: null,
+            leaseId: null,
+            leaseExpiresAt: null,
+            nextAttemptAt: nextAttemptAt || null,
+            nextRetryAt: nextAttemptAt || null,
+          });
+        }
+      } catch (finalErr) {
+        console.error(`[IntelligenceTaskQueue] Error persisting failure state for task ${taskId}:`, finalErr);
+        throw finalErr;
+      }
+
+      task = (await this.getTaskAsync(taskId)) || task;
       return task;
     }
   }
 
-  /**
-   * Lists tasks by status
-   */
   public listByStatus(status: TaskStatus): IntelligenceTask[] {
     return Array.from(this.tasks.values()).filter((t) => t.status === status);
   }
 
-  /**
-   * Clears in-memory queue (for test isolation)
-   */
   public clear(): void {
     this.tasks.clear();
     this.idempotencyIndex.clear();
+    this.activeTaskIds.clear();
   }
 }
 

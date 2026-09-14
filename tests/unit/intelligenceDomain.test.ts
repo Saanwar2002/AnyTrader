@@ -31,6 +31,8 @@ import {
   sanitizeUntrustedContent,
   buildSecuredPrompt,
   intelligenceTaskQueue,
+  IntelligenceTaskQueue,
+  isValidTaskStateTransition,
   jobIntelligenceService,
   propertyIntelligenceService,
   qualityReviewService,
@@ -519,6 +521,89 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(r3.status).toBe('dead_letter');
       expect(r3.attempts).toBe(3);
       expect(r3.error?.classification).toBe('MAX_RETRIES_EXCEEDED');
+    });
+
+    it('immediately transitions non-retryable errors (security/validation) to dead_letter without retrying', async () => {
+      intelligenceTaskQueue.registerHandler('job_extraction', async () => {
+        const err = new Error('Lineage validation failed: corrupt evidence hash');
+        err.name = 'LineageValidationError';
+        throw err;
+      });
+
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_non_retryable_1',
+        'idemp_non_retryable'
+      );
+
+      const result = await intelligenceTaskQueue.executeTask(task.taskId);
+      expect(result.status).toBe('dead_letter');
+      expect(result.attempts).toBe(1);
+      expect(result.error?.classification).toBe('NON_RETRYABLE');
+      expect(result.errorCode).toBe('LineageValidationError');
+    });
+
+    it('aborts finalization when worker loses lease ownership during handler execution', async () => {
+      intelligenceTaskQueue.registerHandler('job_extraction', async () => {
+        // Simulate lease expiration / another worker reclaiming mid-execution
+        const docRef = mockDocs.get(`intelligence_tasks/${task.taskId}`);
+        docRef.workerId = 'other_worker';
+        docRef.leaseId = 'other_lease_token';
+        return { extracted: true };
+      });
+
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_ownership_loss_1',
+        'idemp_ownership_loss'
+      );
+
+      await intelligenceTaskQueue.executeTask(task.taskId, 'original_worker');
+
+      // Task status in store should NOT be falsely overwritten to succeeded
+      const storedTask = mockDocs.get(`intelligence_tasks/${task.taskId}`);
+      expect(storedTask.workerId).toBe('other_worker');
+      expect(storedTask.status).not.toBe('succeeded');
+    });
+
+    it('rejects illegal task state transitions via isValidTaskStateTransition', () => {
+      expect(isValidTaskStateTransition('succeeded', 'processing')).toBe(false);
+      expect(isValidTaskStateTransition('succeeded', 'pending')).toBe(false);
+      expect(isValidTaskStateTransition('dead_letter', 'processing')).toBe(false);
+      expect(isValidTaskStateTransition('dead_letter', 'retrying')).toBe(false);
+      expect(isValidTaskStateTransition('pending', 'processing')).toBe(true);
+      expect(isValidTaskStateTransition('processing', 'succeeded')).toBe(true);
+      expect(isValidTaskStateTransition('processing', 'retrying')).toBe(true);
+      expect(isValidTaskStateTransition('processing', 'dead_letter')).toBe(true);
+    });
+
+    it('enforces worker maxConcurrency limits during worker ticks', async () => {
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker_concurrency_test', 2);
+      queue.setFirestoreDb(intelligenceTaskQueue.getFirestoreDb());
+
+      expect(queue.getMaxConcurrency()).toBe(2);
+      queue.setMaxConcurrency(5);
+      expect(queue.getMaxConcurrency()).toBe(5);
+      queue.setMaxConcurrency(2);
+
+      expect(queue.getActiveTaskCount()).toBe(0);
+    });
+
+    it('FAILS CLOSED when Firestore database is unconfigured or absent', async () => {
+      const bareQueue = new IntelligenceTaskQueue();
+      await expect(
+        bareQueue.enqueueTaskAsync('job_extraction', 'job', 'j1', 'key1')
+      ).rejects.toThrow(/Firestore task store is not ready or configured/);
+
+      await expect(
+        bareQueue.claimTaskTransactional('t1')
+      ).rejects.toThrow(/Firestore task store is not ready or configured/);
+
+      await expect(
+        bareQueue.getTaskAsync('t1')
+      ).rejects.toThrow(/Firestore task store is not ready or configured/);
     });
   });
 

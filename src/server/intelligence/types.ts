@@ -262,6 +262,8 @@ export interface IntelligenceTask {
   modelVersion?: string;
   pipelineVersion?: string;
   workerId?: string;
+  leaseId?: string;
+  leaseAcquiredAt?: string;
   leaseExpiresAt?: string;
   error?: {
     classification: string;
