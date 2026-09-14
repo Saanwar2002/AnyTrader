@@ -142,103 +142,58 @@ export class ImmutableIntelligenceStore {
       updatedAt: new Date().toISOString(),
     };
 
-    if (typeof db.runTransaction === 'function') {
-      return await db.runTransaction(async (transaction: any) => {
-        const existingSnap = await transaction.get(extractionRef);
+    if (typeof db.runTransaction !== 'function') {
+      throw new Error(
+        '[ImmutableStore] Firestore transaction capability (runTransaction) is required for atomic immutable persistence. Operational failure (Fail Closed).'
+      );
+    }
 
-        if (existingSnap && existingSnap.exists) {
-          const existingData = (typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data) as IntelligenceExtraction;
-          const existingHash = computeStructuredDataHash({
-            aggregateId: existingData.aggregateId,
-            aggregateType: existingData.aggregateType,
-            sourceVersion: existingData.sourceVersion,
-            pipelineVersion: existingData.pipelineVersion,
-            modelVersion: existingData.modelVersion,
-            promptVersion: existingData.promptVersion,
-            schemaVersion: existingData.schemaVersion,
-            candidate: existingData.structuredCandidate,
-          });
+    return await db.runTransaction(async (transaction: any) => {
+      const existingSnap = await transaction.get(extractionRef);
 
-          if (existingHash === extractionHash) {
-            // Idempotent retry: Exact same execution recognized.
-            // Transactionally update summary pointer and return existing extraction.
-            transaction.set(summaryRef, updatedSummary, { merge: true });
-            return {
-              versionId,
-              isNew: false,
-              extraction: existingData,
-              eventId: event.eventId,
-            };
-          } else {
-            // Collision or mutation attempt on existing historical version -> HARD FAILURE
-            throw new Error(
-              `[Intelligence Immutability Error] Cannot mutate historical intelligence version '${versionId}'. Historical intelligence outputs are append-only.`
-            );
-          }
+      if (existingSnap && existingSnap.exists) {
+        const existingData = (typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data) as IntelligenceExtraction;
+        const existingHash = computeStructuredDataHash({
+          aggregateId: existingData.aggregateId,
+          aggregateType: existingData.aggregateType,
+          sourceVersion: existingData.sourceVersion,
+          pipelineVersion: existingData.pipelineVersion,
+          modelVersion: existingData.modelVersion,
+          promptVersion: existingData.promptVersion,
+          schemaVersion: existingData.schemaVersion,
+          candidate: existingData.structuredCandidate,
+        });
+
+        if (existingHash === extractionHash) {
+          // Idempotent retry: Exact same execution recognized.
+          // Transactionally update summary pointer and return existing extraction.
+          transaction.set(summaryRef, updatedSummary, { merge: true });
+          return {
+            versionId,
+            isNew: false,
+            extraction: existingData,
+            eventId: event.eventId,
+          };
+        } else {
+          // Collision or mutation attempt on existing historical version -> HARD FAILURE
+          throw new Error(
+            `[Intelligence Immutability Error] Cannot mutate historical intelligence version '${versionId}'. Historical intelligence outputs are append-only.`
+          );
         }
-
-        // Atomic create-only transaction write
-        transaction.set(extractionRef, extraction);
-        transaction.set(eventRef, event);
-        transaction.set(summaryRef, updatedSummary, { merge: true });
-
-        return {
-          versionId,
-          isNew: true,
-          extraction,
-          eventId: event.eventId,
-        };
-      });
-    }
-
-    // Fallback for mock db objects that do not provide runTransaction
-    const existingSnap = await extractionRef.get();
-    if (existingSnap && existingSnap.exists) {
-      const existingData = (typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data) as IntelligenceExtraction;
-      const existingHash = computeStructuredDataHash({
-        aggregateId: existingData.aggregateId,
-        aggregateType: existingData.aggregateType,
-        sourceVersion: existingData.sourceVersion,
-        pipelineVersion: existingData.pipelineVersion,
-        modelVersion: existingData.modelVersion,
-        promptVersion: existingData.promptVersion,
-        schemaVersion: existingData.schemaVersion,
-        candidate: existingData.structuredCandidate,
-      });
-
-      if (existingHash === extractionHash) {
-        await summaryRef.set(updatedSummary, { merge: true });
-        return {
-          versionId,
-          isNew: false,
-          extraction: existingData,
-          eventId: event.eventId,
-        };
-      } else {
-        throw new Error(
-          `[Intelligence Immutability Error] Cannot mutate historical intelligence version '${versionId}'. Historical intelligence outputs are append-only.`
-        );
       }
-    }
 
-    if (typeof db.batch === 'function') {
-      const batch = db.batch();
-      batch.set(extractionRef, extraction);
-      batch.set(eventRef, event);
-      batch.set(summaryRef, updatedSummary, { merge: true });
-      await batch.commit();
-    } else {
-      await extractionRef.set(extraction);
-      await eventRef.set(event);
-      await summaryRef.set(updatedSummary, { merge: true });
-    }
+      // Atomic create-only transaction write
+      transaction.set(extractionRef, extraction);
+      transaction.set(eventRef, event);
+      transaction.set(summaryRef, updatedSummary, { merge: true });
 
-    return {
-      versionId,
-      isNew: true,
-      extraction,
-      eventId: event.eventId,
-    };
+      return {
+        versionId,
+        isNew: true,
+        extraction,
+        eventId: event.eventId,
+      };
+    });
   }
 
   /**

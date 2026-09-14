@@ -1714,5 +1714,75 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         immutableIntelligenceStore.getCurrentPointer(null, 'job', 'job_400')
       ).rejects.toThrow(/\[ImmutableStore\] Firestore database is not configured or ready. Operational failure \(Fail Closed\)\./);
     });
+
+    it('proves non-transaction DB fails closed when runTransaction is missing and writes zero documents', async () => {
+      const writtenDocs = new Map<string, any>();
+      const nonTxDb = {
+        collection: (name: string) => ({
+          doc: (id: string) => ({
+            get: async () => ({ exists: writtenDocs.has(`${name}/${id}`), data: () => writtenDocs.get(`${name}/${id}`) }),
+            set: async (data: any) => { writtenDocs.set(`${name}/${id}`, data); },
+          }),
+        }),
+      };
+
+      const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+      const provenance = { source: 'user', evidenceIds: ['ev_notx'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_notx' };
+      const versionId = 'ver_no_tx_500';
+
+      const extractionPayload: any = {
+        extractionId: 'ext_no_tx_500',
+        versionId,
+        aggregateType: 'job',
+        aggregateId: 'job_no_tx_500',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        sourceVersion: 1,
+        provider: 'google_genai',
+        createdAt: new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        rawManifest: { sha256: 'h500', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_500', createdAt: new Date().toISOString() },
+        structuredCandidate: { category: 'Plumbing', problem: 'No Tx Pipe' },
+        evidenceIds: ['ev_notx'],
+        confidence,
+        provenance,
+      };
+
+      const eventPayload: any = {
+        eventId: 'ie_ev_notx',
+        aggregateType: 'job',
+        aggregateId: 'job_no_tx_500',
+        eventType: 'JOB_ANALYSIS_COMPLETED',
+        schemaVersion: '1.0.0',
+        pipelineVersion: 'v8.1',
+        modelVersion: 'gemini-3.7-flash',
+        promptVersion: 'job_extraction_v8.1',
+        createdAt: new Date().toISOString(),
+        source: 'jobs/job_no_tx_500',
+        evidenceIds: ['ev_notx'],
+        confidence,
+        provenance,
+        status: 'valid',
+        payload: { category: 'Plumbing' },
+      };
+
+      const summaryPayload: any = { jobId: 'job_no_tx_500' };
+
+      await expect(
+        immutableIntelligenceStore.persistOutput({
+          db: nonTxDb as any,
+          aggregateType: 'job',
+          aggregateId: 'job_no_tx_500',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        })
+      ).rejects.toThrow(/\[ImmutableStore\] Firestore transaction capability \(runTransaction\) is required/);
+
+      expect(writtenDocs.size).toBe(0);
+    });
   });
 });
