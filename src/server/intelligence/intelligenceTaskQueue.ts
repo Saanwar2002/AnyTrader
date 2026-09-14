@@ -521,40 +521,36 @@ export class IntelligenceTaskQueue {
           const taskId = doc.id;
           const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
-          try {
-            const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
-              const currentSnap = await transaction.get(taskRef);
-              if (!currentSnap || !currentSnap.exists) return null;
+          const recoveredTask = await this.firestoreDb.runTransaction(async (transaction: any) => {
+            const currentSnap = await transaction.get(taskRef);
+            if (!currentSnap || !currentSnap.exists) return null;
 
-              const task = currentSnap.data() as IntelligenceTask;
-              if (task.status !== 'processing') return null;
+            const task = currentSnap.data() as IntelligenceTask;
+            if (task.status !== 'processing') return null;
 
-              const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
-              if (!isExpired) return null;
+            const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
+            if (!isExpired) return null;
 
-              const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
-              const updates: Partial<IntelligenceTask> = {
-                status: nextStatus,
-                nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
-                nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
-                lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
-                errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
-                leaseId: undefined,
-                leaseExpiresAt: undefined,
-                workerId: undefined,
-                updatedAt: nowIso,
-              };
+            const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
+            const updates: Partial<IntelligenceTask> = {
+              status: nextStatus,
+              nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
+              nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
+              lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
+              errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+              leaseId: undefined,
+              leaseExpiresAt: undefined,
+              workerId: undefined,
+              updatedAt: nowIso,
+            };
 
-              transaction.update(taskRef, updates);
-              return { ...task, ...updates };
-            });
+            transaction.update(taskRef, updates);
+            return { ...task, ...updates };
+          });
 
-            if (recoveredTask) {
-              this.tasks.set(taskId, recoveredTask);
-              recovered.push(recoveredTask);
-            }
-          } catch (txErr) {
-            console.warn(`[IntelligenceTaskQueue] Transaction recovery error for task ${taskId}:`, txErr);
+          if (recoveredTask) {
+            this.tasks.set(taskId, recoveredTask);
+            recovered.push(recoveredTask);
           }
         }
       }
@@ -636,34 +632,6 @@ export class IntelligenceTaskQueue {
     }
 
     const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
-    const handler = this.handlers.get(task.taskType);
-
-    if (!handler) {
-      const missingError = {
-        classification: 'NON_RETRYABLE' as const,
-        message: `No handler registered for task type: ${task.taskType}`,
-        timestamp: new Date().toISOString(),
-      };
-      const nowIso = new Date().toISOString();
-      task.status = 'dead_letter';
-      task.errorCode = 'MISSING_HANDLER';
-      task.lastError = missingError.message;
-      task.error = missingError;
-      task.updatedAt = nowIso;
-
-      await this.firestoreDb.runTransaction(async (transaction: any) => {
-        transaction.update(taskRef, {
-          status: 'dead_letter',
-          errorCode: 'MISSING_HANDLER',
-          lastError: missingError.message,
-          error: missingError,
-          updatedAt: nowIso,
-        });
-      });
-      this.tasks.set(taskId, task);
-      return task;
-    }
-
     const claimLeaseId = `lease_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Lease & Ownership verification:
@@ -683,6 +651,64 @@ export class IntelligenceTaskQueue {
     }
 
     const activeLeaseId = task.leaseId || claimLeaseId;
+    const handler = this.handlers.get(task.taskType);
+
+    if (!handler) {
+      const missingError = {
+        classification: 'NON_RETRYABLE' as const,
+        message: `No handler registered for task type: ${task.taskType}`,
+        timestamp: new Date().toISOString(),
+      };
+      const nowIso = new Date().toISOString();
+
+      try {
+        await this.firestoreDb.runTransaction(async (transaction: any) => {
+          const docSnap = await transaction.get(taskRef);
+          if (!docSnap || !docSnap.exists) {
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
+          }
+          const data = docSnap.data() as IntelligenceTask;
+
+          if (
+            data.status !== 'processing' ||
+            data.workerId !== effectiveWorkerId ||
+            (data.leaseId && data.leaseId !== activeLeaseId)
+          ) {
+            console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during missing-handler finalization. Aborting state write.`);
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
+          }
+
+          transaction.update(taskRef, {
+            status: 'dead_letter',
+            errorCode: 'MISSING_HANDLER',
+            lastError: missingError.message,
+            error: missingError,
+            updatedAt: nowIso,
+            workerId: null,
+            leaseId: null,
+            leaseExpiresAt: null,
+          });
+        });
+      } catch (err) {
+        if (err instanceof OwnershipLostError) {
+          console.warn(`[IntelligenceTaskQueue] ${err.message}`);
+          return (await this.getTaskAsync(taskId)) || task;
+        }
+        throw err;
+      }
+
+      task.status = 'dead_letter';
+      task.errorCode = 'MISSING_HANDLER';
+      task.lastError = missingError.message;
+      task.error = missingError;
+      task.updatedAt = nowIso;
+      delete task.workerId;
+      delete task.leaseId;
+      delete task.leaseExpiresAt;
+      this.tasks.set(taskId, task);
+      return task;
+    }
+
     const startTime = Date.now();
 
     try {

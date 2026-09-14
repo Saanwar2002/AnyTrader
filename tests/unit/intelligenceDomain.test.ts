@@ -568,6 +568,55 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(storedTask.status).not.toBe('succeeded');
     });
 
+    it('propagates transaction errors during stale recovery scan without swallowing', async () => {
+      const queue = new IntelligenceTaskQueue();
+      const failingTxDb = {
+        collection: () => ({
+          where: () => ({
+            get: async () => ({
+              empty: false,
+              docs: [{ id: 'stale_t1' }],
+            }),
+          }),
+          doc: () => ({}),
+        }),
+        runTransaction: async () => {
+          throw new Error('Firestore transaction write conflict during stale recovery');
+        },
+      };
+      queue.setFirestoreDb(failingTxDb as any);
+
+      await expect(queue.recoverStaleTasksAsync(0)).rejects.toThrow(
+        /Firestore transaction write conflict during stale recovery/
+      );
+    });
+
+    it('verifies lease ownership transactionally during missing-handler finalization and prevents concurrent race overwrites', async () => {
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        'property_rollup' as any, // Unregistered handler on worker_a
+        'property',
+        'prop_missing_handler_1',
+        'idemp_missing_handler_race'
+      );
+
+      // Worker B claims the task first while Worker A has no handler registered
+      const claimedByB = await intelligenceTaskQueue.claimTaskTransactional(
+        task.taskId,
+        'worker_b',
+        60000
+      );
+      expect(claimedByB).toBe(true);
+
+      // Worker A attempts to execute the missing-handler path
+      const result = await intelligenceTaskQueue.executeTask(task.taskId, 'worker_a');
+
+      // Worker A must NOT overwrite Worker B's active claim/ownership to dead_letter
+      const currentTaskState = await intelligenceTaskQueue.getTaskAsync(task.taskId);
+      expect(currentTaskState?.status).toBe('processing');
+      expect(currentTaskState?.workerId).toBe('worker_b');
+      expect(result.status).toBe('processing');
+    });
+
     it('rejects illegal task state transitions via isValidTaskStateTransition', () => {
       expect(isValidTaskStateTransition('succeeded', 'processing')).toBe(false);
       expect(isValidTaskStateTransition('succeeded', 'pending')).toBe(false);
