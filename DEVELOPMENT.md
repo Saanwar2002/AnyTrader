@@ -1,6 +1,26 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 11A — Deterministic Canonicalization Hardening**:
+  - **Deterministic Semantic Content Hashing**: Hardened `canonicalizeIntelligence` (`src/server/intelligence/canonicalizer.ts`) to strictly isolate semantic canonical content from runtime processing metadata (`generatedAt` and `provenance.generatedAt`).
+  - **Identical Hash Across Executions**: Two identical logical inputs processed at different timestamps produce identical `contentHash` and `canonicalId`.
+  - **Recursive Key Normalization**: Ensured `computeStructuredDataHash` deterministically serializes all nested object properties and multi-field sorted array elements (`observations`, `inferences`, `conditions`, `problems`, `interventions`, `outcomes`, `evidenceIds`, `supportingEvidenceIds`, `supportingObservationIds`).
+  - **Runtime Timestamp Preservation**: `generatedAt` is preserved in the output document and provenance record when provided, or populated with an execution timestamp without contaminating semantic content hashing.
+  - **Automated Regression Suite (`tests/unit/task11aDeterministicCanonicalization.test.ts`)**: 6 tests verifying:
+    1. Same input (no `generatedAt`) produces identical `contentHash`, `canonicalId`, and semantic content across separate invocations;
+    2. Same input with shuffled/different object key ordering produces identical `contentHash`;
+    3. Explicit `generatedAt` is faithfully preserved in output `generatedAt` and `provenance.generatedAt`;
+    4. Changing any semantic field (observation description, inference severity, component code) produces a different `contentHash`;
+    5. Changing ONLY `generatedAt` produces identical `contentHash` and `canonicalId`;
+    6. Array elements in different orders produce identical `contentHash`.
+  - **Full Test Matrix**: 100% test pass rate across all 26 unit test suites (391/391 passing tests), clean linter (`npm run lint`), and successful application compilation (`compile_applet`).
+
+- **V8.1 Task 11 — Canonical Intelligence Normalization & Schema Enforcement**:
+  - **Platform-Wide Canonical Pipeline**: Implemented `canonicalizeIntelligence` and `persistCanonicalIntelligence` (`src/server/intelligence/canonicalizer.ts`) establishing a unified, versioned, validated canonical intelligence layer across all platform domains and entity types.
+  - **Zod Schema Enforcement (`src/server/intelligence/canonicalSchema.ts`)**: Formulated `CanonicalIntelligenceSchema`, `CanonicalObservationSchema`, and `CanonicalInferenceSchema` validating observation lineage, evidence-backed inferences, multidimensional confidence scores, cryptographic provenance, and semantic versioning.
+  - **Controlled Vocabulary Normalization (`src/server/intelligence/canonicalVocabulary.ts`)**: Implemented normalization mappings and extensible registries for domain codes, component codes, and condition codes.
+  - **Lineage Verification & Immutability**: All canonical extractions require verified backing evidence ("No evidence, no assertion") and are persisted atomically via `ImmutableIntelligenceStore`.
+
 - **V8.1 Task 10A — Evidence Lineage Enforcement Hardening & Real Emulator Suite**:
   - **Same-Type Strict Aggregate Gate**: Hardened `EvidenceLineageValidator.validateLineage` (`src/server/intelligence/lineageValidator.ts`) to strictly enforce that for same-type aggregates (`extraction.aggregateType === evidence.aggregateType`), `extraction.aggregateId === evidence.aggregateId` is mandatory. Mismatched aggregate IDs (e.g. `job_123` referencing evidence belonging to `job_999`) are rejected with `[EvidenceLineage Violation] Same-type aggregate mismatch rejected` even if `sourceId` or `sourceReference` matches.
   - **Expanded Evidence Source References**: Updated `EvidenceSourceReference` in `src/server/intelligence/types.ts` to include typed references for `customerRequestId`, `quoteId`, `reviewId`, `projectId`, and `materialId` with index signature `[key: string]: any;`.

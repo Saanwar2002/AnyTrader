@@ -147,8 +147,8 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
     };
   });
 
-  // Sort observations deterministically by observationId
-  normalizedObservations.sort((a, b) => a.observationId.localeCompare(b.observationId));
+  // Sort observations deterministically by observationId then description
+  normalizedObservations.sort((a, b) => a.observationId.localeCompare(b.observationId) || a.description.localeCompare(b.description));
 
   // 3. Normalize Inferences
   const rawInferences = Array.isArray(input.inferences) ? input.inferences : [];
@@ -203,8 +203,8 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
     };
   });
 
-  // Sort inferences deterministically by inferenceId
-  normalizedInferences.sort((a, b) => a.inferenceId.localeCompare(b.inferenceId));
+  // Sort inferences deterministically by inferenceId then hypothesis
+  normalizedInferences.sort((a, b) => a.inferenceId.localeCompare(b.inferenceId) || a.hypothesis.localeCompare(b.hypothesis));
 
   // 4. Normalize Problems
   const rawProblems = Array.isArray(input.problems) ? input.problems : [];
@@ -231,7 +231,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       inferenceId: prob.inferenceId ? prob.inferenceId.trim() : undefined,
     };
   });
-  normalizedProblems.sort((a, b) => a.description.localeCompare(b.description));
+  normalizedProblems.sort((a, b) => a.description.localeCompare(b.description) || (a.problemCode || '').localeCompare(b.problemCode || '') || (a.component || '').localeCompare(b.component || ''));
 
   // 5. Normalize Interventions
   const rawInterventions = Array.isArray(input.interventions) ? input.interventions : [];
@@ -259,7 +259,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       inferenceId: interv.inferenceId ? interv.inferenceId.trim() : undefined,
     };
   });
-  normalizedInterventions.sort((a, b) => a.description.localeCompare(b.description));
+  normalizedInterventions.sort((a, b) => a.description.localeCompare(b.description) || (a.interventionCode || '').localeCompare(b.interventionCode || '') || (a.component || '').localeCompare(b.component || ''));
 
   // 6. Normalize Outcomes
   const rawOutcomes = Array.isArray(input.outcomes) ? input.outcomes : [];
@@ -285,7 +285,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       evidenceIds: outcEvIds,
     };
   });
-  normalizedOutcomes.sort((a, b) => a.description.localeCompare(b.description));
+  normalizedOutcomes.sort((a, b) => a.description.localeCompare(b.description) || (a.outcomeCode || '').localeCompare(b.outcomeCode || '') || (a.component || '').localeCompare(b.component || ''));
 
   // 7. Normalize Conditions
   const rawConditions = Array.isArray(input.conditions) ? input.conditions : [];
@@ -310,7 +310,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       evidenceIds: condEvIds,
     };
   });
-  normalizedConditions.sort((a, b) => a.condition.localeCompare(b.condition));
+  normalizedConditions.sort((a, b) => a.condition.localeCompare(b.condition) || (a.component || '').localeCompare(b.component || '') || (a.severity || '').localeCompare(b.severity || ''));
 
   // 8. Consolidated Evidence Lineage Check
   const consolidatedEvidenceIds = Array.from(referencedEvidenceSet).sort();
@@ -357,14 +357,15 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       sourceContentHash: input.provenance.sourceContentHash || computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
     };
   } else {
-    provenance = buildProvenance(
-      `${aggregateType}s/${aggregateId}`,
-      consolidatedEvidenceIds,
+    provenance = {
+      source: `${aggregateType}s/${aggregateId}`,
+      evidenceIds: consolidatedEvidenceIds,
+      pipelineVersion,
       modelVersion,
       promptVersion,
-      `${aggregateType}:${aggregateId}:${sourceVersion}`,
-      pipelineVersion
-    );
+      generatedAt,
+      sourceContentHash: computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
+    };
   }
 
   // 11. Canonical deterministic version ID
@@ -378,7 +379,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
     schemaVersion
   );
 
-  // 12. Deterministic Content Hash (stable over data payload, excluding runtime generatedAt / random IDs)
+  // 12. Deterministic Content Hash (stable over semantic data payload, excluding runtime generatedAt / provenance.generatedAt)
   const canonicalPayloadForHashing = {
     aggregateType,
     aggregateId,
@@ -386,27 +387,54 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
     category: category || null,
     component: component || null,
     observations: normalizedObservations.map((o) => ({
+      observationId: o.observationId,
       component: o.component || null,
       condition: o.condition || null,
       description: o.description,
       evidenceIds: o.evidenceIds,
+      capturedAt: o.capturedAt || null,
+      sourceField: o.sourceField || null,
+      metadata: o.metadata || null,
     })),
     inferences: normalizedInferences.map((i) => ({
+      inferenceId: i.inferenceId,
       type: i.type,
       targetComponent: i.targetComponent || null,
       hypothesis: i.hypothesis,
       confidence: i.confidence,
+      reasoning: i.reasoning || null,
       supportingEvidenceIds: i.supportingEvidenceIds,
+      supportingObservationIds: i.supportingObservationIds || null,
       severity: i.severity || null,
       urgency: i.urgency || null,
+      metadata: i.metadata || null,
     })),
     conditions: normalizedConditions,
     problems: normalizedProblems,
     interventions: normalizedInterventions,
     outcomes: normalizedOutcomes,
     evidenceIds: consolidatedEvidenceIds,
+    confidence: {
+      overall: confidence.overall,
+      extraction: confidence.extraction,
+      evidenceQuality: confidence.evidenceQuality,
+      classification: confidence.classification,
+      temporalFreshness: confidence.temporalFreshness,
+      method: confidence.method,
+    },
+    provenance: {
+      source: provenance.source,
+      evidenceIds: provenance.evidenceIds,
+      pipelineVersion: provenance.pipelineVersion,
+      modelVersion: provenance.modelVersion,
+      promptVersion: provenance.promptVersion,
+      sourceContentHash: provenance.sourceContentHash,
+    },
     schemaVersion,
     pipelineVersion,
+    modelVersion,
+    promptVersion,
+    sourceVersion,
   };
   const contentHash = computeStructuredDataHash(canonicalPayloadForHashing);
 
