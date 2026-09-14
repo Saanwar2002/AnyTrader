@@ -59,7 +59,7 @@ export class PropertyIntelligenceService {
     versionId: string;
   }> {
     // 1. Gather property-level evidence
-    let propertyEvidence = evidenceRegistry.getForAggregate('property', property.propertyId);
+    let propertyEvidence = await evidenceRegistry.getForAggregate('property', property.propertyId);
 
     if (propertyEvidence.length === 0) {
       // Register property baseline spec evidence via canonical structured hashing
@@ -70,7 +70,7 @@ export class PropertyIntelligenceService {
         constructionYear: property.constructionYear || null,
       };
 
-      evidenceRegistry.registerStructuredData(
+      await evidenceRegistry.registerStructuredData(
         'property',
         property.propertyId,
         'structured_spec',
@@ -85,7 +85,7 @@ export class PropertyIntelligenceService {
         for (const [idx, docObj] of property.documentObjects.entries()) {
           const sourceRef = docObj.storagePath || docObj.uri || `documents/${idx}`;
           if (docObj.bytes) {
-            evidenceRegistry.register(
+            await evidenceRegistry.register(
               'property',
               property.propertyId,
               'document',
@@ -96,7 +96,7 @@ export class PropertyIntelligenceService {
               { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
             );
           } else {
-            evidenceRegistry.registerReferenceOnly(
+            await evidenceRegistry.registerReferenceOnly(
               'property',
               property.propertyId,
               'document',
@@ -108,7 +108,7 @@ export class PropertyIntelligenceService {
         }
       } else if (property.documents && property.documents.length > 0) {
         for (const [idx, docUrl] of property.documents.entries()) {
-          evidenceRegistry.registerReferenceOnly(
+          await evidenceRegistry.registerReferenceOnly(
             'property',
             property.propertyId,
             'document',
@@ -119,7 +119,7 @@ export class PropertyIntelligenceService {
         }
       }
 
-      propertyEvidence = evidenceRegistry.getForAggregate('property', property.propertyId);
+      propertyEvidence = await evidenceRegistry.getForAggregate('property', property.propertyId);
     }
 
     // Combine evidence IDs from property and jobs

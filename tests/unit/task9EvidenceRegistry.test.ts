@@ -553,4 +553,187 @@ describe('Task 9: Evidence Registry & Evidence Integrity', () => {
       expect(trace.allVerified).toBe(true);
     });
   });
+
+  describe('8. Task 9A: Authoritative Firestore Evidence Store & Fail-Closed Invariants', () => {
+    let registryTestDb: any;
+
+    beforeEach(() => {
+      registryTestDb = createInMemoryTestDb();
+      evidenceRegistry.setDb(registryTestDb);
+    });
+
+    it('proves no process-local evidenceStore Map exists on EvidenceRegistry', () => {
+      expect((evidenceRegistry as any).evidenceStore).toBeUndefined();
+    });
+
+    it('persists registered evidence directly to Firestore intelligence_evidence collection', async () => {
+      const content = 'Worcester Greenstar 30i Combi Boiler Pressure Issue';
+      const ev = await evidenceRegistry.register(
+        'job',
+        'job_firestore_1',
+        'user_description',
+        'jobs/job_firestore_1/desc',
+        content,
+        { source: 'web_portal' },
+        true
+      );
+
+      // Verify returned object
+      expect(ev.evidenceId).toBeDefined();
+      expect(ev.contentHash).toBe(computeSha256(content));
+
+      // Verify it exists in Firestore intelligence_evidence collection directly
+      const docSnap = await registryTestDb.collection('intelligence_evidence').doc(ev.evidenceId).get();
+      expect(docSnap.exists).toBe(true);
+      const firestoreData = docSnap.data();
+      expect(firestoreData.contentHash).toBe(computeSha256(content));
+      expect(firestoreData.aggregateId).toBe('job_firestore_1');
+    });
+
+    it('reads evidence directly from Firestore (reads what is written to Firestore)', async () => {
+      const manualEvidence = createEvidenceRecord({
+        aggregateType: 'property',
+        aggregateId: 'prop_manual_1',
+        sourceType: 'property',
+        sourceId: 'prop_manual_1',
+        sourceVersion: '1',
+        evidenceType: 'document',
+        sourceRef: 'epc.pdf',
+        rawContent: 'EPC Rating C - 72 Points',
+      });
+
+      // Insert directly into Firestore bypassing any in-memory state
+      await registryTestDb.collection('intelligence_evidence').doc(manualEvidence.evidenceId).set(manualEvidence);
+
+      // Fetch through evidenceRegistry - must find it in Firestore
+      const fetched = await evidenceRegistry.get(manualEvidence.evidenceId);
+      expect(fetched).not.toBeNull();
+      expect(fetched?.aggregateId).toBe('prop_manual_1');
+      expect(fetched?.contentHash).toBe(manualEvidence.contentHash);
+
+      // Fetch for aggregate
+      const aggregateEvidence = await evidenceRegistry.getForAggregate('property', 'prop_manual_1');
+      expect(aggregateEvidence.length).toBe(1);
+      expect(aggregateEvidence[0].evidenceId).toBe(manualEvidence.evidenceId);
+    });
+
+    it('FAILS CLOSED when Firestore is null or unavailable (no in-memory fallback)', async () => {
+      const unconfiguredRegistry = new EvidenceRegistry(null);
+
+      // register() must throw
+      await expect(
+        unconfiguredRegistry.register(
+          'job',
+          'job_fc_1',
+          'user_description',
+          'desc',
+          'content'
+        )
+      ).rejects.toThrow(/Firestore database is not configured or ready/);
+
+      // registerReferenceOnly() must throw
+      await expect(
+        unconfiguredRegistry.registerReferenceOnly(
+          'job',
+          'job_fc_1',
+          'image',
+          'https://image.url'
+        )
+      ).rejects.toThrow(/Firestore database is not configured or ready/);
+
+      // registerStructuredData() must throw
+      await expect(
+        unconfiguredRegistry.registerStructuredData(
+          'property',
+          'prop_fc_1',
+          'structured_spec',
+          'spec',
+          { epc: 'B' }
+        )
+      ).rejects.toThrow(/Firestore database is not configured or ready/);
+
+      // verifyAndUpdateContent() must throw
+      await expect(
+        unconfiguredRegistry.verifyAndUpdateContent('some_id', 'new content')
+      ).rejects.toThrow(/Firestore database transaction capability is required/);
+    });
+
+    it('is idempotent on duplicate registrations via evidenceRegistry.register()', async () => {
+      const content = 'Identical evidence payload content';
+      const ev1 = await evidenceRegistry.register(
+        'job',
+        'job_idem_1',
+        'text',
+        'notes',
+        content
+      );
+
+      const ev2 = await evidenceRegistry.register(
+        'job',
+        'job_idem_1',
+        'text',
+        'notes',
+        content
+      );
+
+      expect(ev1.evidenceId).toBe(ev2.evidenceId);
+      expect(ev1.contentHash).toBe(ev2.contentHash);
+    });
+
+    it('rejects conflicting evidence mutation with [Evidence Immutability Error]', async () => {
+      const original = 'Original verified survey report';
+      const ev = await evidenceRegistry.register(
+        'job',
+        'job_tamper_1',
+        'document',
+        'survey.pdf',
+        original,
+        {},
+        true,
+        undefined,
+        { customEvidenceId: 'ev_fixed_id_100' }
+      );
+
+      expect(ev.evidenceId).toBe('ev_fixed_id_100');
+
+      // Attempt to overwrite with different content under same ID
+      await expect(
+        evidenceRegistry.register(
+          'job',
+          'job_tamper_1',
+          'document',
+          'survey.pdf',
+          'Tampered fraudulent survey report',
+          {},
+          true,
+          undefined,
+          { customEvidenceId: 'ev_fixed_id_100' }
+        )
+      ).rejects.toThrow(/\[Evidence Immutability Error\] Cannot mutate historical evidence/);
+    });
+
+    it('atomically upgrades reference-only evidence in Firestore via verifyAndUpdateContent()', async () => {
+      const refEv = await evidenceRegistry.registerReferenceOnly(
+        'job',
+        'job_upgrade_1',
+        'image',
+        'photos/leak.jpg'
+      );
+
+      expect(refEv.verified).toBe(false);
+      expect(refEv.integrityStatus).toBe('reference_only');
+
+      const photoBytes = Buffer.from('REAL_CAMERA_IMAGE_BYTES_123');
+      const verifiedEv = await evidenceRegistry.verifyAndUpdateContent(refEv.evidenceId, photoBytes);
+
+      expect(verifiedEv.verified).toBe(true);
+      expect(verifiedEv.integrityStatus).toBe('verified');
+      expect(verifiedEv.contentHash).toBe(computeSha256(photoBytes));
+
+      // Confirm in Firestore directly
+      const snap = await registryTestDb.collection('intelligence_evidence').doc(refEv.evidenceId).get();
+      expect(snap.data().verified).toBe(true);
+      expect(snap.data().contentHash).toBe(computeSha256(photoBytes));
+    });
+  });
 });

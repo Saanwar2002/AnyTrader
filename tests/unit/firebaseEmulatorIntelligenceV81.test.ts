@@ -596,11 +596,14 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // 5. EVIDENCE INTEGRITY & HASHING INVARIANTS
   // ==========================================================
   describe('5. Evidence Hashing & Cryptographic Invariants', () => {
-    it('hashes actual evidence bytes with genuine SHA-256', () => {
+    it('hashes actual evidence bytes with genuine SHA-256', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_evidence_sha', { role: 'admin', admin: true }).firestore();
+      evidenceRegistry.setDb(adminDb as any);
+
       const content = 'Genuine inspection evidence bytes content';
       const expectedSha256 = createHash('sha256').update(content).digest('hex');
 
-      const ev = evidenceRegistry.register(
+      const ev = await evidenceRegistry.register(
         'job',
         'job_sha_1',
         'user_description',
@@ -615,8 +618,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(ev.integrityStatus).toBe('verified');
     });
 
-    it('does not fabricate a content hash for reference-only evidence pointers', () => {
-      const refEv = evidenceRegistry.registerReferenceOnly(
+    it('does not fabricate a content hash for reference-only evidence pointers', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_evidence_ref', { role: 'admin', admin: true }).firestore();
+      evidenceRegistry.setDb(adminDb as any);
+
+      const refEv = await evidenceRegistry.registerReferenceOnly(
         'job',
         'job_ref_1',
         'image',

@@ -39,18 +39,26 @@ import {
   INTELLIGENCE_SCHEMA_VERSION,
   taskDocumentId,
 } from '../../src/server/intelligence';
+import { createInMemoryTestDb } from '../../src/server/intelligence/testDoubles';
+import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
 
 describe('V8.1 Structured Intelligence Foundation', () => {
+  let testDb = createInMemoryTestDb();
+
   beforeEach(() => {
+    testDb = createInMemoryTestDb();
+    setGlobalIntelligenceDb(testDb);
+    evidenceRegistry.setDb(testDb);
     evidenceRegistry.clear();
     intelligenceTaskQueue.clear();
+    intelligenceTaskQueue.setFirestoreDb(testDb);
     qualityReviewService.clear();
   });
 
   describe('1. Evidence Registry & "No Evidence, No Assertion" Invariant', () => {
-    it('registers evidence with SHA-256 hash and byte size', () => {
+    it('registers evidence with SHA-256 hash and byte size', async () => {
       const content = 'Diagnostic report: Boiler pilot light fails due to clogged thermocouple.';
-      const ev = evidenceRegistry.register(
+      const ev = await evidenceRegistry.register(
         'job',
         'job_101',
         'user_description',
@@ -72,9 +80,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       }).toThrow(/No evidence provided: An intelligence assertion cannot be formed without evidence/);
     });
 
-    it('verifies cryptographic integrity of evidence', () => {
+    it('verifies cryptographic integrity of evidence', async () => {
       const content = 'Valid evidence body';
-      const ev = evidenceRegistry.register(
+      const ev = await evidenceRegistry.register(
         'job',
         'job_102',
         'image',
@@ -82,13 +90,13 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         content
       );
 
-      expect(evidenceRegistry.verifyContentIntegrity(ev.evidenceId, content)).toBe(true);
-      expect(evidenceRegistry.verifyContentIntegrity(ev.evidenceId, 'Tampered content')).toBe(false);
+      expect(await evidenceRegistry.verifyContentIntegrity(ev.evidenceId, content)).toBe(true);
+      expect(await evidenceRegistry.verifyContentIntegrity(ev.evidenceId, 'Tampered content')).toBe(false);
     });
 
-    it('distinguishes actual content from reference-only pointers and rejects false verification', () => {
+    it('distinguishes actual content from reference-only pointers and rejects false verification', async () => {
       // Reference-only evidence (e.g. unverified photo URL)
-      const refEv = evidenceRegistry.registerReferenceOnly(
+      const refEv = await evidenceRegistry.registerReferenceOnly(
         'job',
         'job_103',
         'image',
@@ -104,16 +112,16 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(refEv.sourceReference?.storagePath).toBe('jobs/job_103/photo.jpg');
 
       // Attempting to verify content without actual bytes fails
-      expect(evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, 'test')).toBe(false);
+      expect(await evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, 'test')).toBe(false);
 
       // Updating with actual downloaded bytes transitions to verified
       const actualPhotoBytes = Buffer.from('RAW_IMAGE_BINARY_MOCK_BYTES');
-      const verifiedEv = evidenceRegistry.verifyAndUpdateContent(refEv.evidenceId, actualPhotoBytes);
+      const verifiedEv = await evidenceRegistry.verifyAndUpdateContent(refEv.evidenceId, actualPhotoBytes);
       expect(verifiedEv.verified).toBe(true);
       expect(verifiedEv.integrityStatus).toBe('verified');
       expect(verifiedEv.contentHash).toBe(computeSha256(actualPhotoBytes));
       expect(verifiedEv.byteSize).toBe(actualPhotoBytes.length);
-      expect(evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, actualPhotoBytes)).toBe(true);
+      expect(await evidenceRegistry.verifyContentIntegrity(refEv.evidenceId, actualPhotoBytes)).toBe(true);
     });
 
     it('produces deterministic identical hashes for canonical structured Firestore data regardless of key order', () => {
@@ -675,7 +683,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       });
 
       expect(jobIntelligence.evidenceIds.length).toBeGreaterThanOrEqual(2);
-      const photoEvidence = evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
+      const photoEvidence = await evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
       expect(photoEvidence).toBeDefined();
       expect(photoEvidence?.evidenceType).toBe('image');
       expect(photoEvidence?.verified).toBe(true);
@@ -694,7 +702,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         photos: ['https://storage.googleapis.com/anytrader-photos/job_ref_102_0.jpg'],
       });
 
-      const photoEvidence = evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
+      const photoEvidence = await evidenceRegistry.get(jobIntelligence.evidenceIds[1]);
       expect(photoEvidence).toBeDefined();
       expect(photoEvidence?.evidenceType).toBe('image');
       expect(photoEvidence?.verified).toBe(false);
@@ -1134,7 +1142,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
     });
 
     it('derives Job Intelligence with version metadata and currentVersionId pointer', async () => {
-      const ev = evidenceRegistry.register('job', 'job_999', 'user_description', 'jobs/job_999/desc', 'Fixed radiator thermostat in bedroom.', {}, true);
+      const ev = await evidenceRegistry.register('job', 'job_999', 'user_description', 'jobs/job_999/desc', 'Fixed radiator thermostat in bedroom.', {}, true);
       const result = await jobIntelligenceService.deriveJobIntelligence(
         { jobId: 'job_999', title: 'Radiator Fix', description: 'Fixed radiator thermostat in bedroom.' },
         [ev.evidenceId]
@@ -1148,7 +1156,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
     }, 15000);
 
     it('derives Property Intelligence with version metadata and currentVersionId pointer', async () => {
-      const ev = evidenceRegistry.register('property', 'prop_999', 'document', 'props/prop_999/doc', 'Roof tiles cracked and leaking damp.', {}, true);
+      const ev = await evidenceRegistry.register('property', 'prop_999', 'document', 'props/prop_999/doc', 'Roof tiles cracked and leaking damp.', {}, true);
       const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
         { propertyId: 'prop_999' },
         [],

@@ -1,6 +1,14 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 9A — Firestore Authoritative Production Evidence Store & Fail-Closed Registry**:
+  - **Elimination of Process-Local Memory Map**: Completely removed `private evidenceStore = new Map<string, IntelligenceEvidence>()` from `EvidenceRegistry` (`src/server/intelligence/evidenceRegistry.ts`). Proved that `(evidenceRegistry as any).evidenceStore` is strictly `undefined`.
+  - **Firestore-Authoritative Asynchronous Evidence Flow**: Converted `register()`, `registerReferenceOnly()`, `registerStructuredData()`, `get()`, `getForAggregate()`, `getForSource()`, `verifyAndUpdateContent()`, and `verifyContentIntegrity()` to strictly asynchronous methods. All registration operations invoke `persistEvidenceToFirestore` (`db.runTransaction`), writing authoritatively to `intelligence_evidence/{evidenceId}` before returning the persisted record.
+  - **Strict Fail-Closed Invariants (No In-Memory Fallbacks)**: If Firestore `db` is unconfigured, null, or transactional persistence fails, `EvidenceRegistry` immediately throws `Error: [EvidenceRegistry] Firestore database is not configured or ready. Evidence persistence cannot proceed (Fail-Closed)`. It never retains evidence in memory, never silently downgrades, and never returns unpersisted evidence to intelligence pipelines.
+  - **Production Intelligence Pipeline Updates**: Updated `jobIntelligenceService` (`src/server/intelligence/jobIntelligence.ts`) and `propertyIntelligenceService` (`src/server/intelligence/propertyIntelligence.ts`) to `await` all evidence registrations. AI extraction and intelligence derivation only proceed using authoritatively persisted Firestore evidence.
+  - **Startup Lifecycle Integration (`src/server/bootstrap.ts`)**: Wired `evidenceRegistry.setDb(db)` and `setGlobalIntelligenceDb(db)` into Step 3 of `runBootstrapSequence()`.
+  - **Automated Test Verification**: Added Section 8 ("Task 9A: Authoritative Firestore Evidence Store & Fail-Closed Invariants") to `tests/unit/task9EvidenceRegistry.test.ts` (27/27 tests passing), updated `tests/unit/intelligenceDomain.test.ts` (40/40 tests passing), and updated `tests/unit/firebaseEmulatorIntelligenceV81.test.ts`. All 23 test suites (349 tests) pass with 100% success rate.
+
 - **V8.1 Task 9 — Generic Evidence Registry & Evidence Integrity**:
   - **Core Principle & Lineage Pipeline**: Enforces platform-wide evidence lineage:
     `SOURCE -> EVIDENCE -> EXTRACTION -> INTELLIGENCE EVENT -> CURRENT INTELLIGENCE PROJECTION`.

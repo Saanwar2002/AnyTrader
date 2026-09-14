@@ -68,12 +68,12 @@ export class JobIntelligenceService {
     versionId: string;
   }> {
     // 1. Gather & verify evidence
-    let evidenceItems = evidenceRegistry.getForAggregate('job', job.jobId);
+    let evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId);
 
     // If not yet registered in registry, register the baseline text & media
     if (evidenceItems.length === 0) {
       if (job.description && job.description.trim().length > 0) {
-        evidenceRegistry.register(
+        await evidenceRegistry.register(
           'job',
           job.jobId,
           'user_description',
@@ -90,7 +90,7 @@ export class JobIntelligenceService {
         for (const [idx, photoObj] of job.photoObjects.entries()) {
           const sourceRef = photoObj.storagePath || photoObj.uri || `photos/${idx}`;
           if (photoObj.bytes) {
-            evidenceRegistry.register(
+            await evidenceRegistry.register(
               'job',
               job.jobId,
               'image',
@@ -101,7 +101,7 @@ export class JobIntelligenceService {
               { uri: photoObj.uri, storagePath: photoObj.storagePath, sourceField: `photos[${idx}]` }
             );
           } else {
-            evidenceRegistry.registerReferenceOnly(
+            await evidenceRegistry.registerReferenceOnly(
               'job',
               job.jobId,
               'image',
@@ -114,7 +114,7 @@ export class JobIntelligenceService {
       } else if (job.photos && job.photos.length > 0) {
         // Fallback: reference-only pointers without fabricated byte hashes
         for (const [idx, photoUrl] of job.photos.entries()) {
-          evidenceRegistry.registerReferenceOnly(
+          await evidenceRegistry.registerReferenceOnly(
             'job',
             job.jobId,
             'image',
@@ -130,7 +130,7 @@ export class JobIntelligenceService {
         for (const [idx, docObj] of job.documentObjects.entries()) {
           const sourceRef = docObj.storagePath || docObj.uri || `documents/${idx}`;
           if (docObj.bytes) {
-            evidenceRegistry.register(
+            await evidenceRegistry.register(
               'job',
               job.jobId,
               'document',
@@ -141,7 +141,7 @@ export class JobIntelligenceService {
               { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
             );
           } else {
-            evidenceRegistry.registerReferenceOnly(
+            await evidenceRegistry.registerReferenceOnly(
               'job',
               job.jobId,
               'document',
@@ -153,7 +153,7 @@ export class JobIntelligenceService {
         }
       } else if (job.documents && job.documents.length > 0) {
         for (const [idx, docUrl] of job.documents.entries()) {
-          evidenceRegistry.registerReferenceOnly(
+          await evidenceRegistry.registerReferenceOnly(
             'job',
             job.jobId,
             'document',
@@ -164,7 +164,7 @@ export class JobIntelligenceService {
         }
       }
 
-      evidenceItems = evidenceRegistry.getForAggregate('job', job.jobId);
+      evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId);
     }
 
     const targetEvidenceIds = overrideEvidenceIds || evidenceItems.map((e) => e.evidenceId);

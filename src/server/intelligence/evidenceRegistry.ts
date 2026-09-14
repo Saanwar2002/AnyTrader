@@ -24,10 +24,13 @@ import {
   deriveEvidenceCategory,
   validateNotCircularAiEvidence,
   persistEvidenceToFirestore,
+  getEvidenceFromFirestore,
+  getEvidenceForAggregateFromFirestore,
+  getEvidenceForSourceFromFirestore,
   CreateEvidenceParams,
   createEvidenceRecord,
 } from './evidence';
-import { FirestoreDbLike } from './immutableStore';
+import { FirestoreDbLike, getGlobalIntelligenceDb } from './immutableStore';
 
 export interface RegisterEvidenceOptions {
   sourceType?: SourceType;
@@ -41,16 +44,31 @@ export interface RegisterEvidenceOptions {
   sourceReliability?: number;
   temporalFreshness?: number;
   customEvidenceId?: string;
+  db?: FirestoreDbLike | null;
 }
 
 export class EvidenceRegistry {
-  private evidenceStore = new Map<string, IntelligenceEvidence>();
+  private db: FirestoreDbLike | null = null;
+
+  constructor(db?: FirestoreDbLike | null) {
+    this.db = db || null;
+  }
+
+  public setDb(db: FirestoreDbLike | null): void {
+    this.db = db;
+  }
+
+  private getEffectiveDb(explicitDb?: FirestoreDbLike | null): FirestoreDbLike | null {
+    return explicitDb !== undefined ? explicitDb : (this.db || getGlobalIntelligenceDb());
+  }
 
   /**
-   * Registers a piece of evidence into the registry with SHA-256 content integrity
+   * Registers a piece of evidence into the authoritative Firestore store with SHA-256 content integrity
    * when actual bytes or verified structured data are available.
+   * Transactionally persists to Firestore (intelligence_evidence/{evidenceId}).
+   * Fails closed if Firestore is unavailable.
    */
-  public register(
+  public async register(
     aggregateType: IntelligenceAggregateType,
     aggregateId: string,
     evidenceType: EvidenceType,
@@ -59,8 +77,9 @@ export class EvidenceRegistry {
     metadata: Record<string, unknown> = {},
     verified: boolean = false,
     sourceReference?: EvidenceSourceReference,
-    options?: RegisterEvidenceOptions
-  ): IntelligenceEvidence {
+    options?: RegisterEvidenceOptions,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence> {
     // Step 9: Validate against circular AI evidence
     validateNotCircularAiEvidence({
       sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
@@ -78,7 +97,8 @@ export class EvidenceRegistry {
         sourceRef,
         metadata,
         sourceReference,
-        options
+        options,
+        db
       );
     }
 
@@ -159,24 +179,28 @@ export class EvidenceRegistry {
       temporalFreshness: validatedInput.temporalFreshness,
     };
 
-    this.evidenceStore.set(evidenceId, record);
-    return record;
+    const targetDb = this.getEffectiveDb(options?.db || db);
+    const persistResult = await persistEvidenceToFirestore({ db: targetDb, evidence: record });
+    return persistResult.evidence;
   }
 
   /**
    * Registers a reference-only evidence record where source bytes are not directly accessible
    * at ingestion time (e.g. external media URL, unverified pointer).
    * Invariant: Never falsely claims content verification for unverified references.
+   * Transactionally persists to Firestore (intelligence_evidence/{evidenceId}).
+   * Fails closed if Firestore is unavailable.
    */
-  public registerReferenceOnly(
+  public async registerReferenceOnly(
     aggregateType: IntelligenceAggregateType,
     aggregateId: string,
     evidenceType: EvidenceType,
     sourceRef: string,
     metadata: Record<string, unknown> = {},
     sourceReference?: EvidenceSourceReference,
-    options?: RegisterEvidenceOptions
-  ): IntelligenceEvidence {
+    options?: RegisterEvidenceOptions,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence> {
     // Step 9: Validate against circular AI evidence
     validateNotCircularAiEvidence({
       sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
@@ -253,14 +277,17 @@ export class EvidenceRegistry {
       temporalFreshness: validatedInput.temporalFreshness,
     };
 
-    this.evidenceStore.set(evidenceId, record);
-    return record;
+    const targetDb = this.getEffectiveDb(options?.db || db);
+    const persistResult = await persistEvidenceToFirestore({ db: targetDb, evidence: record });
+    return persistResult.evidence;
   }
 
   /**
-   * Registers canonical structured Firestore data as verified evidence
+   * Registers canonical structured Firestore data as verified evidence.
+   * Transactionally persists to Firestore (intelligence_evidence/{evidenceId}).
+   * Fails closed if Firestore is unavailable.
    */
-  public registerStructuredData(
+  public async registerStructuredData(
     aggregateType: IntelligenceAggregateType,
     aggregateId: string,
     evidenceType: EvidenceType,
@@ -268,8 +295,9 @@ export class EvidenceRegistry {
     structuredData: unknown,
     metadata: Record<string, unknown> = {},
     sourceReference?: EvidenceSourceReference,
-    options?: RegisterEvidenceOptions
-  ): IntelligenceEvidence {
+    options?: RegisterEvidenceOptions,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence> {
     // Step 9: Validate against circular AI evidence
     validateNotCircularAiEvidence({
       sourceType: options?.sourceType || (metadata.sourceType as string) || (aggregateType as string),
@@ -349,51 +377,94 @@ export class EvidenceRegistry {
       temporalFreshness: validatedInput.temporalFreshness,
     };
 
-    this.evidenceStore.set(evidenceId, record);
-    return record;
+    const targetDb = this.getEffectiveDb(options?.db || db);
+    const persistResult = await persistEvidenceToFirestore({ db: targetDb, evidence: record });
+    return persistResult.evidence;
   }
 
   /**
    * Populates and verifies the cryptographic hash of a previously reference-only evidence item
+   * directly within Firestore using runTransaction.
+   * Invariant: Rejects mutation if already verified with conflicting content.
    */
-  public verifyAndUpdateContent(evidenceId: string, actualContent: string | Buffer): IntelligenceEvidence {
-    const existing = this.get(evidenceId);
-    if (!existing) {
-      throw new Error(`[EvidenceRegistry Error] Evidence record '${evidenceId}' not found for verification.`);
+  public async verifyAndUpdateContent(
+    evidenceId: string,
+    actualContent: string | Buffer,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence> {
+    const effectiveDb = this.getEffectiveDb(db);
+    if (!effectiveDb || typeof effectiveDb.runTransaction !== 'function') {
+      throw new Error(
+        '[EvidencePersistence Error] Firestore database transaction capability is required for verifyAndUpdateContent. Operational failure (Fail Closed).'
+      );
     }
 
     const contentBuffer = Buffer.isBuffer(actualContent) ? actualContent : Buffer.from(actualContent, 'utf8');
     const contentHash = computeSha256(contentBuffer);
     const byteSize = contentBuffer.length;
 
-    existing.contentHash = contentHash;
-    existing.contentSize = byteSize;
-    existing.byteSize = byteSize;
-    existing.integrityStatus = 'verified';
-    existing.verified = true;
+    const docRef = effectiveDb.collection('intelligence_evidence').doc(evidenceId);
 
-    this.evidenceStore.set(evidenceId, existing);
-    return existing;
-  }
-
-  /**
-   * Retrieves all registered evidence for a specific aggregate
-   */
-  public getForAggregate(aggregateType: IntelligenceAggregateType, aggregateId: string): IntelligenceEvidence[] {
-    const results: IntelligenceEvidence[] = [];
-    for (const record of this.evidenceStore.values()) {
-      if (record.aggregateType === aggregateType && record.aggregateId === aggregateId) {
-        results.push(record);
+    return effectiveDb.runTransaction(async (transaction: any) => {
+      const snap = await transaction.get(docRef);
+      if (!snap || !snap.exists) {
+        throw new Error(`[EvidenceRegistry Error] Evidence record '${evidenceId}' not found for verification in Firestore.`);
       }
-    }
-    return results;
+      const existing = (typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceEvidence;
+
+      if (existing.verified && existing.contentHash === contentHash) {
+        return existing;
+      }
+      if (existing.verified && existing.contentHash && existing.contentHash !== contentHash) {
+        throw new Error(
+          `[Evidence Immutability Error] Cannot mutate historical evidence '${evidenceId}'. Already verified with different content.`
+        );
+      }
+
+      const updated: IntelligenceEvidence = {
+        ...existing,
+        contentHash,
+        contentSize: byteSize,
+        byteSize,
+        integrityStatus: 'verified',
+        verified: true,
+      };
+
+      transaction.set(docRef, updated);
+      return updated;
+    });
   }
 
   /**
-   * Retrieves a single piece of evidence by ID
+   * Retrieves all registered evidence for a specific aggregate from authoritative Firestore store.
    */
-  public get(evidenceId: string): IntelligenceEvidence | undefined {
-    return this.evidenceStore.get(evidenceId);
+  public async getForAggregate(
+    aggregateType: IntelligenceAggregateType,
+    aggregateId: string,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence[]> {
+    return getEvidenceForAggregateFromFirestore(this.getEffectiveDb(db), aggregateType, aggregateId);
+  }
+
+  /**
+   * Retrieves a single piece of evidence by ID from authoritative Firestore store.
+   */
+  public async get(
+    evidenceId: string,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence | null> {
+    return getEvidenceFromFirestore(this.getEffectiveDb(db), evidenceId);
+  }
+
+  /**
+   * Retrieves all registered evidence for a specific source from authoritative Firestore store.
+   */
+  public async getForSource(
+    sourceType: string,
+    sourceId: string,
+    db?: FirestoreDbLike | null
+  ): Promise<IntelligenceEvidence[]> {
+    return getEvidenceForSourceFromFirestore(this.getEffectiveDb(db), sourceType, sourceId);
   }
 
   /**
@@ -406,23 +477,27 @@ export class EvidenceRegistry {
   }
 
   /**
-   * Verifies the cryptographic integrity of content against registered evidence
+   * Verifies the cryptographic integrity of content against registered evidence in Firestore
    */
-  public verifyContentIntegrity(evidenceId: string, content: string | Buffer): boolean {
-    const record = this.get(evidenceId);
+  public async verifyContentIntegrity(
+    evidenceId: string,
+    content: string | Buffer,
+    db?: FirestoreDbLike | null
+  ): Promise<boolean> {
+    const record = await this.get(evidenceId, db);
     if (!record || !record.verified || !record.contentHash) return false;
     const computed = computeSha256(content);
     return computed === record.contentHash;
   }
 
   /**
-   * Persists an existing in-memory evidence record to Firestore using transactional boundary.
+   * Persists an existing evidence record to Firestore using transactional boundary.
    */
   public async persistToFirestore(
     evidence: IntelligenceEvidence,
     db?: FirestoreDbLike | null
   ): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
-    return persistEvidenceToFirestore({ db, evidence });
+    return persistEvidenceToFirestore({ db: this.getEffectiveDb(db), evidence });
   }
 
   /**
@@ -433,16 +508,14 @@ export class EvidenceRegistry {
     db?: FirestoreDbLike | null
   ): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
     const record = createEvidenceRecord(params);
-    this.evidenceStore.set(record.evidenceId, record);
-    return persistEvidenceToFirestore({ db, evidence: record });
+    return persistEvidenceToFirestore({ db: this.getEffectiveDb(db), evidence: record });
   }
 
   /**
-   * Clears in-memory registry (for testing)
+   * Clears in-memory state (no-op in production Firestore-backed registry).
+   * Maintained for test hygiene compatibility.
    */
-  public clear(): void {
-    this.evidenceStore.clear();
-  }
+  public clear(): void {}
 }
 
 export const evidenceRegistry = new EvidenceRegistry();

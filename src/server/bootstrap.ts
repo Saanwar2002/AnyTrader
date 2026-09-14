@@ -24,6 +24,8 @@ import {
   IntelligenceTaskQueue,
 } from "./intelligence/intelligenceTaskQueue.ts";
 import { TaskType } from "./intelligence/types.ts";
+import { evidenceRegistry } from "./intelligence/evidenceRegistry.ts";
+import { setGlobalIntelligenceDb } from "./intelligence/immutableStore.ts";
 
 export const REQUIRED_INTELLIGENCE_HANDLERS: TaskType[] = [
   "job_extraction",
@@ -133,8 +135,10 @@ export async function runBootstrapSequence(
   }
   console.log("[Bootstrap] Firestore readiness probe verified successfully.");
 
-  console.log("[Bootstrap] Step 3: Configuring Intelligence Task Queue with authoritative Firestore instance...");
+  console.log("[Bootstrap] Step 3: Configuring Intelligence Task Queue & Evidence Registry with authoritative Firestore instance...");
   hooks.queue.setFirestoreDb(db);
+  evidenceRegistry.setDb(db);
+  setGlobalIntelligenceDb(db);
 
   if (hooks.startSyncWorkers) {
     console.log("[Bootstrap] Step 4: Starting background projection & sync workers...");
