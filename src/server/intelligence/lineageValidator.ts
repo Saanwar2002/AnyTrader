@@ -51,6 +51,14 @@ export class EvidenceLineageValidator {
     this.db = db || null;
   }
 
+  public static async validateLineage(
+    extraction: EvidenceLineageContract,
+    db?: FirestoreDbLike | null,
+    transaction?: any
+  ): Promise<EvidenceLineageValidationResult> {
+    return new EvidenceLineageValidator(db).validateLineage(extraction, db, transaction);
+  }
+
   public setDb(db: FirestoreDbLike | null): void {
     this.db = db;
   }

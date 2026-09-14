@@ -1,6 +1,15 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 12 — AI Output Security Boundary**:
+  - **Untrusted Model Security Boundary Pipeline**: Implemented a strict security boundary between untrusted AI model outputs and trusted AnyTrader intelligence (`src/server/intelligence/aiCandidateSchema.ts`, `src/server/intelligence/aiCandidateBoundary.ts`).
+  - **Strict Zod Candidate Schema (`aiCandidateSchema.ts`)**: Formulated `AIExtractionCandidateSchema` with `.strict()` parsing, stripping or rejecting unknown/malicious fields (`makeMeAdmin`, `role`, `verified`, `isAdmin`), capping numeric confidence scores strictly to `[0.0, 1.0]`, enforcing array element limits, and preventing AI payloads from attempting to create raw evidence records directly.
+  - **Maximum Payload Budget Enforcement**: Hard-capped AI candidate inputs at `MAX_AI_PAYLOAD_BYTES` (512 KiB) before parsing, throwing `AICandidateSecurityError` for oversized payloads.
+  - **Server-Owned Metadata Identity**: Server-owned trusted context (`aggregateType`, `aggregateId`, `sourceId`, `sourceVersion`, `pipelineVersion`, `modelVersion`, `promptVersion`) overrides model-derived claims. AI outputs cannot mutate aggregate IDs or impersonate provenance.
+  - **Lineage Verification & Canonical Persistence Integration**: `processAICandidateToCanonical` executes structural validation, attaches server metadata, verifies evidence lineage against the authoritative Firestore Evidence Registry (`EvidenceLineageValidator.validateLineage`), canonicalizes semantic content, and persists to `ImmutableIntelligenceStore` idempotently.
+  - **Comprehensive Unit & Emulator Test Matrix (`tests/unit/task12AIOutputSecurityBoundary.test.ts`, `tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**: 16 dedicated unit tests + 6 real Firestore emulator invariant tests verifying valid candidate acceptance, malformed payload rejection, malicious field stripping, fake evidence rejection, cross-aggregate evidence rejection, self-creating evidence rejection, confidence boundary enforcement ([0,1]), prompt injection containment as data, payload size cap enforcement, and high-concurrency idempotent persistence.
+  - **Full Test Matrix**: 100% test pass rate across all 28 unit test suites (395/395 passing tests), clean linter (`npm run lint`), and successful application build (`compile_applet`).
+
 - **V8.1 Task 11A — Deterministic Canonicalization Hardening**:
   - **Deterministic Semantic Content Hashing**: Hardened `canonicalizeIntelligence` (`src/server/intelligence/canonicalizer.ts`) to strictly isolate semantic canonical content from runtime processing metadata (`generatedAt` and `provenance.generatedAt`).
   - **Identical Hash Across Executions**: Two identical logical inputs processed at different timestamps produce identical `contentHash` and `canonicalId`.

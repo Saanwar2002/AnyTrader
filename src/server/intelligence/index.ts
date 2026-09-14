@@ -35,4 +35,6 @@ export * from './lineageValidator';
 export * from './canonicalVocabulary';
 export * from './canonicalSchema';
 export * from './canonicalizer';
+export * from './aiCandidateSchema';
+export * from './aiCandidateBoundary';
 

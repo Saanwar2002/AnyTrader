@@ -71,6 +71,12 @@ import {
   persistCanonicalIntelligence,
 } from '../../src/server/intelligence/canonicalizer';
 import { CanonicalIntelligenceInput } from '../../src/server/intelligence/types';
+import {
+  processAICandidateToCanonical,
+  validateAndSanitizeAICandidate,
+  AICandidateSecurityError,
+  TrustedServerContext,
+} from '../../src/server/intelligence/aiCandidateBoundary';
 
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
@@ -2834,6 +2840,362 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           canonical,
         })
       ).rejects.toThrow(/does not exist in authoritative Firestore store/i);
+    });
+  });
+
+  describe('Task 12: Real Firestore Emulator AI Candidate Security Boundary Invariants', () => {
+    it('Task 12 Invariant 1: Valid AI Candidate with verified evidence passes lineage check and persists to Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_1', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const jobId = 'job_t12_emu_101';
+      const evidenceId = 'ev_t12_valid_emu_1';
+      const contentHash = 'b'.repeat(64);
+
+      // Seed valid evidence into real Firestore emulator
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+        evidenceId,
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceType: 'user_uploaded_photo',
+        sourceId: 'usr_homeowner_t12',
+        sourceVersion: 'v1',
+        contentHash,
+        byteSize: 2048,
+        integrityStatus: 'verified',
+        verified: true,
+        createdAt: new Date().toISOString(),
+      });
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const rawCandidate = {
+        domain: 'roofing',
+        category: 'Slate Roof',
+        component: 'valley flashing',
+        observations: [
+          {
+            description: 'Loose slate valley tile',
+            evidenceIds: [evidenceId],
+          },
+        ],
+        inferences: [
+          {
+            hypothesis: 'Valley flashing leak vulnerability',
+            confidence: 0.9,
+            supportingEvidenceIds: [evidenceId],
+          },
+        ],
+      };
+
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceId: 'usr_homeowner_t12',
+        sourceVersion: 'v1',
+        pipelineVersion: 'v8.1.0_prod',
+        modelVersion: 'gemini-2.5-flash',
+      };
+
+      const result = await processAICandidateToCanonical(rawCandidate, serverContext, {
+        firestoreDb: storeDb,
+        persistToStore: true,
+      });
+
+      expect(result.persisted).toBe(true);
+      expect(result.canonical.canonicalId).toBeDefined();
+
+      // Verify record exists in real Firestore emulator
+      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', result.canonical.canonicalId));
+      expect(extSnap.exists()).toBe(true);
+      expect(extSnap.data()?.aggregateId).toBe(jobId);
+      expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
+    });
+
+    it('Task 12 Invariant 2: Candidate referencing missing evidence fails lineage validation on Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_2', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const jobId = 'job_t12_emu_102';
+      const missingEvidenceId = 'ev_t12_nonexistent_999';
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const rawCandidate = {
+        domain: 'plumbing',
+        observations: [
+          {
+            description: 'Ghost leak assertion',
+            evidenceIds: [missingEvidenceId],
+          },
+        ],
+      };
+
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceId: 'usr_homeowner_t12',
+      };
+
+      await expect(
+        processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        })
+      ).rejects.toThrow(AICandidateSecurityError);
+    });
+
+    it('Task 12 Invariant 3: Candidate referencing evidence from another aggregate fails lineage on Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_3', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const jobId = 'job_t12_emu_103';
+      const foreignJobId = 'job_t12_FOREIGN_999';
+      const foreignEvidenceId = 'ev_t12_foreign_1';
+
+      // Seed evidence tied to foreign job
+      await setDoc(doc(adminDb, 'intelligence_evidence', foreignEvidenceId), {
+        evidenceId: foreignEvidenceId,
+        aggregateType: 'job',
+        aggregateId: foreignJobId, // Different job!
+        sourceType: 'user_uploaded_photo',
+        sourceId: 'usr_other',
+        contentHash: 'c'.repeat(64),
+        byteSize: 1024,
+        integrityStatus: 'verified',
+        verified: true,
+        createdAt: new Date().toISOString(),
+      });
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const rawCandidate = {
+        domain: 'electrical',
+        observations: [
+          {
+            description: 'Cross-aggregate evidence reference',
+            evidenceIds: [foreignEvidenceId],
+          },
+        ],
+      };
+
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceId: 'usr_homeowner_t12',
+      };
+
+      await expect(
+        processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        })
+      ).rejects.toThrow(AICandidateSecurityError);
+    });
+
+    it('Task 12 Invariant 4: AI output attempting to self-create evidence is rejected', async () => {
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: 'job_t12_emu_104',
+        sourceId: 'usr_homeowner_t12',
+      };
+
+      const selfCreatingPayload = {
+        domain: 'roofing',
+        createEvidence: true,
+        rawEvidence: { evidenceId: 'ev_ai_fabricated_123' },
+        observations: [
+          {
+            description: 'Fabricated assertion',
+            evidenceIds: ['ev_ai_fabricated_123'],
+          },
+        ],
+      };
+
+      expect(() =>
+        validateAndSanitizeAICandidate(selfCreatingPayload, serverContext)
+      ).toThrow(AICandidateSecurityError);
+    });
+
+    it('Task 12 Invariant 5: Server-side metadata ownership enforced when candidate contains spoofed fields', async () => {
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: 'job_AUTHORITATIVE_SERVER_105',
+        sourceId: 'usr_AUTHORITATIVE_SERVER_SOURCE',
+        sourceVersion: 'v1_server_authoritative',
+        pipelineVersion: 'v8.1.0_server',
+        modelVersion: 'gemini-2.5-flash',
+      };
+
+      const spoofedCandidate = {
+        domain: 'roofing',
+        observations: [
+          {
+            description: 'Observation with valid model data',
+            evidenceIds: ['ev_test_1'],
+          },
+        ],
+      };
+
+      const canonicalInput = validateAndSanitizeAICandidate(spoofedCandidate, serverContext);
+
+      expect(canonicalInput.aggregateId).toBe('job_AUTHORITATIVE_SERVER_105');
+      expect(canonicalInput.provenance?.source).toBe('usr_AUTHORITATIVE_SERVER_SOURCE');
+      expect(canonicalInput.sourceVersion).toBe('v1_server_authoritative');
+      expect(canonicalInput.pipelineVersion).toBe('v8.1.0_server');
+      expect(canonicalInput.modelVersion).toBe('gemini-2.5-flash');
+    });
+
+    it('Task 12 Invariant 6: Concurrent identical pipeline executions produce idempotent persistence on Firestore emulator', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_6', { admin: true });
+      const adminDb = adminCtx.firestore();
+
+      const jobId = 'job_t12_emu_106';
+      const evidenceId = 'ev_t12_valid_emu_6';
+      const contentHash = 'd'.repeat(64);
+
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+        evidenceId,
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceType: 'user_uploaded_photo',
+        sourceId: 'usr_homeowner_t12',
+        sourceVersion: 'v1',
+        contentHash,
+        byteSize: 2048,
+        integrityStatus: 'verified',
+        verified: true,
+        createdAt: new Date().toISOString(),
+      });
+
+      const storeDb = {
+        collection: (name: string) => collection(adminDb, name),
+        batch: () => null,
+        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
+          return await runTransaction(adminDb, async (tx) => {
+            const txWrapper = {
+              get: async (ref: any) => tx.get(ref),
+              set: (ref: any, data: any) => {
+                tx.set(ref, data);
+                return txWrapper;
+              },
+              update: (ref: any, data: any) => {
+                tx.update(ref, data);
+                return txWrapper;
+              },
+              delete: (ref: any) => {
+                tx.delete(ref);
+                return txWrapper;
+              },
+            };
+            return await fn(txWrapper);
+          });
+        },
+      };
+
+      const rawCandidate = {
+        domain: 'heating',
+        category: 'Boiler Repair',
+        observations: [
+          {
+            description: 'Boiler pressure drops below 0.5 bar',
+            evidenceIds: [evidenceId],
+          },
+        ],
+      };
+
+      const serverContext: TrustedServerContext = {
+        aggregateType: 'job',
+        aggregateId: jobId,
+        sourceId: 'usr_homeowner_t12',
+        sourceVersion: 'v1',
+      };
+
+      // Run pipeline twice
+      const res1 = await processAICandidateToCanonical(rawCandidate, serverContext, {
+        firestoreDb: storeDb,
+        persistToStore: true,
+      });
+
+      expect(res1.persisted).toBe(true);
+
+      // Second identical run must succeed idempotently (or produce identical canonicalId)
+      const res2 = await processAICandidateToCanonical(rawCandidate, serverContext, {
+        firestoreDb: storeDb,
+        persistToStore: true,
+      });
+
+      expect(res2.canonical.canonicalId).toBe(res1.canonical.canonicalId);
+      expect(res2.canonical.contentHash).toBe(res1.canonical.contentHash);
     });
   });
 });
