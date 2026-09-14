@@ -26,7 +26,29 @@ describe("Task 8: Intelligence Persistence Boundary Invariants", () => {
     store = new ImmutableIntelligenceStore();
   });
 
+  function seedTestEvidence(targetDb: any, evidenceId: string, aggregateType: string, aggregateId: string, sourceVersion: number | string = 1) {
+    return targetDb.collection("intelligence_evidence").doc(evidenceId).set({
+      evidenceId,
+      aggregateType,
+      aggregateId,
+      sourceType: aggregateType,
+      sourceId: aggregateId,
+      sourceVersion,
+      evidenceType: "document",
+      evidenceCategory: "DOCUMENT",
+      sourceRef: `tests/${evidenceId}`,
+      contentHash: "a".repeat(64),
+      contentSize: 100,
+      byteSize: 100,
+      schemaVersion: "v8.1.0",
+      integrityStatus: "verified",
+      verified: true,
+      metadata: {},
+    });
+  }
+
   it("Test 8.1 (HISTORICAL EXTRACTION BOUNDARY): persistOutput transactionally writes extractions, events, and summary pointer", async () => {
+    await seedTestEvidence(db, "ev_101", "job", "job_task8_101", 1);
     const versionId = buildVersionId("job", "job_task8_101", 1, "v8.1", "gemini-3.7-flash", "job_extraction_v8.1", "1.0.0");
 
     const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: "deterministic_heuristic" as const };
@@ -231,6 +253,7 @@ describe("Task 8: Intelligence Persistence Boundary Invariants", () => {
     };
 
     // Write version 1
+    await seedTestEvidence(db, "ev_102", "job", "job_task8_102", 1);
     await store.persistOutput({
       db,
       aggregateType: "job",
@@ -242,11 +265,13 @@ describe("Task 8: Intelligence Persistence Boundary Invariants", () => {
     });
 
     // Write version 2 for same aggregate
+    await seedTestEvidence(db, "ev_102_v2", "job", "job_task8_102", 2);
     const extraction2: IntelligenceExtraction = {
       ...extraction1,
       extractionId: "ext_job_102_v2",
       versionId: version2,
       sourceVersion: 2,
+      evidenceIds: ["ev_102_v2"],
       structuredCandidate: { category: "Electrical", problem: "Blown Fuse Box" },
     };
 
@@ -347,6 +372,7 @@ describe("Task 8: Intelligence Persistence Boundary Invariants", () => {
     };
 
     // First write
+    await seedTestEvidence(db, "ev_103", "job", "job_task8_103", 1);
     const res1 = await store.persistOutput({
       db,
       aggregateType: "job",

@@ -1031,6 +1031,42 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       const { createInMemoryTestDb } = await import('../../src/server/intelligence/testDoubles');
 
       const testDb = createInMemoryTestDb();
+      await testDb.collection('intelligence_evidence').doc('ev_1').set({
+        evidenceId: 'ev_1',
+        aggregateType: 'job',
+        aggregateId: 'job_888',
+        sourceType: 'job',
+        sourceId: 'job_888',
+        sourceVersion: 1,
+        evidenceType: 'document',
+        evidenceCategory: 'DOCUMENT',
+        sourceRef: 'tests/ev_1',
+        contentHash: 'a'.repeat(64),
+        contentSize: 100,
+        byteSize: 100,
+        schemaVersion: 'v8.1.0',
+        integrityStatus: 'verified',
+        verified: true,
+        metadata: {},
+      });
+      await testDb.collection('intelligence_evidence').doc('ev_2').set({
+        evidenceId: 'ev_2',
+        aggregateType: 'job',
+        aggregateId: 'job_888',
+        sourceType: 'job',
+        sourceId: 'job_888',
+        sourceVersion: 2,
+        evidenceType: 'document',
+        evidenceCategory: 'DOCUMENT',
+        sourceRef: 'tests/ev_2',
+        contentHash: 'b'.repeat(64),
+        contentSize: 100,
+        byteSize: 100,
+        schemaVersion: 'v8.1.0',
+        integrityStatus: 'verified',
+        verified: true,
+        metadata: {},
+      });
 
       const versionId1 = buildVersionId('job', 'job_888', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
 
@@ -1117,6 +1153,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
         extractionId: `ext_job_888_2`,
         versionId: versionId2,
         sourceVersion: 2,
+        evidenceIds: ['ev_2'],
         structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe & Flooding' },
       };
 

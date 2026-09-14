@@ -106,6 +106,7 @@ export interface EvidenceSourceReference {
   documentId?: string;
   jobId?: string;
   propertyId?: string;
+  contractorId?: string;
   sourceField?: string;
   sourceVersion?: string | number;
   uri?: string;

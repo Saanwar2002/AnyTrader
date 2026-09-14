@@ -24,6 +24,7 @@
  */
 
 import { computeStructuredDataHash } from './provenance';
+import { evidenceLineageValidator } from './lineageValidator';
 import {
   CanonicalIntelligenceEvent,
   IntelligenceAggregateType,
@@ -151,6 +152,9 @@ export class ImmutableIntelligenceStore {
     }
 
     return await db.runTransaction(async (transaction: any) => {
+      // Step 9 & 10: Validate evidence lineage inside transactional boundary (reads before writes)
+      await evidenceLineageValidator.validateLineage(extraction, db, transaction);
+
       const existingSnap = await transaction.get(extractionRef);
 
       if (existingSnap && existingSnap.exists) {

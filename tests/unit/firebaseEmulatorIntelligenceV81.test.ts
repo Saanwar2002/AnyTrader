@@ -1407,8 +1407,30 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       };
     }
 
+    async function seedEvidence(db: any, evidenceId: string, aggregateType: string, aggregateId: string, sourceVersion: number = 1) {
+      await setDoc(doc(db, 'intelligence_evidence', evidenceId), {
+        evidenceId,
+        aggregateType,
+        aggregateId,
+        sourceType: aggregateType,
+        sourceId: aggregateId,
+        sourceVersion,
+        evidenceType: 'document',
+        evidenceCategory: 'DOCUMENT',
+        sourceRef: `tests/${evidenceId}`,
+        contentHash: 'a'.repeat(64),
+        contentSize: 100,
+        byteSize: 100,
+        schemaVersion: 'v8.1.0',
+        integrityStatus: 'verified',
+        verified: true,
+        metadata: {},
+      });
+    }
+
     it('proves atomic creation of identical historical extractions under high concurrency (3 concurrent workers, 1 created, 2 idempotent successes)', async () => {
       const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store', { role: 'admin', admin: true }).firestore();
+      await seedEvidence(adminDb, 'ev_con_1', 'job', 'job_concurrent_100', 1);
       const storeDb = createRealFirestoreStoreDb(adminDb);
       const versionId = buildVersionId('job', 'job_concurrent_100', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
 
@@ -1574,6 +1596,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       };
 
       // 1. Initial write creates historical extraction
+      await seedEvidence(adminDb, 'ev_200', 'job', 'job_immutability_200', 1);
       const res1 = await immutableIntelligenceStore.persistOutput({
         db: storeDb,
         aggregateType: 'job',
@@ -1663,6 +1686,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         rating: 4.9,
       };
 
+      await seedEvidence(adminDb, 'ev_300', 'contractor', 'contractor_300', 1);
       const result = await immutableIntelligenceStore.persistOutput({
         db: storeDb,
         aggregateType: 'contractor' as any,

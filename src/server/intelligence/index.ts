@@ -31,3 +31,4 @@ export * from './propertyIntelligence';
 export * from './qualityReview';
 export * from './backfillEngine';
 export * from './immutableStore';
+export * from './lineageValidator';

@@ -1,6 +1,19 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 10 — Evidence → Intelligence Lineage Enforcement**:
+  - **Core Provenance Invariant ("No evidence, no assertion")**: Enforces a strict, hard provenance boundary between evidence and historical intelligence. Any historical intelligence extraction claiming evidence backing MUST reference evidence records that:
+    1. Actually exist in authoritative Firestore storage (`intelligence_evidence/{evidenceId}`);
+    2. Are structurally and cryptographically valid (`integrityStatus: 'verified'` requires a valid 64-character SHA-256 `contentHash` and positive `byteSize`; `reference_only` requires a valid non-empty `sourceRef` and must NOT claim verified bytes);
+    3. Belong to the correct source/aggregate without cross-entity contamination (e.g. `job_123` cannot claim evidence for `job_999`);
+    4. Are compatible in `sourceVersion` (e.g. extraction v2 referencing evidence v1 is rejected when explicitly declared);
+    5. Are NOT AI-generated assertions (`sourceType: 'ai_output'`, `evidenceType: 'ai_candidate'`, or `isAiGenerated: true` are rejected under anti-circularity rules);
+    6. Are validated transactionally BEFORE any historical extraction, event, or summary projection write occurs.
+  - **Evidence Lineage Validator (`src/server/intelligence/lineageValidator.ts`)**: Created the authoritative `EvidenceLineageValidator` enforcing all 6 lineage constraints with explicit, human-readable error messages.
+  - **Pre-Persistence Transactional Integration (`src/server/intelligence/immutableStore.ts`)**: Updated `ImmutableIntelligenceStore.persistOutput` to invoke `evidenceLineageValidator.validateLineage(options.extraction, db, tx)` inside `db.runTransaction` *before* executing any writes to `intelligence_extractions`, `intelligence_events`, or summary projections. If validation fails, the transaction throws immediately and zero documents are created.
+  - **Comprehensive Automated Test Suite (`tests/unit/task10EvidenceLineage.test.ts`)**: 11 unit tests covering valid creation, missing evidence rejection, cross-aggregate contamination rejection, sourceVersion mismatch rejection, anti-AI circularity rejection, reference-only rules, structured data rules, fail-closed null DB handling, pre-persistence zero-write verification, tampered hash/size rejection, empty evidence rejection, and composite property rollup linking.
+  - **Full Test Matrix**: 100% test pass rate across all 24 unit test suites (360/360 passing tests), clean linter (`npm run lint`), and successful application compilation (`compile_applet`).
+
 - **V8.1 Task 9A — Firestore Authoritative Production Evidence Store & Fail-Closed Registry**:
   - **Elimination of Process-Local Memory Map**: Completely removed `private evidenceStore = new Map<string, IntelligenceEvidence>()` from `EvidenceRegistry` (`src/server/intelligence/evidenceRegistry.ts`). Proved that `(evidenceRegistry as any).evidenceStore` is strictly `undefined`.
   - **Firestore-Authoritative Asynchronous Evidence Flow**: Converted `register()`, `registerReferenceOnly()`, `registerStructuredData()`, `get()`, `getForAggregate()`, `getForSource()`, `verifyAndUpdateContent()`, and `verifyContentIntegrity()` to strictly asynchronous methods. All registration operations invoke `persistEvidenceToFirestore` (`db.runTransaction`), writing authoritatively to `intelligence_evidence/{evidenceId}` before returning the persisted record.
