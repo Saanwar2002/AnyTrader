@@ -1392,6 +1392,203 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(data.status).toBe('succeeded');
       expect(data.attempts).toBe(1);
     });
+
+    it('proves SAME WORKER ID, DIFFERENT LEASE ID (Failure path) fails to finalize and aborts state write', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_fail', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_13d_fail_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // 1. Create a processing task owned by worker-A with lease-A
+      const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+      await setDoc(docRef, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+
+      let handlerReleasePromiseResolve: any;
+      const handlerReleasePromise = new Promise((resolve) => {
+        handlerReleasePromiseResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        // Wait until we simulate reclamation outside
+        await handlerReleasePromise;
+        throw new Error('Simulated original execution failure');
+      });
+
+      // Start executeTask - it will reuse 'worker-A' and 'lease-A' as the active lease.
+      const execPromise = queueA.executeTask(taskId);
+
+      // 2. Simulate lease expiry/reclaim: current owner becomes worker-A with lease-B
+      const futureLease = new Date(Date.now() + 120000).toISOString();
+      await updateDoc(docRef, {
+        leaseId: 'lease-B',
+        leaseExpiresAt: futureLease,
+        attempts: 2,
+      });
+
+      // 3. Now let the handler fail
+      handlerReleasePromiseResolve();
+
+      // 4. Wait for executeTask to complete
+      await execPromise;
+
+      // The old execution MUST NOT be able to modify the task in Firestore.
+      const taskSnap = await getDoc(docRef);
+      expect(taskSnap.exists()).toBe(true);
+      const data = taskSnap.data()!;
+      expect(data.status).toBe('processing');
+      expect(data.workerId).toBe('worker-A');
+      expect(data.leaseId).toBe('lease-B');
+      expect(data.attempts).toBe(2);
+      expect(data.errorCode).toBeUndefined(); // Error must not be written
+    });
+
+    it('proves SAME WORKER ID, DIFFERENT LEASE ID (Success path) fails to finalize', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_succ', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_13d_succ_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // 1. Create a processing task owned by worker-A with lease-A
+      const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+      await setDoc(docRef, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+
+      let handlerReleasePromiseResolve: any;
+      const handlerReleasePromise = new Promise((resolve) => {
+        handlerReleasePromiseResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        await handlerReleasePromise;
+        return { success: true };
+      });
+
+      const execPromise = queueA.executeTask(taskId);
+
+      // 2. Simulating lease reclaim: Current task owner becomes worker-A with lease-B
+      const futureLease = new Date(Date.now() + 120000).toISOString();
+      await updateDoc(docRef, {
+        leaseId: 'lease-B',
+        leaseExpiresAt: futureLease,
+        attempts: 2,
+      });
+
+      // 3. Let the handler succeed
+      handlerReleasePromiseResolve();
+
+      // 4. Wait for executeTask to complete
+      await execPromise;
+
+      // Verify Firestore database state remains owned by worker-A with lease-B, and status is processing (attempts=2)
+      const taskSnap = await getDoc(docRef);
+      expect(taskSnap.exists()).toBe(true);
+      const data = taskSnap.data()!;
+      expect(data.status).toBe('processing');
+      expect(data.workerId).toBe('worker-A');
+      expect(data.leaseId).toBe('lease-B');
+      expect(data.attempts).toBe(2);
+    });
+
+    it('proves DIFFERENT WORKER, DIFFERENT LEASE cannot finalize success or failure', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_diff', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskSuccessId = `task_13d_diff_succ_${Date.now()}`;
+      const taskFailureId = `task_13d_diff_fail_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // Set up success task owned by worker-B + lease-B
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccessId), {
+        taskId: taskSuccessId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-B',
+        leaseId: 'lease-B',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      // Set up failure task owned by worker-B + lease-B
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskFailureId), {
+        taskId: taskFailureId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-B',
+        leaseId: 'lease-B',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+
+      let releaseSuccess: any;
+      const successPromise = new Promise((resolve) => { releaseSuccess = resolve; });
+      queueA.registerHandler('job_extraction', async (task) => {
+        if (task.taskId === taskSuccessId) {
+          await successPromise;
+          return { done: true };
+        } else {
+          await successPromise;
+          throw new Error('Failure route');
+        }
+      });
+
+      const execSuccess = queueA.executeTask(taskSuccessId);
+      const execFailure = queueA.executeTask(taskFailureId);
+
+      // Release handlers
+      releaseSuccess();
+
+      await Promise.all([execSuccess, execFailure]);
+
+      // Both tasks must remain owned by worker-B + lease-B in 'processing' status
+      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccessId));
+      const snapFail = await getDoc(doc(adminDb, 'intelligence_tasks', taskFailureId));
+
+      expect(snapSucc.data()!.status).toBe('processing');
+      expect(snapSucc.data()!.workerId).toBe('worker-B');
+      expect(snapSucc.data()!.leaseId).toBe('lease-B');
+
+      expect(snapFail.data()!.status).toBe('processing');
+      expect(snapFail.data()!.workerId).toBe('worker-B');
+      expect(snapFail.data()!.leaseId).toBe('lease-B');
+    });
   });
 
   // ==========================================================

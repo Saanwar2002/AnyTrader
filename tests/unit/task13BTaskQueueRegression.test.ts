@@ -392,4 +392,244 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
       expect(isValidTaskStateTransition('cancelled', 'processing')).toBe(false);
     });
   });
+
+  // ==========================================================
+  // 6. TASK 13D: FINAL LEASE-ID OWNERSHIP HARDENING
+  // ==========================================================
+  describe('6. Task 13D: Final Lease-ID Ownership Hardening', () => {
+    it('Task 13D: SAME WORKER ID, DIFFERENT LEASE ID (Failure path) fails to finalize', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskId = 'task_13d_fail_mock_1';
+      const nowIso = new Date().toISOString();
+
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(mockDb as any);
+
+      let handlerReleasePromiseResolve: any;
+      const handlerReleasePromise = new Promise((resolve) => {
+        handlerReleasePromiseResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        // Concurrently simulate lease expiry/reclaim: leaseId becomes lease-B AFTER executeTask has resolved activeLeaseId
+        mockDocs.set(taskId, {
+          ...mockDocs.get(taskId),
+          leaseId: 'lease-B',
+          attempts: 2,
+        });
+
+        await handlerReleasePromise;
+        throw new Error('Simulated failure');
+      });
+
+      // Start executing. Since workerId matches in queueA configuration, it initiates execution.
+      const execPromise = queueA.executeTask(taskId);
+
+      // Let handler complete (fail)
+      handlerReleasePromiseResolve();
+
+      await execPromise;
+
+      // Assert database state is unmodified by the failure finalization (no errorCode, no lastError, status stays processing)
+      const finalDoc = mockDocs.get(taskId);
+      expect(finalDoc.status).toBe('processing');
+      expect(finalDoc.workerId).toBe('worker-A');
+      expect(finalDoc.leaseId).toBe('lease-B');
+      expect(finalDoc.attempts).toBe(2);
+      expect(finalDoc.errorCode).toBeUndefined();
+    });
+
+    it('Task 13D: SAME WORKER ID, DIFFERENT LEASE ID (Success path) fails to finalize', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskId = 'task_13d_succ_mock_1';
+      const nowIso = new Date().toISOString();
+
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(mockDb as any);
+
+      let handlerReleasePromiseResolve: any;
+      const handlerReleasePromise = new Promise((resolve) => {
+        handlerReleasePromiseResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        // Concurrently simulate lease reclaim: leaseId becomes lease-B AFTER executeTask has resolved activeLeaseId
+        mockDocs.set(taskId, {
+          ...mockDocs.get(taskId),
+          leaseId: 'lease-B',
+          attempts: 2,
+        });
+
+        await handlerReleasePromise;
+        return { success: true };
+      });
+
+      const execPromise = queueA.executeTask(taskId);
+
+      handlerReleasePromiseResolve();
+
+      await execPromise;
+
+      const finalDoc = mockDocs.get(taskId);
+      expect(finalDoc.status).toBe('processing');
+      expect(finalDoc.workerId).toBe('worker-A');
+      expect(finalDoc.leaseId).toBe('lease-B');
+      expect(finalDoc.attempts).toBe(2);
+    });
+
+    it('Task 13D: DIFFERENT WORKER, DIFFERENT LEASE cannot finalize success or failure', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskSuccessId = 'task_13d_diff_succ_mock';
+      const taskFailureId = 'task_13d_diff_fail_mock';
+      const nowIso = new Date().toISOString();
+
+      mockDocs.set(taskSuccessId, {
+        taskId: taskSuccessId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-B',
+        leaseId: 'lease-B',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      mockDocs.set(taskFailureId, {
+        taskId: taskFailureId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-B',
+        leaseId: 'lease-B',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(mockDb as any);
+
+      let releaseSuccess: any;
+      const successPromise = new Promise((resolve) => { releaseSuccess = resolve; });
+      queueA.registerHandler('job_extraction', async (task) => {
+        if (task.taskId === taskSuccessId) {
+          await successPromise;
+          return { done: true };
+        } else {
+          await successPromise;
+          throw new Error('Failure route');
+        }
+      });
+
+      const execSuccess = queueA.executeTask(taskSuccessId);
+      const execFailure = queueA.executeTask(taskFailureId);
+
+      releaseSuccess();
+
+      await Promise.all([execSuccess, execFailure]);
+
+      const snapSucc = mockDocs.get(taskSuccessId);
+      const snapFail = mockDocs.get(taskFailureId);
+
+      expect(snapSucc.status).toBe('processing');
+      expect(snapSucc.workerId).toBe('worker-B');
+      expect(snapSucc.leaseId).toBe('lease-B');
+
+      expect(snapFail.status).toBe('processing');
+      expect(snapFail.workerId).toBe('worker-B');
+      expect(snapFail.leaseId).toBe('lease-B');
+    });
+  });
 });

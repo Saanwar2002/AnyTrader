@@ -672,7 +672,7 @@ export class IntelligenceTaskQueue {
           if (
             data.status !== 'processing' ||
             data.workerId !== effectiveWorkerId ||
-            (data.leaseId && data.leaseId !== activeLeaseId)
+            data.leaseId !== activeLeaseId
           ) {
             console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during missing-handler finalization. Aborting state write.`);
             throw new OwnershipLostError(taskId, effectiveWorkerId);
@@ -724,7 +724,11 @@ export class IntelligenceTaskQueue {
         }
         const data = docSnap.data() as IntelligenceTask;
 
-        if (data.status !== 'processing' || data.workerId !== effectiveWorkerId || (data.leaseId && data.leaseId !== activeLeaseId)) {
+        if (
+          data.status !== 'processing' ||
+          data.workerId !== effectiveWorkerId ||
+          data.leaseId !== activeLeaseId
+        ) {
           throw new OwnershipLostError(taskId, effectiveWorkerId);
         }
 
@@ -779,12 +783,18 @@ export class IntelligenceTaskQueue {
       try {
         await this.firestoreDb.runTransaction(async (transaction: any) => {
           const docSnap = await transaction.get(taskRef);
-          if (!docSnap || !docSnap.exists) return;
+          if (!docSnap || !docSnap.exists) {
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
+          }
           const data = docSnap.data() as IntelligenceTask;
 
-          if (data.status !== 'processing' || data.workerId !== effectiveWorkerId) {
+          if (
+            data.status !== 'processing' ||
+            data.workerId !== effectiveWorkerId ||
+            data.leaseId !== activeLeaseId
+          ) {
             console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during failure finalization. Aborting state write.`);
-            return;
+            throw new OwnershipLostError(taskId, effectiveWorkerId);
           }
 
           transaction.update(taskRef, {
@@ -806,6 +816,11 @@ export class IntelligenceTaskQueue {
           });
         });
       } catch (finalErr) {
+        if (finalErr instanceof OwnershipLostError) {
+          console.warn(`[IntelligenceTaskQueue] ${finalErr.message}`);
+          task = (await this.getTaskAsync(taskId)) || task;
+          return task;
+        }
         console.error(`[IntelligenceTaskQueue] Error persisting failure state for task ${taskId}:`, finalErr);
         throw finalErr;
       }
