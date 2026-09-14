@@ -1,6 +1,24 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 10A — Evidence Lineage Enforcement Hardening & Real Emulator Suite**:
+  - **Same-Type Strict Aggregate Gate**: Hardened `EvidenceLineageValidator.validateLineage` (`src/server/intelligence/lineageValidator.ts`) to strictly enforce that for same-type aggregates (`extraction.aggregateType === evidence.aggregateType`), `extraction.aggregateId === evidence.aggregateId` is mandatory. Mismatched aggregate IDs (e.g. `job_123` referencing evidence belonging to `job_999`) are rejected with `[EvidenceLineage Violation] Same-type aggregate mismatch rejected` even if `sourceId` or `sourceReference` matches.
+  - **Expanded Evidence Source References**: Updated `EvidenceSourceReference` in `src/server/intelligence/types.ts` to include typed references for `customerRequestId`, `quoteId`, `reviewId`, `projectId`, and `materialId` with index signature `[key: string]: any;`.
+  - **Firestore Undefined Field Sanitization**: Implemented `cleanUndefinedFields` in `src/server/intelligence/evidence.ts` and `src/server/intelligence/immutableStore.ts` ensuring no `undefined` field values are passed to Firestore transaction `setDoc` calls, preventing SDK validation errors.
+  - **Firestore Intelligence Security Rules Expansion (`firestore.rules`)**: Added security rules for additional intelligence collections (`intelligence_contractors`, `intelligence_quotes`, `intelligence_reviews`, `intelligence_materials`, `intelligence_projects`, `intelligence_customer_requests`) with admin-only read/write access.
+  - **Real Firebase Emulator Invariant Suite (Section 10 in `tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**: Added 10 end-to-end real emulator tests proving:
+    1. Valid same-aggregate evidence creates historical intelligence in emulator Firestore;
+    2. Nonexistent evidence throws and creates zero extraction/event/summary documents;
+    3. Mismatched same-type aggregate throws and creates zero documents;
+    4. Mismatched sourceVersion throws and creates zero documents;
+    5. Unverified evidence with tampered SHA-256 or zero byteSize throws and creates zero documents;
+    6. Cross-entity multi-evidence fails if any single evidence record fails validation;
+    7. Anti-AI circularity throws and creates zero documents;
+    8. Reference-only evidence without content hash is accepted when `verified = false`;
+    9. Structured evidence without raw bytes is accepted when schema is valid;
+    10. Concurrent identical write under real emulator transaction results in exactly 1 creation and 2 idempotent returns with no duplicate documents.
+  - **Full Test Matrix**: 100% test pass rate across all 24 unit test suites (361/361 passing tests) plus 51 real Firebase Emulator tests passing (code 0). Clean linter (`npm run lint`) and successful applet build (`compile_applet`).
+
 - **V8.1 Task 10 — Evidence → Intelligence Lineage Enforcement**:
   - **Core Provenance Invariant ("No evidence, no assertion")**: Enforces a strict, hard provenance boundary between evidence and historical intelligence. Any historical intelligence extraction claiming evidence backing MUST reference evidence records that:
     1. Actually exist in authoritative Firestore storage (`intelligence_evidence/{evidenceId}`);

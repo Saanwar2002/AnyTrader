@@ -24,6 +24,7 @@
  */
 
 import { computeStructuredDataHash } from './provenance';
+import { cleanUndefinedFields } from './evidence';
 import { evidenceLineageValidator } from './lineageValidator';
 import {
   CanonicalIntelligenceEvent,
@@ -189,14 +190,18 @@ export class ImmutableIntelligenceStore {
       }
 
       // Atomic create-only transaction write
-      transaction.set(extractionRef, extraction);
-      transaction.set(eventRef, event);
-      transaction.set(summaryRef, updatedSummary, { merge: true });
+      const sanitizedExtraction = cleanUndefinedFields(extraction);
+      const sanitizedEvent = cleanUndefinedFields(event);
+      const sanitizedSummary = cleanUndefinedFields(updatedSummary);
+
+      transaction.set(extractionRef, sanitizedExtraction);
+      transaction.set(eventRef, sanitizedEvent);
+      transaction.set(summaryRef, sanitizedSummary, { merge: true });
 
       return {
         versionId,
         isNew: true,
-        extraction,
+        extraction: sanitizedExtraction,
         eventId: event.eventId,
       };
     });

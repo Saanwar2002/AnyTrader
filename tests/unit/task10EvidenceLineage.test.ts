@@ -268,7 +268,52 @@ describe('Task 10: Evidence → Intelligence Lineage Enforcement Invariants', ()
         event: { eventId: 'ie_123', aggregateType: 'job', aggregateId: 'job_123' } as any,
         summaryProjection: { jobId: 'job_123' },
       })
-    ).rejects.toThrow(/Cross-aggregate evidence reference rejected: Evidence 'ev_job_999' belongs to 'job:job_999', not 'job:job_123'/);
+    ).rejects.toThrow(/Same-type aggregate mismatch rejected: Evidence 'ev_job_999' belongs to 'job:job_999', not 'job:job_123'/);
+  });
+
+  it('Step 16b: Same-type aggregate mismatch rejected even when sourceId matches target aggregateId', async () => {
+    // Vulnerability defense: Evidence has aggregateId = job_999, but sourceId = job_123
+    await seedEvidence({
+      evidenceId: 'ev_job_spoofed_source',
+      aggregateType: 'job',
+      aggregateId: 'job_999',
+      sourceId: 'job_123',
+      sourceVersion: 1,
+    });
+
+    const versionId = buildVersionId('job', 'job_123', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+
+    const extraction: IntelligenceExtraction = {
+      extractionId: 'ext_123_spoof',
+      versionId,
+      aggregateType: 'job',
+      aggregateId: 'job_123',
+      schemaVersion: '1.0.0',
+      pipelineVersion: 'v8.1',
+      modelVersion: 'gemini-3.7-flash',
+      promptVersion: 'job_v1',
+      sourceVersion: 1,
+      provider: 'google_genai',
+      createdAt: new Date().toISOString(),
+      generatedAt: new Date().toISOString(),
+      rawManifest: { sha256: validHash, encoding: 'gzip', originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_123_spoof', createdAt: new Date().toISOString() },
+      structuredCandidate: { category: 'Electrical', problem: 'Sparks' },
+      evidenceIds: ['ev_job_spoofed_source'],
+      confidence,
+      provenance,
+    };
+
+    await expect(
+      store.persistOutput({
+        db,
+        aggregateType: 'job',
+        aggregateId: 'job_123',
+        versionId,
+        extraction,
+        event: { eventId: 'ie_123_spoof', aggregateType: 'job', aggregateId: 'job_123' } as any,
+        summaryProjection: { jobId: 'job_123' },
+      })
+    ).rejects.toThrow(/Same-type aggregate mismatch rejected: Evidence 'ev_job_spoofed_source' belongs to 'job:job_999', not 'job:job_123'/);
   });
 
   it('Step 17: Incompatible sourceVersion -> strictly rejected', async () => {

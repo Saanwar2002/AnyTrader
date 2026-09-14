@@ -178,6 +178,21 @@ export function buildEvidenceStoragePath(evidenceId: string, filename?: string):
   return `intelligence_evidence/${evidenceId}/${filename || 'content'}`;
 }
 
+export function cleanUndefinedFields<T extends Record<string, any>>(obj: T): T {
+  const result: any = Array.isArray(obj) ? [] : {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val !== undefined) {
+      if (val !== null && typeof val === 'object' && !(val instanceof Date) && !Buffer.isBuffer(val)) {
+        result[key] = cleanUndefinedFields(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Factory to construct a fully validated IntelligenceEvidence object.
  */
@@ -261,7 +276,7 @@ export function createEvidenceRecord(params: CreateEvidenceParams): Intelligence
     verified: isVerified,
   });
 
-  const record: IntelligenceEvidence = {
+  const record: IntelligenceEvidence = cleanUndefinedFields({
     evidenceId,
     aggregateType: validated.aggregateType,
     aggregateId: validated.aggregateId,
@@ -286,7 +301,7 @@ export function createEvidenceRecord(params: CreateEvidenceParams): Intelligence
     sourceRef: validated.sourceRef,
     sourceReference: validated.sourceReference,
     metadata: validated.metadata,
-  };
+  });
 
   validateEvidencePayload(record);
   return record;
@@ -349,13 +364,14 @@ export async function persistEvidenceToFirestore(
       }
     }
 
-    // Atomic transaction create
-    transaction.set(docRef, evidence);
+    // Atomic transaction create (cleaned of undefined values)
+    const sanitizedEvidence = cleanUndefinedFields(evidence);
+    transaction.set(docRef, sanitizedEvidence);
 
     return {
       evidenceId: evidence.evidenceId,
       isNew: true,
-      evidence,
+      evidence: sanitizedEvidence,
     };
   });
 }

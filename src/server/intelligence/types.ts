@@ -107,9 +107,15 @@ export interface EvidenceSourceReference {
   jobId?: string;
   propertyId?: string;
   contractorId?: string;
+  customerRequestId?: string;
+  quoteId?: string;
+  reviewId?: string;
+  projectId?: string;
+  materialId?: string;
   sourceField?: string;
   sourceVersion?: string | number;
   uri?: string;
+  [key: string]: any;
 }
 
 export interface ConfidenceScores {

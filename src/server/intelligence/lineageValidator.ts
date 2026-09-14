@@ -118,14 +118,16 @@ export class EvidenceLineageValidator {
       // Step 18: Anti-AI Circularity Guard
       const isAiSelfClaim =
         evidence.sourceType === 'ai_output' ||
+        evidence.sourceType === 'ai_model' ||
         evidence.evidenceType === 'ai_candidate' ||
         evidence.metadata?.isAiGenerated === true ||
+        evidence.metadata?.generatedOutput === true ||
         evidence.metadata?.aiSelfJustification === true ||
         (evidence.sourceRef && evidence.sourceRef.startsWith('ai_output:'));
 
       if (isAiSelfClaim) {
         throw new Error(
-          `[EvidenceLineage Violation] Evidence '${evidenceId}' is an AI-generated assertion. AI outputs cannot satisfy their own evidence requirement.`
+          `[EvidenceLineage Violation] Anti-AI Circularity Violation: Evidence '${evidenceId}' is an AI-generated assertion. AI outputs cannot satisfy their own evidence requirement.`
         );
       }
 
@@ -164,17 +166,31 @@ export class EvidenceLineageValidator {
           `[EvidenceLineage Violation] Evidence '${evidence.evidenceId}' has integrityStatus 'verified' but verified flag is false.`
         );
       }
-      if (!evidence.contentHash || !/^[a-f0-9]{64}$/i.test(evidence.contentHash)) {
-        throw new Error(
-          `[EvidenceLineage Violation] Evidence '${evidence.evidenceId}' has invalid verified integrity: missing or malformed 64-character SHA-256 contentHash.`
-        );
+
+      const isStructured =
+        evidence.evidenceType === 'structured_data' ||
+        evidence.evidenceCategory === 'STRUCTURED_DATA' ||
+        evidence.metadata?.schema !== undefined;
+
+      if (!isStructured) {
+        if (!evidence.contentHash || !/^[a-f0-9]{64}$/i.test(evidence.contentHash)) {
+          throw new Error(
+            `[EvidenceLineage Violation] Evidence '${evidence.evidenceId}' has invalid verified integrity: missing or malformed 64-character SHA-256 contentHash.`
+          );
+        }
+        if (evidence.byteSize === undefined || evidence.byteSize === null || evidence.byteSize <= 0) {
+          throw new Error(
+            `[EvidenceLineage Violation] Evidence '${evidence.evidenceId}' has invalid verified integrity: byteSize must be greater than zero.`
+          );
+        }
+      } else {
+        if (!evidence.schemaVersion && !evidence.metadata?.schema) {
+          throw new Error(
+            `[EvidenceLineage Violation] Structured evidence '${evidence.evidenceId}' missing valid schemaVersion or metadata schema.`
+          );
+        }
       }
-      if (evidence.byteSize === undefined || evidence.byteSize === null || evidence.byteSize <= 0) {
-        throw new Error(
-          `[EvidenceLineage Violation] Evidence '${evidence.evidenceId}' has invalid verified integrity: byteSize must be greater than zero.`
-        );
-      }
-    } else if (status === 'reference_only') {
+    } else if (status === 'reference_only' || status === 'unverified') {
       if (!evidence.sourceRef || typeof evidence.sourceRef !== 'string' || evidence.sourceRef.trim() === '') {
         throw new Error(
           `[EvidenceLineage Violation] Reference-only evidence '${evidence.evidenceId}' is missing a valid sourceRef pointer.`
@@ -205,47 +221,73 @@ export class EvidenceLineageValidator {
     const evAggType = String(evidence.aggregateType || '').toLowerCase();
     const evAggId = String(evidence.aggregateId || '');
 
-    // 1. Same aggregate type: Must match aggregateId exactly
+    // 1. Same aggregate type: Must match aggregateId exactly.
+    // Direct same-type lineage REQUIRES extraction.aggregateType === evidence.aggregateType
+    // AND extraction.aggregateId === evidence.aggregateId.
+    // Mismatched aggregate IDs MUST NOT pass merely because sourceId or sourceReference matches.
     if (extAggType === evAggType) {
       if (extAggId !== evAggId) {
-        // Check if there is an explicit matching sourceId
-        const sourceMatches = evidence.sourceId === extAggId;
-        const refMatches =
-          (extAggType === 'job' && evidence.sourceReference?.jobId === extAggId) ||
-          (extAggType === 'property' && evidence.sourceReference?.propertyId === extAggId);
-
-        if (!sourceMatches && !refMatches) {
-          throw new Error(
-            `[EvidenceLineage Violation] Cross-aggregate evidence reference rejected: Evidence '${evidence.evidenceId}' belongs to '${evidence.aggregateType}:${evidence.aggregateId}', not '${extraction.aggregateType}:${extraction.aggregateId}'.`
-          );
-        }
+        throw new Error(
+          `[EvidenceLineage Violation] Same-type aggregate mismatch rejected: Evidence '${evidence.evidenceId}' belongs to '${evidence.aggregateType}:${evidence.aggregateId}', not '${extraction.aggregateType}:${extraction.aggregateId}'.`
+        );
       }
       return;
     }
 
-    // 2. Cross-aggregate relationships: Allowed only if explicitly linked
+    // 2. Cross-aggregate relationships: Allowed only if explicitly linked via validated relationship
     // Example: Property rollups referencing job evidence from jobs on that property
     const isLinkedToProperty =
       extAggType === 'property' &&
       (evidence.sourceReference?.propertyId === extAggId ||
-        evidence.metadata?.propertyId === extAggId ||
-        evidence.sourceId === extAggId);
+        evidence.metadata?.propertyId === extAggId);
 
     const isLinkedToJob =
       extAggType === 'job' &&
       (evidence.sourceReference?.jobId === extAggId ||
-        evidence.metadata?.jobId === extAggId ||
-        evidence.sourceId === extAggId);
+        evidence.metadata?.jobId === extAggId);
 
     const isLinkedToContractor =
       extAggType === 'contractor' &&
       (evidence.sourceReference?.contractorId === extAggId ||
-        evidence.metadata?.contractorId === extAggId ||
-        evidence.sourceId === extAggId);
+        evidence.metadata?.contractorId === extAggId);
 
-    if (!isLinkedToProperty && !isLinkedToJob && !isLinkedToContractor) {
+    const isLinkedToCustomerRequest =
+      extAggType === 'customer_request' &&
+      (evidence.sourceReference?.customerRequestId === extAggId ||
+        evidence.metadata?.customerRequestId === extAggId);
+
+    const isLinkedToQuote =
+      extAggType === 'quote' &&
+      (evidence.sourceReference?.quoteId === extAggId ||
+        evidence.metadata?.quoteId === extAggId);
+
+    const isLinkedToReview =
+      extAggType === 'review' &&
+      (evidence.sourceReference?.reviewId === extAggId ||
+        evidence.metadata?.reviewId === extAggId);
+
+    const isLinkedToProject =
+      extAggType === 'project' &&
+      (evidence.sourceReference?.projectId === extAggId ||
+        evidence.metadata?.projectId === extAggId);
+
+    const isLinkedToMaterial =
+      extAggType === 'material' &&
+      (evidence.sourceReference?.materialId === extAggId ||
+        evidence.metadata?.materialId === extAggId);
+
+    if (
+      !isLinkedToProperty &&
+      !isLinkedToJob &&
+      !isLinkedToContractor &&
+      !isLinkedToCustomerRequest &&
+      !isLinkedToQuote &&
+      !isLinkedToReview &&
+      !isLinkedToProject &&
+      !isLinkedToMaterial
+    ) {
       throw new Error(
-        `[EvidenceLineage Violation] Incompatible cross-aggregate relationship: Evidence '${evidence.evidenceId}' (aggregate: '${evidence.aggregateType}:${evidence.aggregateId}', source: '${evidence.sourceType}:${evidence.sourceId}') does not reference target '${extraction.aggregateType}:${extraction.aggregateId}'.`
+        `[EvidenceLineage Violation] Incompatible cross-aggregate relationship: Evidence '${evidence.evidenceId}' (aggregate: '${evidence.aggregateType}:${evidence.aggregateId}', source: '${evidence.sourceType}:${evidence.sourceId}') does not have an explicit validated relationship referencing target '${extraction.aggregateType}:${extraction.aggregateId}'.`
       );
     }
   }
