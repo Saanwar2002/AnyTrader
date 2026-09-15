@@ -4539,24 +4539,22 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           workerId: 'worker_c6',
           leaseId: 'lease_c6',
           startedAt: new Date().toISOString(),
+          pricingVersion: 'legacy_v1',
         },
         storeDb as any
       );
 
-      const succ = await processingRunStore.recordRunSucceeded(
-        runId,
-        {
-          workerId: 'worker_c6',
-          leaseId: 'lease_c6',
-          pricingVersion: 'v2_custom_tier',
-        },
-        storeDb as any
-      );
-
-      expect(succ.pricingVersion).toBe('v2_custom_tier');
-
-      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
-      expect(snap.data()?.pricingVersion).toBe('v2_custom_tier');
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c6',
+            leaseId: 'lease_c6',
+            pricingVersion: 'v2_custom_tier',
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
     });
 
     it('C7 — Historical cost: Changing current pricing configuration does not mutate an existing processing run', async () => {
@@ -5055,6 +5053,397 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           storeDb as any
         )
       ).rejects.toThrow(/Malicious update rejected: caller-supplied taskId/);
+    });
+
+    it('Test A — Idempotency of recordRunStarted with identical params', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_ta', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_ta', 1, 'lease_ta');
+      const startPayload = {
+        runId,
+        taskId: 'task_ta',
+        aggregateType: 'job' as const,
+        aggregateId: 'job_ta',
+        taskType: 'job_extraction' as const,
+        status: 'started' as const,
+        attempt: 1,
+        workerId: 'worker_ta',
+        leaseId: 'lease_ta',
+        startedAt: new Date().toISOString(),
+        provider: 'google_genai',
+        modelVersion: 'gemini-2.5-flash',
+        pricingVersion: 'v1_test',
+      };
+
+      const first = await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+      expect(first.runId).toBe(runId);
+      expect(first.status).toBe('started');
+
+      const second = await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+      expect(second.runId).toBe(runId);
+      expect(second.status).toBe('started');
+    });
+
+    it('Test B — recordRunStarted rejects if called a second time but with mismatching/conflicting server-owned metadata', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tb', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tb', 1, 'lease_tb');
+      const startPayload = {
+        runId,
+        taskId: 'task_tb',
+        aggregateType: 'job' as const,
+        aggregateId: 'job_tb',
+        taskType: 'job_extraction' as const,
+        status: 'started' as const,
+        attempt: 1,
+        workerId: 'worker_tb',
+        leaseId: 'lease_tb',
+        startedAt: new Date().toISOString(),
+        provider: 'google_genai',
+      };
+
+      await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+
+      // Conflict: different provider
+      await expect(
+        processingRunStore.recordRunStarted(
+          { ...startPayload, provider: 'different_provider' },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Conflict in server-owned metadata\/identity: incoming provider/);
+    });
+
+    it('Test C — recordRunStarted does not modify any execution identity or server-owned fields on a second call if those fields match', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tc', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tc', 1, 'lease_tc');
+      const startPayload = {
+        runId,
+        taskId: 'task_tc',
+        aggregateType: 'job' as const,
+        aggregateId: 'job_tc',
+        taskType: 'job_extraction' as const,
+        status: 'started' as const,
+        attempt: 1,
+        workerId: 'worker_tc',
+        leaseId: 'lease_tc',
+        startedAt: new Date().toISOString(),
+        provider: 'google_genai',
+      };
+
+      await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+
+      const second = await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+      expect(second.provider).toBe('google_genai');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.provider).toBe('google_genai');
+    });
+
+    it('Test D — recordRunStarted does not revert a terminal state back to started when called again', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_td', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_td', 1, 'lease_td');
+      const startPayload = {
+        runId,
+        taskId: 'task_td',
+        aggregateType: 'job' as const,
+        aggregateId: 'job_td',
+        taskType: 'job_extraction' as const,
+        status: 'started' as const,
+        attempt: 1,
+        workerId: 'worker_td',
+        leaseId: 'lease_td',
+        startedAt: new Date().toISOString(),
+      };
+
+      await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+
+      // Finalize the run to succeeded
+      await processingRunStore.recordRunSucceeded(
+        runId,
+        { workerId: 'worker_td', leaseId: 'lease_td' },
+        storeDb as any
+      );
+
+      // Re-call recordRunStarted
+      const res = await processingRunStore.recordRunStarted(startPayload, storeDb as any);
+      expect(res.status).toBe('succeeded');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.status).toBe('succeeded');
+    });
+
+    it('Test E — recordRunSucceeded rejects changes to existing/authoritative metadata fields when those fields were already set', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_te', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_te', 1, 'lease_te');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_te',
+          aggregateType: 'job',
+          aggregateId: 'job_te',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_te',
+          leaseId: 'lease_te',
+          startedAt: new Date().toISOString(),
+          provider: 'google_genai',
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_te',
+            leaseId: 'lease_te',
+            provider: 'hacked_provider',
+          } as any,
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied provider/);
+    });
+
+    it('Test F — recordRunFailed rejects changes to existing/authoritative metadata fields when those fields were already set', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tf', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tf', 1, 'lease_tf');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_tf',
+          aggregateType: 'job',
+          aggregateId: 'job_tf',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_tf',
+          leaseId: 'lease_tf',
+          startedAt: new Date().toISOString(),
+          provider: 'google_genai',
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunFailed(
+          runId,
+          new Error('Simulated failure'),
+          {
+            workerId: 'worker_tf',
+            leaseId: 'lease_tf',
+            provider: 'hacked_provider',
+          } as any,
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied provider/);
+    });
+
+    it('Test G — recordRunSucceeded allows specifying metadata fields during finalization if they were completely absent/undefined at start', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tg', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tg', 1, 'lease_tg');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_tg',
+          aggregateType: 'job',
+          aggregateId: 'job_tg',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_tg',
+          leaseId: 'lease_tg',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_tg',
+          leaseId: 'lease_tg',
+          provider: 'google_genai',
+          modelVersion: 'gemini-1.5-flash',
+        },
+        storeDb as any
+      );
+
+      expect(succ.provider).toBe('google_genai');
+      expect(succ.modelVersion).toBe('gemini-1.5-flash');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.provider).toBe('google_genai');
+      expect(snap.data()?.modelVersion).toBe('gemini-1.5-flash');
+    });
+
+    it('Test H — recordRunFailed allows specifying metadata fields during finalization if they were completely absent/undefined at start', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_th', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_th', 1, 'lease_th');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_th',
+          aggregateType: 'job',
+          aggregateId: 'job_th',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_th',
+          leaseId: 'lease_th',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const fail = await processingRunStore.recordRunFailed(
+        runId,
+        new Error('Failure with delayed metadata'),
+        {
+          workerId: 'worker_th',
+          leaseId: 'lease_th',
+          provider: 'google_genai',
+          modelVersion: 'gemini-1.5-flash',
+        },
+        storeDb as any
+      );
+
+      expect(fail.provider).toBe('google_genai');
+      expect(fail.modelVersion).toBe('gemini-1.5-flash');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.provider).toBe('google_genai');
+      expect(snap.data()?.modelVersion).toBe('gemini-1.5-flash');
+    });
+
+    it('Test I — recordRunSucceeded rejects a different pricingVersion if pricingVersion was already specified at start', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_ti', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_ti', 1, 'lease_ti');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_ti',
+          aggregateType: 'job',
+          aggregateId: 'job_ti',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_ti',
+          leaseId: 'lease_ti',
+          startedAt: new Date().toISOString(),
+          pricingVersion: 'v1_authoritative',
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_ti',
+            leaseId: 'lease_ti',
+            pricingVersion: 'v2_malicious_override',
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+    });
+
+    it('Test J — recordRunFailed rejects a different pricingVersion if pricingVersion was already specified at start', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tj', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tj', 1, 'lease_tj');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_tj',
+          aggregateType: 'job',
+          aggregateId: 'job_tj',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_tj',
+          leaseId: 'lease_tj',
+          startedAt: new Date().toISOString(),
+          pricingVersion: 'v1_authoritative',
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunFailed(
+          runId,
+          new Error('Failure update test'),
+          {
+            workerId: 'worker_tj',
+            leaseId: 'lease_tj',
+            pricingVersion: 'v2_malicious_override',
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+    });
+
+    it('Test K — Concurrent recordRunStarted idempotency and isolation', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tk', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_tk', 1, 'lease_tk');
+      const startPayload = {
+        runId,
+        taskId: 'task_tk',
+        aggregateType: 'job' as const,
+        aggregateId: 'job_tk',
+        taskType: 'job_extraction' as const,
+        status: 'started' as const,
+        attempt: 1,
+        workerId: 'worker_tk',
+        leaseId: 'lease_tk',
+        startedAt: new Date().toISOString(),
+      };
+
+      const results = await Promise.all([
+        processingRunStore.recordRunStarted(startPayload, storeDb as any),
+        processingRunStore.recordRunStarted(startPayload, storeDb as any),
+        processingRunStore.recordRunStarted(startPayload, storeDb as any),
+      ]);
+
+      for (const res of results) {
+        expect(res.runId).toBe(runId);
+        expect(res.status).toBe('started');
+      }
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data()?.status).toBe('started');
     });
   });
 });

@@ -350,6 +350,37 @@ export class IntelligenceProcessingRunStore {
           return existing;
         }
 
+        // 14C.3 Check: Reject if incoming request attempts to change server-owned metadata
+        const serverOwnedKeys = [
+          'provider',
+          'modelVersion',
+          'promptVersion',
+          'pipelineVersion',
+          'schemaVersion',
+          'pricingVersion',
+          'taskId',
+          'aggregateType',
+          'aggregateId',
+          'taskType',
+          'attempt',
+          'workerId',
+          'leaseId',
+          'startedAt',
+          'createdAt',
+          'runId'
+        ];
+        for (const key of serverOwnedKeys) {
+          const incomingVal = runInput[key as keyof IntelligenceProcessingRun];
+          const existingVal = existing[key as keyof IntelligenceProcessingRun];
+          if (incomingVal !== undefined && incomingVal !== null && existingVal !== undefined && existingVal !== null) {
+            if (incomingVal !== existingVal) {
+              throw new ProcessingRunValidationError(
+                `Conflict in server-owned metadata/identity: incoming ${key} '${incomingVal}' does not match existing '${existingVal}'`
+              );
+            }
+          }
+        }
+
         transaction.set(docRef, sanitized, { merge: true });
         return { ...existing, ...sanitized };
       }
@@ -416,10 +447,14 @@ export class IntelligenceProcessingRunStore {
         'pricingVersion',
       ];
       for (const key of identityKeys) {
-        if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
-          throw new ProcessingRunValidationError(
-            `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
-          );
+        if (updates && updates[key] !== undefined && updates[key] !== null) {
+          if (existing[key] !== undefined && existing[key] !== null) {
+            if (updates[key] !== existing[key]) {
+              throw new ProcessingRunValidationError(
+                `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
+              );
+            }
+          }
         }
       }
 
@@ -467,12 +502,12 @@ export class IntelligenceProcessingRunStore {
         createdAt: existing.createdAt,
         workerId: existing.workerId,
         leaseId: existing.leaseId,
-        provider: existing.provider,
-        modelVersion: existing.modelVersion,
-        promptVersion: existing.promptVersion,
-        pipelineVersion: existing.pipelineVersion,
-        schemaVersion: existing.schemaVersion,
-        pricingVersion: existing.pricingVersion,
+        provider: existing.provider !== undefined ? existing.provider : updates?.provider,
+        modelVersion: existing.modelVersion !== undefined ? existing.modelVersion : updates?.modelVersion,
+        promptVersion: existing.promptVersion !== undefined ? existing.promptVersion : updates?.promptVersion,
+        pipelineVersion: existing.pipelineVersion !== undefined ? existing.pipelineVersion : updates?.pipelineVersion,
+        schemaVersion: existing.schemaVersion !== undefined ? existing.schemaVersion : updates?.schemaVersion,
+        pricingVersion: existing.pricingVersion !== undefined ? existing.pricingVersion : updates?.pricingVersion,
       };
 
       const validated = validateProcessingRunRecord(mergedRaw);
@@ -540,10 +575,14 @@ export class IntelligenceProcessingRunStore {
           'pricingVersion',
         ];
         for (const key of identityKeys) {
-          if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
-            throw new ProcessingRunValidationError(
-              `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
-            );
+          if (updates && updates[key] !== undefined && updates[key] !== null) {
+            if (existing[key] !== undefined && existing[key] !== null) {
+              if (updates[key] !== existing[key]) {
+                throw new ProcessingRunValidationError(
+                  `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
+                );
+              }
+            }
           }
         }
 
@@ -600,12 +639,12 @@ export class IntelligenceProcessingRunStore {
           createdAt: existing.createdAt,
           workerId: existing.workerId,
           leaseId: existing.leaseId,
-          provider: existing.provider,
-          modelVersion: existing.modelVersion,
-          promptVersion: existing.promptVersion,
-          pipelineVersion: existing.pipelineVersion,
-          schemaVersion: existing.schemaVersion,
-          pricingVersion: existing.pricingVersion,
+          provider: existing.provider !== undefined ? existing.provider : updates?.provider,
+          modelVersion: existing.modelVersion !== undefined ? existing.modelVersion : updates?.modelVersion,
+          promptVersion: existing.promptVersion !== undefined ? existing.promptVersion : updates?.promptVersion,
+          pipelineVersion: existing.pipelineVersion !== undefined ? existing.pipelineVersion : updates?.pipelineVersion,
+          schemaVersion: existing.schemaVersion !== undefined ? existing.schemaVersion : updates?.schemaVersion,
+          pricingVersion: existing.pricingVersion !== undefined ? existing.pricingVersion : updates?.pricingVersion,
         };
 
         const validated = validateProcessingRunRecord(mergedRaw);

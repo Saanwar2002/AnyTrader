@@ -1,5 +1,23 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🧠 AnyTrader V8.1 — Task 14C.3: Final Processing-Run Idempotency & Server-Metadata Hardening (September 15, 2026)
+- **Task 14C.3 — Final Processing-Run Idempotency & Server-Metadata Hardening**:
+  - **Deterministic Start Idempotency**: Hardened `recordRunStarted` to be fully idempotent. If invoked multiple times with identical parameters, it successfully returns the existing record without mutating the identity or duplicating documents.
+  - **Conflict Metadata Rejection**: Enforced that starting an existing deterministic run with mismatched server-owned metadata (such as model version, pipeline version, or taskId) is strictly rejected with a `ProcessingRunValidationError`.
+  - **Delayed Specification of Absent Metadata**: Supported delayed metadata definition on execution finalization. If metadata keys (like `pricingVersion`, `provider`, or `modelVersion`) were absent/undefined at start, `recordRunSucceeded` and `recordRunFailed` allow them to be specified during outcome logging, while strictly rejecting any changes to keys that were already present.
+  - **Terminal State Protection on Start Re-execution**: Prevented re-started runs from reverting the status of already completed runs. If a run is in a terminal state (`succeeded`, `failed`, `retrying`, or `dead_letter`), re-invoking `recordRunStarted` on it returns the existing terminal record safely without modifying its status.
+  - **11 Real Firebase Emulator Integration Tests (A-K)**: Implemented 11 comprehensive integration tests under `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` using real Firestore Admin SDK contexts and transactions to verify:
+    - *Test A*: Idempotency of start registration with identical params.
+    - *Test B*: Rejection of mismatched server-owned metadata on start re-execution.
+    - *Test C*: Immutable preservation of matching execution identity fields.
+    - *Test D*: Terminal state preservation on start re-execution.
+    - *Test E / F*: Rejection of modified execution metadata on success/failure finalization.
+    - *Test G / H*: Delayed metadata specification for absent-at-start fields on finalization.
+    - *Test I / J*: Corrected pricing-version semantics to reject altered pricing configurations on finalization.
+    - *Test K*: High-concurrency start registration atomicity and isolation.
+  - **Corrected Test C6 Semantics**: Redefined test C6 to align with the immutable metadata constraints, asserting that an altered pricingVersion supplied during finalization throws a validation error.
+  - **Validation & Build Verification**: Verified 100% of the 43 unit tests pass successfully, linter runs clean, and application compiles perfectly.
+
 ## 🧠 AnyTrader V8.1 — Task 14, 14B, 14C & 14C.1: Intelligence Processing Observability, Real Emulator Persistence, Observability Integrity Boundary & Server-Owned Metadata (September 15, 2026)
 - **Task 14C.1 — Server-Owned Processing-Run Metadata Integrity**:
   - **Strict Identity Protection Boundary**: Prevented callers from overwriting critical server-owned metadata during execution finalization (`recordRunSucceeded()` and `recordRunFailed()`).
