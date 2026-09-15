@@ -610,15 +610,30 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
           if (name === 'intelligence_processing_runs') {
             return {
               doc: () => ({
-                set: async () => {
-                  throw new Error('Firestore disk write error during recordRunStarted');
+                get: async () => ({ exists: false }),
+                set: (data: any) => {
+                  if (data?.status === 'started') {
+                    throw new Error('Firestore disk write error during recordRunStarted');
+                  }
                 },
               }),
             };
           }
           return mockDb.collection(name);
         },
-        runTransaction: mockDb.runTransaction,
+        runTransaction: async (fn: any) => {
+          const tx = {
+            get: async (ref: any) => ref.get ? ref.get() : { exists: false },
+            set: (ref: any, data: any, opts: any) => {
+              if (data?.status === 'started') {
+                throw new Error('Firestore disk write error during recordRunStarted');
+              }
+              return ref?.set ? ref.set(data, opts) : undefined;
+            },
+            update: (ref: any, data: any) => ref?.update ? ref.update(data) : undefined,
+          };
+          return fn(tx);
+        },
       };
 
       testQueue.setFirestoreDb(mockDbFailingStart as any);
@@ -647,25 +662,38 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
           if (name === 'intelligence_processing_runs') {
             return {
               doc: () => ({
-                get: async () => ({ exists: true, data: () => ({ startedAt: new Date().toISOString() }) }),
-                set: async () => {},
-                update: async () => {},
+                get: async () => ({
+                  exists: true,
+                  data: () => ({
+                    runId: 'r_succ_fail',
+                    taskId: 'job_fail_succ',
+                    aggregateType: 'job',
+                    aggregateId: 'job_fail_succ',
+                    taskType: 'job_extraction',
+                    status: 'started',
+                    attempt: 1,
+                    workerId: 'w1',
+                    leaseId: 'l1',
+                    startedAt: new Date().toISOString(),
+                  }),
+                }),
+                set: () => {},
+                update: () => {},
               }),
             };
           }
           return mockDb.collection(name);
         },
         runTransaction: async (fn: any) => {
-          // If transaction is called for intelligence_processing_runs, fail it
           const tx = {
-            get: async (ref: any) => {
-              if (ref.id?.startsWith('run_')) {
+            get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, opts: any) => {
+              if (data?.status === 'succeeded') {
                 throw new Error('Firestore transaction error during recordRunSucceeded');
               }
-              return ref.get();
+              return ref?.set ? ref.set(data, opts) : undefined;
             },
-            set: (ref: any, data: any, opts: any) => ref.set(data, opts),
-            update: (ref: any, data: any) => ref.update(data),
+            update: (ref: any, data: any) => ref?.update ? ref.update(data) : undefined,
           };
           return fn(tx);
         },
@@ -686,6 +714,69 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
 
       const executedTask = await testQueue.executeTask(task.taskId);
       expect(executedTask.status).not.toBe('succeeded');
+    });
+
+    it('fails closed and propagates error when recordRunFailed throws (failure is not silently swallowed)', async () => {
+      const testQueue = new IntelligenceTaskQueue();
+      const mockDbFailingRecordFail = {
+        collection: (name: string) => {
+          if (name === 'intelligence_processing_runs') {
+            return {
+              doc: (id: string) => ({
+                get: async () => ({
+                  exists: true,
+                  data: () => ({
+                    runId: id || 'run_fail_record_1',
+                    taskId: 'job_fail_record_failed',
+                    aggregateType: 'job',
+                    aggregateId: 'job_fail_record_failed',
+                    taskType: 'job_extraction',
+                    status: 'started',
+                    attempt: 1,
+                    workerId: 'w1',
+                    leaseId: 'l1',
+                    startedAt: new Date().toISOString(),
+                  }),
+                }),
+                set: () => {
+                  throw new Error('Firestore disk error during recordRunFailed');
+                },
+              }),
+            };
+          }
+          return mockDb.collection(name);
+        },
+        runTransaction: async (fn: any) => {
+          const tx = {
+            get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, opts: any) => {
+              if (data?.status === 'retrying' || data?.status === 'dead_letter') {
+                throw new Error('Firestore disk error during recordRunFailed');
+              }
+              return ref?.set ? ref.set(data, opts) : undefined;
+            },
+            update: (ref: any, data: any) => ref?.update ? ref.update(data) : undefined,
+          };
+          return fn(tx);
+        },
+      };
+
+      testQueue.setFirestoreDb(mockDbFailingRecordFail as any);
+      testQueue.registerHandler('job_extraction', async () => {
+        throw new Error('Task handler execution failed');
+      });
+
+      const task = await testQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_fail_record_failed',
+        'idem_fail_rf_key',
+        { title: 'Test Fail Record Run Failed' }
+      );
+
+      await expect(testQueue.executeTask(task.taskId)).rejects.toThrow(
+        /Firestore disk error during recordRunFailed/
+      );
     });
   });
 });

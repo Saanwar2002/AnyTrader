@@ -22,7 +22,7 @@
   - **Comprehensive Verification Suite (`tests/unit/task14ProcessingObservability.test.ts`)**:
     - 24/24 unit tests passing, covering record creation, deterministic runId generation, status transitions, metric validation, sanitization of PII/secrets, cost calculation, and fail-closed behavior.
   - **Full Regression & Pass Rate**:
-    - 100% test pass rate across 29 unit test suites (443/443 tests passing).
+    - 100% test pass rate across 29 unit test suites (447/447 tests passing).
     - Clean TypeScript diagnostics (`npm run lint`).
     - Verified build via `compile_applet`.
 

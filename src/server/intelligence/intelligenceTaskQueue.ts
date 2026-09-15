@@ -815,28 +815,24 @@ export class IntelligenceTaskQueue {
 
       const classificationValue = isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.classification;
 
-      // 1. Record failure in processing run store
-      try {
-        await processingRunStore.recordRunFailed(
-          runId,
-          err,
-          {
-            taskId,
-            aggregateType: effectiveAggregateType,
-            aggregateId: effectiveAggregateId,
-            taskType: task.taskType || 'job_extraction',
-            attempt: attempts,
-            workerId: effectiveWorkerId,
-            leaseId: activeLeaseId,
-            status: newStatus,
-            durationMs,
-            finishedAt: nowIso,
-          },
-          this.firestoreDb
-        );
-      } catch (recordFailErr) {
-        console.warn(`[IntelligenceTaskQueue] Warning recording failed run ${runId}:`, recordFailErr);
-      }
+      // 1. Record failure in processing run store (Fail Closed: processing-run persistence failure must not be silently swallowed)
+      await processingRunStore.recordRunFailed(
+        runId,
+        err,
+        {
+          taskId,
+          aggregateType: effectiveAggregateType,
+          aggregateId: effectiveAggregateId,
+          taskType: task.taskType || 'job_extraction',
+          attempt: attempts,
+          workerId: effectiveWorkerId,
+          leaseId: activeLeaseId,
+          status: newStatus,
+          durationMs,
+          finishedAt: nowIso,
+        },
+        this.firestoreDb
+      );
 
       // 2. FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       try {
