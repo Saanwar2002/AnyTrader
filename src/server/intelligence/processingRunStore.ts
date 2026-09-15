@@ -227,7 +227,7 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
 export class IntelligenceProcessingRunStore {
   /**
    * Records the initial 'started' execution attempt record in Firestore.
-   * Fails closed if Firestore is unavailable.
+   * Fails closed if Firestore is unavailable or transaction is unsupported.
    */
   public async recordRunStarted(
     runInput: Partial<IntelligenceProcessingRun>,
@@ -256,24 +256,41 @@ export class IntelligenceProcessingRunStore {
     const docRef = effectiveDb.collection('intelligence_processing_runs').doc(validated.runId);
     const sanitized = cleanUndefinedFields(validated);
 
-    await effectiveDb.runTransaction(async (transaction: any) => {
+    return await effectiveDb.runTransaction(async (transaction: any) => {
       if (!transaction || typeof transaction.set !== 'function') {
-        throw new Error('[ProcessingRunStore] Transaction object missing set method (Fail Closed).');
+        throw new Error('[ProcessingRunStore] Transaction object missing required set method (Fail Closed).');
       }
       const snap = typeof transaction.get === 'function' ? await transaction.get(docRef) : null;
       if (snap && snap.exists) {
-        transaction.set(docRef, sanitized, { merge: true });
-      } else {
-        transaction.set(docRef, sanitized);
-      }
-    });
+        const existing = (typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceProcessingRun;
+        
+        // Worker & Lease Ownership Validation
+        if (
+          (runInput.workerId && existing.workerId && existing.workerId !== runInput.workerId) ||
+          (runInput.leaseId && existing.leaseId && existing.leaseId !== runInput.leaseId)
+        ) {
+          throw new ProcessingRunValidationError(
+            `Worker or lease mismatch for processing run '${validated.runId}': existing worker '${existing.workerId}' / lease '${existing.leaseId}' does not match incoming worker '${runInput.workerId}' / lease '${runInput.leaseId}'`
+          );
+        }
 
-    return validated;
+        // Terminal State Protection: If run is already completed/terminal, do NOT revert status to 'started'
+        if (existing.status && existing.status !== 'started') {
+          return existing;
+        }
+
+        transaction.set(docRef, sanitized, { merge: true });
+        return { ...existing, ...sanitized };
+      }
+
+      transaction.set(docRef, sanitized);
+      return validated;
+    });
   }
 
   /**
    * Marks a processing execution record as 'succeeded' after immutable intelligence persistence confirms.
-   * Fails closed if Firestore is unavailable.
+   * Fails closed if Firestore is unavailable or transaction is unsupported.
    */
   public async recordRunSucceeded(
     runId: string,
@@ -302,6 +319,24 @@ export class IntelligenceProcessingRunStore {
       }
 
       const existing = (typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceProcessingRun;
+
+      // Worker & Lease Ownership Validation
+      if (
+        (updates.workerId && existing.workerId && existing.workerId !== updates.workerId) ||
+        (updates.leaseId && existing.leaseId && existing.leaseId !== updates.leaseId)
+      ) {
+        throw new ProcessingRunValidationError(
+          `Worker or lease mismatch for processing run '${runId}': existing worker '${existing.workerId}' / lease '${existing.leaseId}' does not match update worker '${updates.workerId}' / lease '${updates.leaseId}'`
+        );
+      }
+
+      // State Transition Integrity: Check if attempting invalid state transition
+      if (existing.status && existing.status !== 'started' && existing.status !== 'succeeded') {
+        throw new ProcessingRunValidationError(
+          `Invalid state transition: cannot transition processing run '${runId}' from terminal/failed state '${existing.status}' to 'succeeded'`
+        );
+      }
+
       const startedAtTime = new Date(existing.startedAt || now).getTime();
       const finishedAt = updates.finishedAt || now;
       const durationMs = updates.durationMs !== undefined
@@ -329,7 +364,7 @@ export class IntelligenceProcessingRunStore {
 
   /**
    * Marks a processing execution record as 'failed' / 'retrying' / 'dead_letter' with sanitized error telemetry.
-   * Fails closed if Firestore is unavailable.
+   * Fails closed if Firestore is unavailable or transaction is unsupported.
    */
   public async recordRunFailed(
     runId: string,
@@ -357,44 +392,84 @@ export class IntelligenceProcessingRunStore {
       const snap = typeof transaction.get === 'function' ? await transaction.get(docRef) : null;
       const existing = (snap && snap.exists && snap.data)
         ? ((typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceProcessingRun)
-        : {
-            runId,
-            taskId: updates?.taskId || 'unknown_task',
-            aggregateType: updates?.aggregateType || 'job',
-            aggregateId: updates?.aggregateId || 'unknown',
-            taskType: updates?.taskType || 'job_extraction',
-            status: 'started',
-            attempt: updates?.attempt || 1,
-            workerId: updates?.workerId || 'unknown_worker',
-            leaseId: updates?.leaseId || 'unknown_lease',
-            startedAt: updates?.startedAt || now,
-            createdAt: now,
-            ...(updates || {}),
-          };
+        : null;
 
-      const startedAtTime = new Date(existing.startedAt || now).getTime();
-      const finishedAt = updates?.finishedAt || now;
-      const durationMs = updates?.durationMs !== undefined
-        ? validateNonNegativeFiniteNumber(updates.durationMs, 'durationMs', 86_400_000)
-        : Math.max(0, new Date(finishedAt).getTime() - startedAtTime);
+      if (existing) {
+        // Worker & Lease Ownership Validation
+        if (
+          (updates?.workerId && existing.workerId && existing.workerId !== updates.workerId) ||
+          (updates?.leaseId && existing.leaseId && existing.leaseId !== updates.leaseId)
+        ) {
+          throw new ProcessingRunValidationError(
+            `Worker or lease mismatch for processing run '${runId}': existing worker '${existing.workerId}' / lease '${existing.leaseId}' does not match update worker '${updates.workerId}' / lease '${updates.leaseId}'`
+          );
+        }
 
-      const targetStatus: ProcessingRunStatus = updates?.status && VALID_STATUSES.has(updates.status as ProcessingRunStatus)
-        ? (updates.status as ProcessingRunStatus)
-        : (errorClassification.retryable ? 'retrying' : 'dead_letter');
+        const targetStatus: ProcessingRunStatus = updates?.status && VALID_STATUSES.has(updates.status as ProcessingRunStatus)
+          ? (updates.status as ProcessingRunStatus)
+          : (errorClassification.retryable ? 'retrying' : 'dead_letter');
 
-      const mergedRaw: Partial<IntelligenceProcessingRun> = {
-        ...existing,
-        ...updates,
-        status: targetStatus,
-        finishedAt,
-        durationMs,
+        // State Transition Integrity: Cannot transition from 'succeeded' to failed states, or from 'dead_letter' to 'retrying'
+        if (existing.status === 'succeeded') {
+          throw new ProcessingRunValidationError(
+            `Invalid state transition: cannot transition processing run '${runId}' from 'succeeded' to '${targetStatus}'`
+          );
+        }
+        if (existing.status === 'dead_letter' && targetStatus === 'retrying') {
+          throw new ProcessingRunValidationError(
+            `Invalid state transition: cannot transition processing run '${runId}' from 'dead_letter' to 'retrying'`
+          );
+        }
+
+        const startedAtTime = new Date(existing.startedAt || now).getTime();
+        const finishedAt = updates?.finishedAt || now;
+        const durationMs = updates?.durationMs !== undefined
+          ? validateNonNegativeFiniteNumber(updates.durationMs, 'durationMs', 86_400_000)
+          : Math.max(0, new Date(finishedAt).getTime() - startedAtTime);
+
+        const mergedRaw: Partial<IntelligenceProcessingRun> = {
+          ...existing,
+          ...updates,
+          status: targetStatus,
+          finishedAt,
+          durationMs,
+          errorCode: errorClassification.errorCode,
+          errorClass: errorClassification.errorClass,
+          retryable: errorClassification.retryable,
+          sanitizedDiagnostic: errorClassification.sanitizedDiagnostic,
+        };
+
+        const validated = validateProcessingRunRecord(mergedRaw);
+        const sanitized = cleanUndefinedFields(validated);
+        transaction.set(docRef, sanitized, { merge: true });
+        return validated;
+      }
+
+      // Record does not exist yet: create initial failure record
+      const initialRecord: Partial<IntelligenceProcessingRun> = {
+        runId,
+        taskId: updates?.taskId || 'unknown_task',
+        aggregateType: updates?.aggregateType || 'job',
+        aggregateId: updates?.aggregateId || 'unknown',
+        taskType: updates?.taskType || 'job_extraction',
+        status: updates?.status && VALID_STATUSES.has(updates.status as ProcessingRunStatus)
+          ? (updates.status as ProcessingRunStatus)
+          : (errorClassification.retryable ? 'retrying' : 'dead_letter'),
+        attempt: updates?.attempt || 1,
+        workerId: updates?.workerId || 'unknown_worker',
+        leaseId: updates?.leaseId || 'unknown_lease',
+        startedAt: updates?.startedAt || now,
+        finishedAt: updates?.finishedAt || now,
+        durationMs: updates?.durationMs !== undefined ? updates.durationMs : 0,
         errorCode: errorClassification.errorCode,
         errorClass: errorClassification.errorClass,
         retryable: errorClassification.retryable,
         sanitizedDiagnostic: errorClassification.sanitizedDiagnostic,
+        createdAt: now,
+        ...(updates || {}),
       };
 
-      const validated = validateProcessingRunRecord(mergedRaw);
+      const validated = validateProcessingRunRecord(initialRecord);
       const sanitized = cleanUndefinedFields(validated);
       transaction.set(docRef, sanitized, { merge: true });
       return validated;

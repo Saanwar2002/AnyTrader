@@ -657,28 +657,26 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
 
     it('fails closed when recordRunSucceeded throws (task is not marked succeeded)', async () => {
       const testQueue = new IntelligenceTaskQueue();
+      const mockRunStore = new Map<string, any>();
       const mockDbFailingSucc = {
         collection: (name: string) => {
           if (name === 'intelligence_processing_runs') {
             return {
-              doc: () => ({
+              doc: (id: string) => ({
                 get: async () => ({
-                  exists: true,
-                  data: () => ({
-                    runId: 'r_succ_fail',
-                    taskId: 'job_fail_succ',
-                    aggregateType: 'job',
-                    aggregateId: 'job_fail_succ',
-                    taskType: 'job_extraction',
-                    status: 'started',
-                    attempt: 1,
-                    workerId: 'w1',
-                    leaseId: 'l1',
-                    startedAt: new Date().toISOString(),
-                  }),
+                  exists: mockRunStore.has(id),
+                  data: () => mockRunStore.get(id),
                 }),
-                set: () => {},
-                update: () => {},
+                set: (data: any, opts: any) => {
+                  if (opts?.merge && mockRunStore.has(id)) {
+                    mockRunStore.set(id, { ...mockRunStore.get(id), ...data });
+                  } else {
+                    mockRunStore.set(id, data);
+                  }
+                },
+                update: (data: any) => {
+                  mockRunStore.set(id, { ...mockRunStore.get(id), ...data });
+                },
               }),
             };
           }
@@ -718,28 +716,22 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
 
     it('fails closed and propagates error when recordRunFailed throws (failure is not silently swallowed)', async () => {
       const testQueue = new IntelligenceTaskQueue();
+      const mockRunStore = new Map<string, any>();
       const mockDbFailingRecordFail = {
         collection: (name: string) => {
           if (name === 'intelligence_processing_runs') {
             return {
               doc: (id: string) => ({
                 get: async () => ({
-                  exists: true,
-                  data: () => ({
-                    runId: id || 'run_fail_record_1',
-                    taskId: 'job_fail_record_failed',
-                    aggregateType: 'job',
-                    aggregateId: 'job_fail_record_failed',
-                    taskType: 'job_extraction',
-                    status: 'started',
-                    attempt: 1,
-                    workerId: 'w1',
-                    leaseId: 'l1',
-                    startedAt: new Date().toISOString(),
-                  }),
+                  exists: mockRunStore.has(id),
+                  data: () => mockRunStore.get(id),
                 }),
-                set: () => {
-                  throw new Error('Firestore disk error during recordRunFailed');
+                set: (data: any, opts: any) => {
+                  if (opts?.merge && mockRunStore.has(id)) {
+                    mockRunStore.set(id, { ...mockRunStore.get(id), ...data });
+                  } else {
+                    mockRunStore.set(id, data);
+                  }
                 },
               }),
             };
@@ -777,6 +769,165 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
       await expect(testQueue.executeTask(task.taskId)).rejects.toThrow(
         /Firestore disk error during recordRunFailed/
       );
+    });
+  });
+
+  describe('7. Task 14B: Transaction-Only Processing Run Persistence Boundary Invariants', () => {
+    it('fails closed when runTransaction is missing on database (no doc.set or doc.update fallback)', async () => {
+      const dbWithoutTransaction = {
+        collection: () => ({
+          doc: () => ({
+            set: async () => {
+              throw new Error('FALLBACK_SHOULD_NOT_BE_CALLED');
+            },
+            update: async () => {
+              throw new Error('FALLBACK_SHOULD_NOT_BE_CALLED');
+            },
+          }),
+        }),
+      };
+
+      const store = new IntelligenceProcessingRunStore();
+
+      await expect(
+        store.recordRunStarted({ taskId: 't1', attempt: 1, leaseId: 'l1', aggregateType: 'job', aggregateId: 'j1', workerId: 'w1' }, dbWithoutTransaction as any)
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+
+      await expect(
+        store.recordRunSucceeded('run_test_1', {}, dbWithoutTransaction as any)
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+
+      await expect(
+        store.recordRunFailed('run_test_1', new Error('err'), {}, dbWithoutTransaction as any)
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+    });
+
+    it('creates idempotent processing run records for identical execution attempts (same taskId + attempt + leaseId)', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+
+      const runId = buildProcessingRunId('task_123', 1, 'lease_abc');
+
+      const run1 = await store.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_123',
+          attempt: 1,
+          leaseId: 'lease_abc',
+          aggregateType: 'job',
+          aggregateId: 'job_456',
+          taskType: 'job_extraction',
+          workerId: 'worker_1',
+          startedAt: new Date().toISOString(),
+        },
+        mockDb as any
+      );
+
+      expect(run1.runId).toBe(runId);
+
+      // Re-running recordRunStarted with same attempt parameters
+      const run2 = await store.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_123',
+          attempt: 1,
+          leaseId: 'lease_abc',
+          aggregateType: 'job',
+          aggregateId: 'job_456',
+          taskType: 'job_extraction',
+          workerId: 'worker_1',
+          startedAt: new Date().toISOString(),
+        },
+        mockDb as any
+      );
+
+      expect(run2.runId).toBe(run1.runId);
+      expect(mockDb.store.size).toBe(1); // Exactly 1 document created
+    });
+
+    it('creates separate processing run records for different attempt numbers of the same task', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+
+      const runId1 = buildProcessingRunId('task_123', 1, 'lease_1');
+      const runId2 = buildProcessingRunId('task_123', 2, 'lease_2');
+
+      expect(runId1).not.toBe(runId2);
+
+      await store.recordRunStarted(
+        { runId: runId1, taskId: 'task_123', attempt: 1, leaseId: 'lease_1', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      await store.recordRunStarted(
+        { runId: runId2, taskId: 'task_123', attempt: 2, leaseId: 'lease_2', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      expect(mockDb.store.size).toBe(2);
+    });
+
+    it('rejects invalid state transitions (e.g. dead_letter -> succeeded or succeeded -> failed)', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_invalid', 1, 'lease_inv');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_invalid', attempt: 1, leaseId: 'lease_inv', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      // Mark as succeeded first
+      await store.recordRunSucceeded(runId, { workerId: 'w1', leaseId: 'lease_inv' }, mockDb as any);
+
+      // Attempt invalid transition succeeded -> failed
+      await expect(
+        store.recordRunFailed(runId, new Error('late_error'), { workerId: 'w1', leaseId: 'lease_inv' }, mockDb as any)
+      ).rejects.toThrow(/Invalid state transition: cannot transition processing run/);
+
+      // Attempt invalid transition succeeded -> started (via recordRunStarted on completed run)
+      const existingCompleted = await store.recordRunStarted(
+        { runId, taskId: 'task_invalid', attempt: 1, leaseId: 'lease_inv', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+      expect(existingCompleted.status).toBe('succeeded'); // Preserves terminal state
+    });
+
+    it('enforces worker and lease ownership integrity across run updates', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_owner', 1, 'lease_valid');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_owner', attempt: 1, leaseId: 'lease_valid', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'worker_valid' },
+        mockDb as any
+      );
+
+      // Old/stale worker or different lease attempts to mark run succeeded
+      await expect(
+        store.recordRunSucceeded(runId, { workerId: 'worker_stale', leaseId: 'lease_valid' }, mockDb as any)
+      ).rejects.toThrow(/Worker or lease mismatch/);
+
+      await expect(
+        store.recordRunSucceeded(runId, { workerId: 'worker_valid', leaseId: 'lease_expired' }, mockDb as any)
+      ).rejects.toThrow(/Worker or lease mismatch/);
+    });
+
+    it('propagates transaction failures immediately without swallowing errors', async () => {
+      const mockFailingTxDb = {
+        collection: () => ({
+          doc: () => ({}),
+        }),
+        runTransaction: async () => {
+          throw new Error('TRANSACTION_ABORTED_BY_FIRESTORE');
+        },
+      };
+
+      const store = new IntelligenceProcessingRunStore();
+
+      await expect(
+        store.recordRunStarted({ taskId: 't1', attempt: 1, leaseId: 'l1', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' }, mockFailingTxDb as any)
+      ).rejects.toThrow(/TRANSACTION_ABORTED_BY_FIRESTORE/);
     });
   });
 });
