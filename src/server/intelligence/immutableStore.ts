@@ -145,6 +145,7 @@ export class ImmutableIntelligenceStore {
       currentSchemaVersion: extraction.schemaVersion,
       updatedAt: new Date().toISOString(),
     };
+    const sanitizedSummary = cleanUndefinedFields(updatedSummary);
 
     if (typeof db.runTransaction !== 'function') {
       throw new Error(
@@ -174,7 +175,7 @@ export class ImmutableIntelligenceStore {
         if (existingHash === extractionHash) {
           // Idempotent retry: Exact same execution recognized.
           // Transactionally update summary pointer and return existing extraction.
-          transaction.set(summaryRef, updatedSummary, { merge: true });
+          transaction.set(summaryRef, sanitizedSummary, { merge: true });
           return {
             versionId,
             isNew: false,
@@ -192,7 +193,6 @@ export class ImmutableIntelligenceStore {
       // Atomic create-only transaction write
       const sanitizedExtraction = cleanUndefinedFields(extraction);
       const sanitizedEvent = cleanUndefinedFields(event);
-      const sanitizedSummary = cleanUndefinedFields(updatedSummary);
 
       transaction.set(extractionRef, sanitizedExtraction);
       transaction.set(eventRef, sanitizedEvent);

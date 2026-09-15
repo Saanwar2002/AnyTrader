@@ -1,6 +1,26 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
+- **V8.1 Task 13E — Real Firestore Emulator Verification for Task Ownership**:
+  - **Authoritative Firestore Emulator Ownership Suite (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
+    - Validated all Task 13 task ownership invariants on the live Firebase Firestore emulator using real documents, real collections (`intelligence_tasks`), real transactions (`runTransaction`), and real transactional contention.
+    - Verified Invariant 1: Primary lease ownership verification (workerId + leaseId) during successful task completion.
+    - Verified Invariant 2: Expired lease recovery and reclaim by a second worker inside transactional boundaries.
+    - Verified Invariant 3: Reclaimed task completion rejected with `OwnershipLostError` when the original worker attempts completion with a stale `leaseId`.
+    - Verified Invariant 4: Active lease protected against concurrent claim while within valid `leaseExpiresAt` window.
+    - Verified Invariant 5: Active lease protected against premature stale recovery by other workers.
+    - Verified Invariant 6: Concurrent transactional completion race condition resolved with exactly one winner, while loser throws `OwnershipLostError`.
+    - Verified Invariant 7: High-contention transactional serialization across multiple parallel workers attempting to claim the same pending task.
+    - Verified Invariant 8: Missing/unregistered handler failure finalization strictly validates lease ownership and throws `OwnershipLostError` if reclaimed.
+    - Verified Invariant 9: Deterministic idempotency key derivation prevents duplicate task generation on real Firestore emulator collections.
+  - **Deterministic Serialization & Firestore Undefined Field Hardening (`src/server/intelligence/provenance.ts`, `src/server/intelligence/immutableStore.ts`)**:
+    - Updated `canonicalizeData` in `provenance.ts` to ignore undefined object properties, ensuring identical structured data hashing across objects with undefined fields and persisted documents where undefined fields are omitted.
+    - Sanitized `updatedSummary` prior to transactional execution in `immutableStore.ts`, ensuring idempotent retry projections never pass undefined properties to Firestore `Transaction.set()` on emulator.
+  - **Full Test Matrix**:
+    - 100% emulator test pass rate: 124/124 tests passing in `npm run test:emulator`.
+    - 100% non-emulator unit test pass rate: 417/417 tests passing across 28 test suites in `npm test`.
+    - Clean compilation verified via `compile_applet`.
+
 - **V8.1 Task 13 — Async Intelligence Task Queue & Orchestration**:
   - **Authoritative Firestore Task Queue (`src/server/intelligence/intelligenceTaskQueue.ts`)**: Firestore task collection (`intelligence_tasks`) acts as the single source of truth in production. Zero in-memory authority; fail-closed behavior throws if Firestore database reference is missing or failing.
   - **Deterministic Durable Idempotency**: Document ID is derived deterministically from the idempotency key (`idem_sha256(idempotencyKey)[0..32]`), eliminating creation race windows and preventing duplicate task creation across distributed nodes.

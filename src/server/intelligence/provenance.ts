@@ -32,7 +32,7 @@ export function canonicalizeData(data: unknown): string {
   }
   if (typeof data === 'object') {
     const obj = data as Record<string, unknown>;
-    const sortedKeys = Object.keys(obj).sort();
+    const sortedKeys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
     const pairs = sortedKeys.map(key => {
       return JSON.stringify(key) + ':' + canonicalizeData(obj[key]);
     });

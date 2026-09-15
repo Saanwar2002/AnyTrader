@@ -38,6 +38,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   collection,
   getDocs,
   runTransaction,
@@ -77,6 +78,7 @@ import {
   AICandidateSecurityError,
   TrustedServerContext,
 } from '../../src/server/intelligence/aiCandidateBoundary';
+import { cleanUndefinedFields } from '../../src/server/intelligence/evidence';
 
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
@@ -123,6 +125,122 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     await testEnv.clearStorage();
     evidenceRegistry.clear();
   });
+
+  function createRealFirestoreTaskDb(modularDb: any) {
+    return {
+      collection(name: string) {
+        const colRef = collection(modularDb, name);
+        return {
+          colName: name,
+          collectionName: name,
+          doc(id: string) {
+            const docRef = doc(modularDb, name, id);
+            return {
+              colName: name,
+              collectionName: name,
+              id,
+              get: async () => {
+                const snap = await getDoc(docRef);
+                return {
+                  id: snap.id,
+                  exists: snap.exists(),
+                  data: () => snap.data(),
+                };
+              },
+              set: async (data: any, options?: { merge?: boolean }) => {
+                const cleaned = cleanUndefinedFields(data);
+                if (options?.merge) {
+                  await setDoc(docRef, cleaned, { merge: true });
+                } else {
+                  await setDoc(docRef, cleaned);
+                }
+              },
+              update: async (data: any) => {
+                const sanitized: any = {};
+                for (const [k, v] of Object.entries(data)) {
+                  sanitized[k] = v === undefined ? deleteField() : v;
+                }
+                return updateDoc(docRef, sanitized);
+              },
+              delete: async () => deleteDoc(docRef),
+            };
+          },
+          where(field: string, op: any, val: any) {
+            return {
+              limit(count: number) {
+                return {
+                  get: async () => {
+                    const q = query(colRef, where(field, op, val), limit(count));
+                    const snap = await getDocs(q);
+                    return {
+                      empty: snap.empty,
+                      docs: snap.docs.map((d) => ({
+                        id: d.id,
+                        data: () => d.data(),
+                      })),
+                    };
+                  },
+                };
+              },
+              get: async () => {
+                const q = query(colRef, where(field, op, val));
+                const snap = await getDocs(q);
+                return {
+                  empty: snap.empty,
+                  docs: snap.docs.map((d) => ({
+                    id: d.id,
+                    data: () => d.data(),
+                  })),
+                };
+              },
+            };
+          },
+        };
+      },
+      runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
+        return runTransaction(modularDb, async (tx) => {
+          const txWrapper = {
+            get: async (refObj: any) => {
+              const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
+              const docRef = doc(modularDb, col, refObj.id);
+              const snap = await tx.get(docRef);
+              return {
+                id: snap.id,
+                exists: snap.exists(),
+                data: () => snap.data(),
+              };
+            },
+            set: (refObj: any, data: any, options?: { merge?: boolean }) => {
+              const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
+              const docRef = doc(modularDb, col, refObj.id);
+              const cleaned = cleanUndefinedFields(data);
+              if (options?.merge) {
+                tx.set(docRef, cleaned, { merge: true });
+              } else {
+                tx.set(docRef, cleaned);
+              }
+            },
+            update: (refObj: any, data: any) => {
+              const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
+              const docRef = doc(modularDb, col, refObj.id);
+              const sanitized: any = {};
+              for (const [k, v] of Object.entries(data)) {
+                sanitized[k] = v === undefined ? deleteField() : v;
+              }
+              tx.update(docRef, sanitized);
+            },
+            delete: (refObj: any) => {
+              const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
+              const docRef = doc(modularDb, col, refObj.id);
+              tx.delete(docRef);
+            },
+          };
+          return await updateFunction(txWrapper);
+        });
+      },
+    };
+  }
+  const createRealFirestoreStoreDb = createRealFirestoreTaskDb;
 
   // ==========================================================
   // 1. FIRESTORE SECURITY RULES FOR INTELLIGENCE COLLECTIONS
@@ -1207,89 +1325,9 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   });
 
   // ==========================================================
-  // 8. REAL FIRESTORE EMULATOR CONCURRENCY & ATOMIC CLAIMING (CI WIRED)
+  // 8. REAL FIRESTORE EMULATOR CONCURRENCY & TASK 13E OWNERSHIP (CI WIRED)
   // ==========================================================
-  describe('8. Real Firestore Emulator Concurrency & Atomic Claiming (CI Wired)', () => {
-    function createRealFirestoreTaskDb(modularDb: any) {
-      return {
-        collection(name: string) {
-          const colRef = collection(modularDb, name);
-          return {
-            doc(id: string) {
-              const docRef = doc(modularDb, name, id);
-              return {
-                id,
-                get: async () => {
-                  const snap = await getDoc(docRef);
-                  return {
-                    id: snap.id,
-                    exists: snap.exists(),
-                    data: () => snap.data(),
-                  };
-                },
-                set: async (data: any) => setDoc(docRef, data),
-                update: async (data: any) => updateDoc(docRef, data),
-              };
-            },
-            where(field: string, op: any, val: any) {
-              return {
-                limit(count: number) {
-                  return {
-                    get: async () => {
-                      const q = query(colRef, where(field, op, val), limit(count));
-                      const snap = await getDocs(q);
-                      return {
-                        empty: snap.empty,
-                        docs: snap.docs.map((d) => ({
-                          id: d.id,
-                          data: () => d.data(),
-                        })),
-                      };
-                    },
-                  };
-                },
-                get: async () => {
-                  const q = query(colRef, where(field, op, val));
-                  const snap = await getDocs(q);
-                  return {
-                    empty: snap.empty,
-                    docs: snap.docs.map((d) => ({
-                      id: d.id,
-                      data: () => d.data(),
-                    })),
-                  };
-                },
-              };
-            },
-          };
-        },
-        runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
-          return runTransaction(modularDb, async (tx) => {
-            const txWrapper = {
-              get: async (refObj: any) => {
-                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
-                const snap = await tx.get(docRef);
-                return {
-                  id: snap.id,
-                  exists: snap.exists(),
-                  data: () => snap.data(),
-                };
-              },
-              set: (refObj: any, data: any) => {
-                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
-                tx.set(docRef, data);
-              },
-              update: (refObj: any, data: any) => {
-                const docRef = doc(modularDb, 'intelligence_tasks', refObj.id);
-                tx.update(docRef, data);
-              },
-            };
-            return await updateFunction(txWrapper);
-          });
-        },
-      };
-    }
-
+  describe('8. Real Firestore Emulator Concurrency & Task 13E Ownership Invariants (CI Wired)', () => {
     it('proves real Firestore emulator atomic claiming under high concurrency (3 concurrent workers, 1 winner)', async () => {
       const adminDb = testEnv!.authenticatedContext('admin_emu_worker', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
@@ -1343,7 +1381,6 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskId = `task_emu_exec_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      // Seed initial pending task in real Firestore emulator
       await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
@@ -1375,17 +1412,14 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         return { extracted: true, worker: 'B' };
       });
 
-      // Concurrently execute task on both workers against real Firestore emulator
       const [resA, resB] = await Promise.all([
         queueA.executeTask(taskId),
         queueB.executeTask(taskId),
       ]);
 
-      // Exactly ONE handler execution occurred
       expect(handlerCalls).toBe(1);
       expect(['emu-worker-A', 'emu-worker-B']).toContain(winningWorker);
 
-      // Verify that real Firestore emulator recorded the succeeded state
       const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
       expect(taskSnap.exists()).toBe(true);
       const data = taskSnap.data()!;
@@ -1393,14 +1427,161 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(data.attempts).toBe(1);
     });
 
-    it('proves SAME WORKER ID, DIFFERENT LEASE ID (Failure path) fails to finalize and aborts state write', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_fail', { role: 'admin', admin: true }).firestore();
+    // ==========================================
+    // TASK 13E INVARIANTS (1 - 9)
+    // ==========================================
+
+    it('Task 13E Invariant 1: Concurrent claim gives exactly one winner on real Firestore emulator', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv1', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_13d_fail_${Date.now()}`;
+      const taskId = `task_t13e_claim_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      // 1. Create a processing task owned by worker-A with lease-A
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+
+      const [claimA, claimB] = await Promise.all([
+        queueA.claimTaskTransactional(taskId, 'worker-A', 60000),
+        queueB.claimTaskTransactional(taskId, 'worker-B', 60000),
+      ]);
+
+      // Exactly ONE returns true, exactly one returns false
+      expect((claimA && !claimB) || (!claimA && claimB)).toBe(true);
+      const winner = claimA ? 'worker-A' : 'worker-B';
+
+      // Verify authoritative state in real Firestore emulator
+      const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+      expect(snap.exists()).toBe(true);
+      const data = snap.data()!;
+      expect(data.status).toBe('processing');
+      expect(data.attempts).toBe(1);
+      expect(data.workerId).toBe(winner);
+      expect(typeof data.leaseId).toBe('string');
+      expect(data.leaseId!.length).toBeGreaterThan(0);
+    });
+
+    it('Task 13E Invariant 2: Active foreign lease with max attempts prevents claim and prevents premature dead-lettering', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv2', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_t13e_foreign_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+      const futureLease = new Date(Date.now() + 60000).toISOString();
+
+      // Seed task processing by worker-A with attempts == maxAttempts
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 3,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: futureLease,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+
+      // Worker B attempts to claim
+      const claimed = await queueB.claimTaskTransactional(taskId, 'worker-B');
+      expect(claimed).toBe(false);
+
+      // Authoritative state in real Firestore emulator must remain untouched:
+      // Worker A still owns task, status remains processing, attempts remains 3, not dead-lettered
+      const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+      const data = snap.data()!;
+      expect(data.status).toBe('processing');
+      expect(data.workerId).toBe('worker-A');
+      expect(data.leaseId).toBe('lease-A');
+      expect(data.attempts).toBe(3);
+      expect(data.errorCode).toBeUndefined();
+    });
+
+    it('Task 13E Invariant 3: Stale reclaim clears old workerId and leaseId upon recovery in real Firestore', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv3', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskRetryId = `task_t13e_stale_retry_${Date.now()}`;
+      const taskDeadId = `task_t13e_stale_dead_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+      const expiredLease = new Date(Date.now() - 10000).toISOString();
+
+      // Task 1: attempts = 1 < maxAttempts 3 -> recovers to retrying
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskRetryId), {
+        taskId: taskRetryId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: expiredLease,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      // Task 2: attempts = 3 == maxAttempts 3 -> recovers to dead_letter
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+        taskId: taskDeadId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 3,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: expiredLease,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+      queue.setFirestoreDb(firestoreTaskDb as any);
+
+      const recovered = await queue.recoverStaleTasksAsync();
+      expect(recovered.length).toBeGreaterThanOrEqual(2);
+
+      // Verify Task 1 in real Firestore
+      const snapRetry = await getDoc(doc(adminDb, 'intelligence_tasks', taskRetryId));
+      const dataRetry = snapRetry.data()!;
+      expect(dataRetry.status).toBe('retrying');
+      expect(dataRetry.workerId).toBeFalsy();
+      expect(dataRetry.leaseId).toBeFalsy();
+      expect(dataRetry.leaseExpiresAt).toBeFalsy();
+
+      // Verify Task 2 in real Firestore
+      const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
+      const dataDead = snapDead.data()!;
+      expect(dataDead.status).toBe('dead_letter');
+      expect(dataDead.errorCode).toBe('STALE_LEASE_EXHAUSTED');
+      expect(dataDead.workerId).toBeFalsy();
+      expect(dataDead.leaseId).toBeFalsy();
+      expect(dataDead.leaseExpiresAt).toBeFalsy();
+    });
+
+    it('Task 13E Invariant 4: Old worker cannot finalize failure after lease reclaim on real Firestore', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv4', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskId = `task_t13e_fail_reclaim_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // Initial task owned by worker-A + lease-A
       const docRef = doc(adminDb, 'intelligence_tasks', taskId);
       await setDoc(docRef, {
         taskId,
@@ -1418,21 +1599,22 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
       queueA.setFirestoreDb(firestoreTaskDb as any);
 
-      let handlerReleasePromiseResolve: any;
-      const handlerReleasePromise = new Promise((resolve) => {
-        handlerReleasePromiseResolve = resolve;
-      });
+      let releaseHandler: any;
+      let handlerStarted: any;
+      const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
+      const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
 
       queueA.registerHandler('job_extraction', async () => {
-        // Wait until we simulate reclamation outside
-        await handlerReleasePromise;
-        throw new Error('Simulated original execution failure');
+        handlerStarted();
+        await handlerGate;
+        throw new Error('Late failure from stale execution');
       });
 
-      // Start executeTask - it will reuse 'worker-A' and 'lease-A' as the active lease.
+      // Start execution with lease-A
       const execPromise = queueA.executeTask(taskId);
+      await startedGate;
 
-      // 2. Simulate lease expiry/reclaim: current owner becomes worker-A with lease-B
+      // Simulate lease reclaim while handler is executing under lease-A: task is now owned by worker-A + lease-B
       const futureLease = new Date(Date.now() + 120000).toISOString();
       await updateDoc(docRef, {
         leaseId: 'lease-B',
@@ -1440,31 +1622,27 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         attempts: 2,
       });
 
-      // 3. Now let the handler fail
-      handlerReleasePromiseResolve();
-
-      // 4. Wait for executeTask to complete
+      // Release the failing handler
+      releaseHandler();
       await execPromise;
 
-      // The old execution MUST NOT be able to modify the task in Firestore.
-      const taskSnap = await getDoc(docRef);
-      expect(taskSnap.exists()).toBe(true);
-      const data = taskSnap.data()!;
+      // Authoritative state in real Firestore must still be processing under lease-B
+      const snap = await getDoc(docRef);
+      const data = snap.data()!;
       expect(data.status).toBe('processing');
       expect(data.workerId).toBe('worker-A');
       expect(data.leaseId).toBe('lease-B');
       expect(data.attempts).toBe(2);
-      expect(data.errorCode).toBeUndefined(); // Error must not be written
+      expect(data.errorCode).toBeUndefined();
     });
 
-    it('proves SAME WORKER ID, DIFFERENT LEASE ID (Success path) fails to finalize', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_succ', { role: 'admin', admin: true }).firestore();
+    it('Task 13E Invariant 5: Old worker cannot finalize success after lease reclaim on real Firestore', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv5', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_13d_succ_${Date.now()}`;
+      const taskId = `task_t13e_succ_reclaim_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      // 1. Create a processing task owned by worker-A with lease-A
       const docRef = doc(adminDb, 'intelligence_tasks', taskId);
       await setDoc(docRef, {
         taskId,
@@ -1482,19 +1660,21 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
       queueA.setFirestoreDb(firestoreTaskDb as any);
 
-      let handlerReleasePromiseResolve: any;
-      const handlerReleasePromise = new Promise((resolve) => {
-        handlerReleasePromiseResolve = resolve;
-      });
+      let releaseHandler: any;
+      let handlerStarted: any;
+      const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
+      const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
 
       queueA.registerHandler('job_extraction', async () => {
-        await handlerReleasePromise;
-        return { success: true };
+        handlerStarted();
+        await handlerGate;
+        return { done: true };
       });
 
       const execPromise = queueA.executeTask(taskId);
+      await startedGate;
 
-      // 2. Simulating lease reclaim: Current task owner becomes worker-A with lease-B
+      // Simulate lease reclaim while handler is executing under lease-A: task is now owned by worker-A with lease-B
       const futureLease = new Date(Date.now() + 120000).toISOString();
       await updateDoc(docRef, {
         leaseId: 'lease-B',
@@ -1502,33 +1682,29 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         attempts: 2,
       });
 
-      // 3. Let the handler succeed
-      handlerReleasePromiseResolve();
-
-      // 4. Wait for executeTask to complete
+      // Let success handler finish
+      releaseHandler();
       await execPromise;
 
-      // Verify Firestore database state remains owned by worker-A with lease-B, and status is processing (attempts=2)
-      const taskSnap = await getDoc(docRef);
-      expect(taskSnap.exists()).toBe(true);
-      const data = taskSnap.data()!;
+      // Authoritative state in real Firestore remains processing under lease-B (not succeeded)
+      const snap = await getDoc(docRef);
+      const data = snap.data()!;
       expect(data.status).toBe('processing');
       expect(data.workerId).toBe('worker-A');
       expect(data.leaseId).toBe('lease-B');
       expect(data.attempts).toBe(2);
     });
 
-    it('proves DIFFERENT WORKER, DIFFERENT LEASE cannot finalize success or failure', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13d_diff', { role: 'admin', admin: true }).firestore();
+    it('Task 13E Invariant 6: Different worker cannot finalize success or failure on real Firestore', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv6', { role: 'admin', admin: true }).firestore();
       const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskSuccessId = `task_13d_diff_succ_${Date.now()}`;
-      const taskFailureId = `task_13d_diff_fail_${Date.now()}`;
+      const taskSuccId = `task_t13e_diff_succ_${Date.now()}`;
+      const taskFailId = `task_t13e_diff_fail_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      // Set up success task owned by worker-B + lease-B
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccessId), {
-        taskId: taskSuccessId,
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+        taskId: taskSuccId,
         taskType: 'job_extraction',
         status: 'processing',
         attempts: 1,
@@ -1540,9 +1716,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         updatedAt: nowIso,
       });
 
-      // Set up failure task owned by worker-B + lease-B
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskFailureId), {
-        taskId: taskFailureId,
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskFailId), {
+        taskId: taskFailId,
         taskType: 'job_extraction',
         status: 'processing',
         attempts: 1,
@@ -1557,29 +1732,18 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
       queueA.setFirestoreDb(firestoreTaskDb as any);
 
-      let releaseSuccess: any;
-      const successPromise = new Promise((resolve) => { releaseSuccess = resolve; });
-      queueA.registerHandler('job_extraction', async (task) => {
-        if (task.taskId === taskSuccessId) {
-          await successPromise;
-          return { done: true };
-        } else {
-          await successPromise;
-          throw new Error('Failure route');
-        }
+      queueA.registerHandler('job_extraction', async (t) => {
+        if (t.taskId === taskSuccId) return { ok: true };
+        throw new Error('Worker-A failure attempt');
       });
 
-      const execSuccess = queueA.executeTask(taskSuccessId);
-      const execFailure = queueA.executeTask(taskFailureId);
+      await Promise.all([
+        queueA.executeTask(taskSuccId),
+        queueA.executeTask(taskFailId),
+      ]);
 
-      // Release handlers
-      releaseSuccess();
-
-      await Promise.all([execSuccess, execFailure]);
-
-      // Both tasks must remain owned by worker-B + lease-B in 'processing' status
-      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccessId));
-      const snapFail = await getDoc(doc(adminDb, 'intelligence_tasks', taskFailureId));
+      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
+      const snapFail = await getDoc(doc(adminDb, 'intelligence_tasks', taskFailId));
 
       expect(snapSucc.data()!.status).toBe('processing');
       expect(snapSucc.data()!.workerId).toBe('worker-B');
@@ -1589,88 +1753,148 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(snapFail.data()!.workerId).toBe('worker-B');
       expect(snapFail.data()!.leaseId).toBe('lease-B');
     });
+
+    it('Task 13E Invariant 7: Missing handler dead-letters own task verifying leaseId; foreign worker cannot overwrite', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv7', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskOwnId = `task_t13e_missing_own_${Date.now()}`;
+      const taskForeignId = `task_t13e_missing_foreign_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      // Task 1: pending with unregistered task type
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskOwnId), {
+        taskId: taskOwnId,
+        taskType: 'unknown_service_unregistered',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      queueA.setFirestoreDb(firestoreTaskDb as any);
+
+      // Worker A executes task with no handler registered -> claims task and dead-letters it
+      const resOwn = await queueA.executeTask(taskOwnId);
+      expect(resOwn.status).toBe('dead_letter');
+      expect(resOwn.errorCode).toBe('MISSING_HANDLER');
+
+      // Authoritative Firestore check
+      const snapOwn = await getDoc(doc(adminDb, 'intelligence_tasks', taskOwnId));
+      expect(snapOwn.data()!.status).toBe('dead_letter');
+      expect(snapOwn.data()!.errorCode).toBe('MISSING_HANDLER');
+
+      // Task 2: owned by worker-B + lease-B with active lease
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskForeignId), {
+        taskId: taskForeignId,
+        taskType: 'unknown_service_unregistered',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-B',
+        leaseId: 'lease-B',
+        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      // Worker A attempts to execute task owned by worker-B
+      await queueA.executeTask(taskForeignId);
+
+      // Authoritative Firestore check: Task 2 is NOT overwritten by worker-A
+      const snapForeign = await getDoc(doc(adminDb, 'intelligence_tasks', taskForeignId));
+      expect(snapForeign.data()!.status).toBe('processing');
+      expect(snapForeign.data()!.workerId).toBe('worker-B');
+      expect(snapForeign.data()!.leaseId).toBe('lease-B');
+    });
+
+    it('Task 13E Invariant 8: Terminal states (succeeded, dead_letter) are protected against claim on real Firestore', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv8', { role: 'admin', admin: true }).firestore();
+      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+
+      const taskSuccId = `task_t13e_term_succ_${Date.now()}`;
+      const taskDeadId = `task_t13e_term_dead_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+        taskId: taskSuccId,
+        taskType: 'job_extraction',
+        status: 'succeeded',
+        attempts: 1,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+        taskId: taskDeadId,
+        taskType: 'job_extraction',
+        status: 'dead_letter',
+        attempts: 3,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-invader');
+      queue.setFirestoreDb(firestoreTaskDb as any);
+
+      const claimSucc = await queue.claimTaskTransactional(taskSuccId, 'worker-invader');
+      const claimDead = await queue.claimTaskTransactional(taskDeadId, 'worker-invader');
+
+      expect(claimSucc).toBe(false);
+      expect(claimDead).toBe(false);
+
+      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
+      const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
+
+      expect(snapSucc.data()!.status).toBe('succeeded');
+      expect(snapDead.data()!.status).toBe('dead_letter');
+    });
+
+    it('Task 13E Invariant 9: Transaction failures in stale recovery propagate without silent swallowing', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv9', { role: 'admin', admin: true }).firestore();
+
+      const taskId = `task_t13e_tx_fail_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+      const expiredLease = new Date(Date.now() - 10000).toISOString();
+
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: expiredLease,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const realTaskDb = createRealFirestoreTaskDb(adminDb);
+      const failingDb = {
+        ...realTaskDb,
+        runTransaction: async () => {
+          throw new Error('Simulated Firestore transaction conflict / network abort');
+        },
+      };
+
+      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+      queue.setFirestoreDb(failingDb as any);
+
+      await expect(queue.recoverStaleTasksAsync()).rejects.toThrow(
+        /Simulated Firestore transaction conflict \/ network abort/
+      );
+    });
   });
 
   // ==========================================================
   // 9. TASK 7A IMMUTABLE INTELLIGENCE PERSISTENCE & CONCURRENCY
   // ==========================================================
   describe('9. Task 7A Immutable Intelligence Persistence & Concurrency Invariants (Emulator)', () => {
-    function createRealFirestoreStoreDb(modularDb: any) {
-      return {
-        collection(name: string) {
-          const colRef = collection(modularDb, name);
-          return {
-            doc(id: string) {
-              const docRef = doc(modularDb, name, id);
-              return {
-                colName: name,
-                id,
-                get: async () => {
-                  const snap = await getDoc(docRef);
-                  return {
-                    id: snap.id,
-                    exists: snap.exists(),
-                    data: () => snap.data(),
-                  };
-                },
-                set: async (data: any, options?: { merge?: boolean }) => {
-                  if (options?.merge) {
-                    await setDoc(docRef, data, { merge: true });
-                  } else {
-                    await setDoc(docRef, data);
-                  }
-                },
-                update: async (data: any) => updateDoc(docRef, data),
-              };
-            },
-            where(field: string, op: any, val: any) {
-              return {
-                get: async () => {
-                  const q = query(colRef, where(field, op, val));
-                  const snap = await getDocs(q);
-                  return {
-                    empty: snap.empty,
-                    docs: snap.docs.map((d) => ({
-                      id: d.id,
-                      data: () => d.data(),
-                    })),
-                  };
-                },
-              };
-            },
-          };
-        },
-        runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
-          return runTransaction(modularDb, async (tx) => {
-            const txWrapper = {
-              get: async (refObj: any) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                const snap = await tx.get(docRef);
-                return {
-                  id: snap.id,
-                  exists: snap.exists(),
-                  data: () => snap.data(),
-                };
-              },
-              set: (refObj: any, data: any, options?: { merge?: boolean }) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                if (options?.merge) {
-                  tx.set(docRef, data, { merge: true });
-                } else {
-                  tx.set(docRef, data);
-                }
-              },
-              update: (refObj: any, data: any) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                tx.update(docRef, data);
-              },
-            };
-            return await updateFunction(txWrapper);
-          });
-        },
-      };
-    }
-
     async function seedEvidence(db: any, evidenceId: string, aggregateType: string, aggregateId: string, sourceVersion: number = 1) {
       await setDoc(doc(db, 'intelligence_evidence', evidenceId), {
         evidenceId,
@@ -2971,30 +3195,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         schemaVersion: 'v8.1.0',
       });
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const persistResult = await persistCanonicalIntelligence({
         db: storeDb,
@@ -3061,30 +3262,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         schemaVersion: 'v8.1.0',
       });
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       await expect(
         persistCanonicalIntelligence({
@@ -3119,30 +3297,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         createdAt: new Date().toISOString(),
       });
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const rawCandidate = {
         domain: 'roofing',
@@ -3194,30 +3349,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const jobId = 'job_t12_emu_102';
       const missingEvidenceId = 'ev_t12_nonexistent_999';
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const rawCandidate = {
         domain: 'plumbing',
@@ -3265,30 +3397,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         createdAt: new Date().toISOString(),
       });
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const rawCandidate = {
         domain: 'electrical',
@@ -3389,30 +3498,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         createdAt: new Date().toISOString(),
       });
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const rawCandidate = {
         domain: 'heating',
@@ -3454,30 +3540,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_1', { admin: true });
       const adminDb = adminCtx.firestore();
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const rawCandidate = {
         domain: 'roofing',
@@ -3507,30 +3570,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_2', { admin: true });
       const adminDb = adminCtx.firestore();
 
-      const storeDb = {
-        collection: (name: string) => collection(adminDb, name),
-        batch: () => null,
-        runTransaction: async <T>(fn: (tx: any) => Promise<T>): Promise<T> => {
-          return await runTransaction(adminDb, async (tx) => {
-            const txWrapper = {
-              get: async (ref: any) => tx.get(ref),
-              set: (ref: any, data: any) => {
-                tx.set(ref, data);
-                return txWrapper;
-              },
-              update: (ref: any, data: any) => {
-                tx.update(ref, data);
-                return txWrapper;
-              },
-              delete: (ref: any) => {
-                tx.delete(ref);
-                return txWrapper;
-              },
-            };
-            return await fn(txWrapper);
-          });
-        },
-      };
+      const storeDb = createRealFirestoreStoreDb(adminDb);
 
       const platformAggs: Array<'contractor' | 'material' | 'project' | 'customer_request'> = [
         'contractor',
