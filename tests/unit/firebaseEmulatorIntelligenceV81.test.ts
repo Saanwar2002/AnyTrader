@@ -4955,6 +4955,107 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
       expect(snap.data()?.status).toBe('succeeded');
     });
+
+    it('C17 — Server-Owned Metadata Integrity on Real Emulator: recordRunSucceeded and recordRunFailed reject malicious runId', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c17', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c17', 1, 'lease_c17');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c17',
+          aggregateType: 'job',
+          aggregateId: 'job_c17',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c17',
+          leaseId: 'lease_c17',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      // A. recordRunSucceeded() with malicious updates.runId -> rejected
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          { runId: 'malicious_run_id_c17', workerId: 'worker_c17', leaseId: 'lease_c17' },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied runId/);
+
+      // B. recordRunFailed() with malicious updates.runId -> rejected
+      await expect(
+        processingRunStore.recordRunFailed(
+          runId,
+          new Error('Emulator error test'),
+          { runId: 'malicious_run_id_c17', workerId: 'worker_c17', leaseId: 'lease_c17' },
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied runId/);
+
+      // C. persisted runId remains unchanged after rejected attempts
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data()?.runId).toBe(runId);
+      expect(snap.data()?.status).toBe('started');
+
+      // D. legitimate telemetry updates still succeed
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c17',
+          leaseId: 'lease_c17',
+          inputTokens: 120,
+          outputTokens: 60,
+          totalTokens: 180,
+          inputBytes: 700,
+          outputBytes: 300,
+          estimatedCost: 0.0009,
+          durationMs: 250,
+        },
+        storeDb as any
+      );
+      expect(succ.status).toBe('succeeded');
+      expect(succ.totalTokens).toBe(180);
+
+      const snapSucceeded = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snapSucceeded.data()?.status).toBe('succeeded');
+      expect(snapSucceeded.data()?.totalTokens).toBe(180);
+
+      // F. server-owned task/attempt identity cannot be overwritten
+      const runIdForOverwriteTest = buildProcessingRunId('task_c17_over', 1, 'lease_c17_over');
+      await processingRunStore.recordRunStarted(
+        {
+          runId: runIdForOverwriteTest,
+          taskId: 'task_c17_over',
+          aggregateType: 'job',
+          aggregateId: 'job_c17_over',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c17_over',
+          leaseId: 'worker_c17_over',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runIdForOverwriteTest,
+          {
+            workerId: 'worker_c17_over',
+            leaseId: 'worker_c17_over',
+            taskId: 'stolen_task_id',
+          } as any,
+          storeDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied taskId/);
+    });
   });
 });
 

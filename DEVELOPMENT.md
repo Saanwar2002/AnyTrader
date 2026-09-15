@@ -1,6 +1,11 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🧠 AnyTrader V8.1 — Task 14, 14B & 14C: Intelligence Processing Observability, Real Emulator Persistence & Observability Integrity Boundary (September 15, 2026)
+## 🧠 AnyTrader V8.1 — Task 14, 14B, 14C & 14C.1: Intelligence Processing Observability, Real Emulator Persistence, Observability Integrity Boundary & Server-Owned Metadata (September 15, 2026)
+- **Task 14C.1 — Server-Owned Processing-Run Metadata Integrity**:
+  - **Strict Identity Protection Boundary**: Prevented callers from overwriting critical server-owned metadata during execution finalization (`recordRunSucceeded()` and `recordRunFailed()`).
+  - **RunId Integrity Validation**: Authoritatively validates that caller-supplied updates containing `updates.runId` are rejected if they differ from the method's authoritative `runId` parameter.
+  - **Immutable Server Identity Fields**: Implemented strict protection on server-owned identity attributes (`taskId`, `attempt`, `aggregateType`, `aggregateId`, `taskType`, `startedAt`, `createdAt`). Any modifications to these fields are rejected, with updates merged and forced to match the existing server-owned record.
+  - **Comprehensive Verification**: Validated these controls under 100% test coverage through both isolated unit tests (`tests/unit/task14ProcessingObservability.test.ts`) and real Firebase Firestore emulator integration tests (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`).
 - **Task 14C — Intelligence Processing Observability Integrity & Metrics Boundary**:
   - **Comprehensive Observability Hardening (`src/server/intelligence/processingRunStore.ts`, `src/server/intelligence/costModel.ts`)**:
     - **Structural Validity & Strict Validation**: Added validation layers to enforce schema conformance, rejecting any unknown keys or un-mapped attributes.

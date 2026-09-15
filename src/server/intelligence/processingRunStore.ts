@@ -364,6 +364,14 @@ export class IntelligenceProcessingRunStore {
       throw new ProcessingRunValidationError('Missing valid runId for recordRunSucceeded');
     }
 
+    if (updates?.runId !== undefined && updates?.runId !== null) {
+      if (updates.runId !== runId) {
+        throw new ProcessingRunValidationError(
+          `Malicious update rejected: caller-supplied runId '${updates.runId}' does not match authoritative runId '${runId}'`
+        );
+      }
+    }
+
     const docRef = effectiveDb.collection('intelligence_processing_runs').doc(runId);
     const now = new Date().toISOString();
 
@@ -377,6 +385,24 @@ export class IntelligenceProcessingRunStore {
       }
 
       const existing = (typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceProcessingRun;
+
+      // Identity Protection: If updates contains execution identity keys, reject if they differ from existing
+      const identityKeys: Array<keyof IntelligenceProcessingRun> = [
+        'taskId',
+        'attempt',
+        'aggregateType',
+        'aggregateId',
+        'taskType',
+        'startedAt',
+        'createdAt',
+      ];
+      for (const key of identityKeys) {
+        if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
+          throw new ProcessingRunValidationError(
+            `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
+          );
+        }
+      }
 
       // Worker & Lease Ownership Validation
       if (
@@ -411,6 +437,17 @@ export class IntelligenceProcessingRunStore {
         errorClass: undefined,
         retryable: undefined,
         sanitizedDiagnostic: undefined,
+        // Override with strictly authoritative server-owned identity
+        runId,
+        taskId: existing.taskId,
+        attempt: existing.attempt,
+        aggregateType: existing.aggregateType,
+        aggregateId: existing.aggregateId,
+        taskType: existing.taskType,
+        startedAt: existing.startedAt,
+        createdAt: existing.createdAt,
+        workerId: existing.workerId,
+        leaseId: existing.leaseId,
       };
 
       const validated = validateProcessingRunRecord(mergedRaw);
@@ -439,6 +476,14 @@ export class IntelligenceProcessingRunStore {
       throw new ProcessingRunValidationError('Missing valid runId for recordRunFailed');
     }
 
+    if (updates?.runId !== undefined && updates?.runId !== null) {
+      if (updates.runId !== runId) {
+        throw new ProcessingRunValidationError(
+          `Malicious update rejected: caller-supplied runId '${updates.runId}' does not match authoritative runId '${runId}'`
+        );
+      }
+    }
+
     const errorClassification = classifyAndSanitizeProcessingError(error);
     const docRef = effectiveDb.collection('intelligence_processing_runs').doc(runId);
     const now = new Date().toISOString();
@@ -453,6 +498,24 @@ export class IntelligenceProcessingRunStore {
         : null;
 
       if (existing) {
+        // Identity Protection: If updates contains execution identity keys, reject if they differ from existing
+        const identityKeys: Array<keyof IntelligenceProcessingRun> = [
+          'taskId',
+          'attempt',
+          'aggregateType',
+          'aggregateId',
+          'taskType',
+          'startedAt',
+          'createdAt',
+        ];
+        for (const key of identityKeys) {
+          if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
+            throw new ProcessingRunValidationError(
+              `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
+            );
+          }
+        }
+
         // Worker & Lease Ownership Validation
         if (
           (updates?.workerId && existing.workerId && existing.workerId !== updates.workerId) ||
@@ -495,6 +558,17 @@ export class IntelligenceProcessingRunStore {
           errorClass: errorClassification.errorClass,
           retryable: errorClassification.retryable,
           sanitizedDiagnostic: errorClassification.sanitizedDiagnostic,
+          // Override with strictly authoritative server-owned identity
+          runId,
+          taskId: existing.taskId,
+          attempt: existing.attempt,
+          aggregateType: existing.aggregateType,
+          aggregateId: existing.aggregateId,
+          taskType: existing.taskType,
+          startedAt: existing.startedAt,
+          createdAt: existing.createdAt,
+          workerId: existing.workerId,
+          leaseId: existing.leaseId,
         };
 
         const validated = validateProcessingRunRecord(mergedRaw);
@@ -505,9 +579,8 @@ export class IntelligenceProcessingRunStore {
 
       // Record does not exist yet: create initial failure record
       const initialRecord: Partial<IntelligenceProcessingRun> = {
-        runId,
         taskId: updates?.taskId || 'unknown_task',
-        aggregateType: updates?.aggregateType || 'job',
+        aggregateType: (updates?.aggregateType || 'job') as any,
         aggregateId: updates?.aggregateId || 'unknown',
         taskType: updates?.taskType || 'job_extraction',
         status: updates?.status && VALID_STATUSES.has(updates.status as ProcessingRunStatus)
@@ -525,6 +598,7 @@ export class IntelligenceProcessingRunStore {
         sanitizedDiagnostic: errorClassification.sanitizedDiagnostic,
         createdAt: now,
         ...(updates || {}),
+        runId, // Ensure runId is strictly overridden and cannot be overwritten by updates
       };
 
       const validated = validateProcessingRunRecord(initialRecord);

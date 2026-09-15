@@ -930,4 +930,146 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
       ).rejects.toThrow(/TRANSACTION_ABORTED_BY_FIRESTORE/);
     });
   });
+
+  describe('8. Task 14C.1: Server-Owned Processing-Run Metadata Integrity', () => {
+    it('A. recordRunSucceeded() with malicious updates.runId is rejected', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_1', 1, 'lease_c1_1');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_1', attempt: 1, leaseId: 'lease_c1_1', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      await expect(
+        store.recordRunSucceeded(runId, { runId: 'malicious_run_id', workerId: 'w1', leaseId: 'lease_c1_1' }, mockDb as any)
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied runId/);
+    });
+
+    it('B. recordRunFailed() with malicious updates.runId is rejected', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_2', 1, 'lease_c1_2');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_2', attempt: 1, leaseId: 'lease_c1_2', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      await expect(
+        store.recordRunFailed(runId, new Error('Test err'), { runId: 'malicious_run_id', workerId: 'w1', leaseId: 'lease_c1_2' }, mockDb as any)
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied runId/);
+    });
+
+    it('C. persisted runId remains unchanged after rejected attempt', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_3', 1, 'lease_c1_3');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_3', attempt: 1, leaseId: 'lease_c1_3', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      try {
+        await store.recordRunSucceeded(runId, { runId: 'malicious_run_id', workerId: 'w1', leaseId: 'lease_c1_3' }, mockDb as any);
+      } catch (err) {
+        // expected
+      }
+
+      const run = await store.getRun(runId, mockDb as any);
+      expect(run).toBeDefined();
+      expect(run?.runId).toBe(runId);
+      expect(run?.status).toBe('started');
+    });
+
+    it('D. legitimate telemetry updates still succeed', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_4', 1, 'lease_c1_4');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_4', attempt: 1, leaseId: 'lease_c1_4', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      const succ = await store.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'w1',
+          leaseId: 'lease_c1_4',
+          inputTokens: 150,
+          outputTokens: 75,
+          totalTokens: 225,
+          inputBytes: 800,
+          outputBytes: 400,
+          estimatedCost: 0.0012,
+          costCurrency: 'USD',
+          durationMs: 450,
+          finishedAt: new Date().toISOString(),
+        },
+        mockDb as any
+      );
+
+      expect(succ.status).toBe('succeeded');
+      expect(succ.totalTokens).toBe(225);
+      expect(succ.estimatedCost).toBe(0.0012);
+      expect(succ.durationMs).toBe(450);
+    });
+
+    it('E. legitimate worker/lease ownership still works', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_5', 1, 'lease_c1_5');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_5', attempt: 1, leaseId: 'lease_c1_5', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      // Legitimate verify call with matching worker and lease
+      const succ = await store.recordRunSucceeded(
+        runId,
+        { workerId: 'w1', leaseId: 'lease_c1_5' },
+        mockDb as any
+      );
+      expect(succ.status).toBe('succeeded');
+    });
+
+    it('F. server-owned task/attempt identity cannot be overwritten', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_c1_6', 1, 'lease_c1_6');
+
+      await store.recordRunStarted(
+        { runId, taskId: 'task_c1_6', attempt: 1, leaseId: 'lease_c1_6', aggregateType: 'job', aggregateId: 'j1', taskType: 'job_extraction', workerId: 'w1' },
+        mockDb as any
+      );
+
+      await expect(
+        store.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'w1',
+            leaseId: 'lease_c1_6',
+            taskId: 'malicious_task_id',
+          } as any,
+          mockDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied taskId/);
+
+      await expect(
+        store.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'w1',
+            leaseId: 'lease_c1_6',
+            attempt: 99,
+          } as any,
+          mockDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied attempt/);
+    });
+  });
 });
