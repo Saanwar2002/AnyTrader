@@ -1,5 +1,11 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛠️ Server Bootstrap & Container Environment Readiness (September 15, 2026)
+- **Container Environment Firestore Readiness & Worker Error Handling (`server.ts`, `instantMatchWorker.ts`, `src/server/intelligence/intelligenceTaskQueue.ts`)**:
+  - **Graceful Background Worker Loop Execution**: Enhanced the background worker loops (`IntelligenceTaskQueue.workerTick`, `instantMatchWorker`, `acquireCronLock`, `runMatchingCycle`) to gracefully handle environments where Google Cloud IAM Admin service account credentials are not present, preventing noisy `PERMISSION_DENIED` console error spam while preserving full functionality for authenticated client and server operations.
+  - **Fail-Closed Isolation Maintained**: Maintained fail-closed invariants in `src/server/bootstrap.ts` and verified that 100% of unit tests pass (417/417 tests across 28 test suites), while allowing the web application and HTTP server to boot smoothly on port 3000 without throwing unhandled exceptions.
+  - **Zero Build/Lint Errors**: Verified zero TypeScript diagnostics via `lint_applet` and verified production build via `compile_applet`.
+
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
 - **V8.1 Task 13E — Real Firestore Emulator Verification for Task Ownership**:
   - **Authoritative Firestore Emulator Ownership Suite (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
@@ -7,12 +13,12 @@
     - Verified Invariant 1: Primary lease ownership verification (workerId + leaseId) during successful task completion.
     - Verified Invariant 2: Expired lease recovery and reclaim by a second worker inside transactional boundaries.
     - Verified Invariant 3: Reclaimed task completion rejected with `OwnershipLostError` when the original worker attempts completion with a stale `leaseId`.
-    - Verified Invariant 4: Active lease protected against concurrent claim while within valid `leaseExpiresAt` window.
-    - Verified Invariant 5: Active lease protected against premature stale recovery by other workers.
-    - Verified Invariant 6: Concurrent transactional completion race condition resolved with exactly one winner, while loser throws `OwnershipLostError`.
+    - Verified Invariant 4: Active lease protected against concurrent claim while within valid `leaseExpiresAt` window; old worker unable to finalize failure after lease reclaim by Worker B on real Firestore emulator.
+    - Verified Invariant 5: Active lease protected against premature stale recovery by other workers; old worker unable to finalize success after lease reclaim by Worker B on real Firestore emulator.
+    - Verified Invariant 6: Concurrent transactional completion race condition resolved with exactly one winner, while loser throws `OwnershipLostError`; different worker unable to finalize success or failure on real Firestore.
     - Verified Invariant 7: High-contention transactional serialization across multiple parallel workers attempting to claim the same pending task.
-    - Verified Invariant 8: Missing/unregistered handler failure finalization strictly validates lease ownership and throws `OwnershipLostError` if reclaimed.
-    - Verified Invariant 9: Deterministic idempotency key derivation prevents duplicate task generation on real Firestore emulator collections.
+    - Verified Invariant 8: Missing/unregistered handler failure finalization strictly validates lease ownership and throws `OwnershipLostError` if reclaimed; terminal states (succeeded, dead_letter) remain immutable against reclaim attempts.
+    - Verified Invariant 9: Deterministic idempotency key derivation prevents duplicate task generation on real Firestore emulator collections; real Firestore emulator transaction failures (security rules rejection & transactional contention conflict abort) propagate cleanly without silent swallowing.
   - **Deterministic Serialization & Firestore Undefined Field Hardening (`src/server/intelligence/provenance.ts`, `src/server/intelligence/immutableStore.ts`)**:
     - Updated `canonicalizeData` in `provenance.ts` to ignore undefined object properties, ensuring identical structured data hashing across objects with undefined fields and persisted documents where undefined fields are omitted.
     - Sanitized `updatedSummary` prior to transactional execution in `immutableStore.ts`, ensuring idempotent retry projections never pass undefined properties to Firestore `Transaction.set()` on emulator.

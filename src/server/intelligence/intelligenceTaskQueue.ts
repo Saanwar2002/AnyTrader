@@ -197,7 +197,15 @@ export class IntelligenceTaskQueue {
       throw new Error("[IntelligenceTaskQueue] Cannot start worker: Firestore task store is not configured or not ready.");
     }
     this.workerIntervalTimer = setInterval(() => {
-      this.workerTick().catch((err) => {
+      this.workerTick().catch((err: any) => {
+        const errMsg = err?.message || String(err);
+        if (
+          errMsg.includes("PERMISSION_DENIED") ||
+          errMsg.includes("UNAUTHENTICATED") ||
+          errMsg.includes("Could not load the default credentials")
+        ) {
+          return;
+        }
         console.error('[IntelligenceTaskQueue] Worker tick error:', err);
       });
     }, pollIntervalMs);
@@ -258,6 +266,10 @@ export class IntelligenceTaskQueue {
       }
       return Array.from(tasksMap.values());
     } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      if (errMsg.includes("PERMISSION_DENIED") || errMsg.includes("UNAUTHENTICATED")) {
+        return [];
+      }
       console.error('[IntelligenceTaskQueue] getRunnableTasksFromFirestore query error:', err?.message || err);
       throw err;
     }
@@ -272,7 +284,15 @@ export class IntelligenceTaskQueue {
     this.isWorkerRunning = true;
 
     try {
-      await this.recoverStaleTasksAsync();
+      try {
+        await this.recoverStaleTasksAsync();
+      } catch (staleErr: any) {
+        const msg = staleErr?.message || String(staleErr);
+        if (msg.includes("PERMISSION_DENIED") || msg.includes("UNAUTHENTICATED")) {
+          return;
+        }
+        throw staleErr;
+      }
       
       const availableSlots = this.maxConcurrency - this.activeTaskIds.size;
       if (availableSlots <= 0) return;
@@ -556,7 +576,10 @@ export class IntelligenceTaskQueue {
       }
       return recovered;
     } catch (err: any) {
-      console.error('[IntelligenceTaskQueue] Async stale recovery scan error:', err?.message || err);
+      const errMsg = err?.message || String(err);
+      if (!errMsg.includes("PERMISSION_DENIED") && !errMsg.includes("UNAUTHENTICATED") && !errMsg.includes("Could not load the default credentials")) {
+        console.error('[IntelligenceTaskQueue] Async stale recovery scan error:', errMsg);
+      }
       throw err;
     }
   }

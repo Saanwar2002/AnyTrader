@@ -26,14 +26,22 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
   console.log("Starting Instant Match Engine...");
 
   // Cache platform config
-  db.collection("platform_config").doc("global").onSnapshot((doc) => {
-    if (doc.exists) {
-      const data = doc.data();
-      if (data) {
-         globalConfig = { ...globalConfig, ...data };
+  const configUnsubscribe = db.collection("platform_config").doc("global").onSnapshot(
+    (doc) => {
+      if (doc.exists) {
+        const data = doc.data();
+        if (data) {
+           globalConfig = { ...globalConfig, ...data };
+        }
+      }
+    },
+    (err: any) => {
+      const msg = err?.message || String(err);
+      if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+        console.warn("Instant match config listener error:", err);
       }
     }
-  });
+  );
 
   const processingMatches = new Set<string>();
 
@@ -105,8 +113,16 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
             processingMatches.delete(matchDoc.id);
           }
         }
-      } catch (err) {
-        console.error("Error in Instant Match Engine onSnapshot handler:", err);
+      } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+          console.error("Error in Instant Match Engine onSnapshot handler:", err);
+        }
+      }
+    }, (err: any) => {
+      const msg = err?.message || String(err);
+      if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+        console.warn("Instant match listener error:", err);
       }
     });
 
@@ -155,12 +171,16 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
              await initiateNextAttempt(db, matchDoc.ref, matchDoc.data(), nextAttemptNum);
           }
        }
-     } catch (err) {
-        console.error("Error in Instant Match Engine timeout interval:", err);
+     } catch (err: any) {
+        const msg = err?.message || String(err);
+        if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+          console.error("Error in Instant Match Engine timeout interval:", err);
+        }
      }
   }, 10000); // Check timeouts every 10 seconds (efficient query)
 
   return () => {
+    configUnsubscribe();
     matchesUnsubscribe();
     clearInterval(timeoutCheckInterval);
   };

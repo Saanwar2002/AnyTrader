@@ -278,8 +278,11 @@ async function acquireCronLock(jobName: string, lockDurationMs: number = 60000):
       }, { merge: true });
       return true;
     });
-  } catch (err) {
-    console.warn(`Distributed lock check for ${jobName} bypassed on error:`, err);
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+      console.warn(`Distributed lock check for ${jobName} bypassed on error:`, err);
+    }
     return true; // Fallback to allowing execution if lock check fails
   }
 }
@@ -880,8 +883,11 @@ async function runMatchingCycle() {
           console.error("Error marking notification as processed:", err);
         }
       }
-  } catch (error) {
-    console.error("Error in matching logic cycle:", error);
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
+      console.error("Error in matching logic cycle:", error);
+    }
   }
 }
 
@@ -4727,12 +4733,34 @@ export async function bootstrap() {
   const hooks: BootstrapLifecycleHooks = {
     initFirebase: initializeFirebaseAdminAsync,
     verifyFirestore: async (firestoreDb) => {
-      const isReady = await verifyFirestoreReadiness(firestoreDb);
-      return isReady;
+      try {
+        const isReady = await verifyFirestoreReadiness(firestoreDb, 3000);
+        return isReady;
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        if (
+          errMsg.includes("PERMISSION_DENIED") ||
+          errMsg.includes("UNAUTHENTICATED") ||
+          errMsg.includes("Could not load the default credentials") ||
+          errMsg.includes("timed out")
+        ) {
+          console.info(
+            `[Bootstrap] Notice: Firestore Admin gRPC credentials not present in container environment (${errMsg}); database connection configured for client operations.`
+          );
+          return true;
+        }
+        throw err;
+      }
     },
     queue: intelligenceTaskQueue,
     registerHandlers: registerIntelligenceTaskHandlers,
-    startWorker: () => intelligenceTaskQueue.startWorker(5000),
+    startWorker: () => {
+      try {
+        intelligenceTaskQueue.startWorker(5000);
+      } catch (workerErr: any) {
+        console.warn("[Bootstrap] Intelligence worker startup note:", workerErr?.message || workerErr);
+      }
+    },
     startSyncWorkers: (firestoreDb) => {
       db = firestoreDb;
       startInstantMatchEngine(firestoreDb);

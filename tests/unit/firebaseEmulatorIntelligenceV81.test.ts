@@ -1581,22 +1581,19 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskId = `task_t13e_fail_reclaim_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      // Initial task owned by worker-A + lease-A
+      // Seed task ready for worker-A
       const docRef = doc(adminDb, 'intelligence_tasks', taskId);
       await setDoc(docRef, {
         taskId,
         taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
+        status: 'pending',
+        attempts: 0,
         maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
         createdAt: nowIso,
         updatedAt: nowIso,
       });
 
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
       queueA.setFirestoreDb(firestoreTaskDb as any);
 
       let releaseHandler: any;
@@ -1610,28 +1607,33 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         throw new Error('Late failure from stale execution');
       });
 
-      // Start execution with lease-A
-      const execPromise = queueA.executeTask(taskId);
+      // Start execution with short lease-A (50ms configured on queue)
+      const execPromise = queueA.executeTask(taskId, 'worker-A');
       await startedGate;
 
-      // Simulate lease reclaim while handler is executing under lease-A: task is now owned by worker-A + lease-B
-      const futureLease = new Date(Date.now() + 120000).toISOString();
-      await updateDoc(docRef, {
-        leaseId: 'lease-B',
-        leaseExpiresAt: futureLease,
-        attempts: 2,
-      });
+      // Allow lease-A to expire naturally on real Firestore
+      await new Promise((resolve) => setTimeout(resolve, 60));
 
-      // Release the failing handler
+      // Worker B executes the actual transactional reclaim against the real Firestore emulator
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+
+      const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
+      expect(reclaimed).toBe(true);
+
+      // Release Worker A's failing handler from its stale attempt
       releaseHandler();
-      await execPromise;
+      const resA = await execPromise;
+      // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
+      expect(resA.workerId).toBe('worker-B');
+      expect(resA.status).toBe('processing');
 
-      // Authoritative state in real Firestore must still be processing under lease-B
+      // Authoritative state in real Firestore must remain processing under Worker B's lease
       const snap = await getDoc(docRef);
       const data = snap.data()!;
       expect(data.status).toBe('processing');
-      expect(data.workerId).toBe('worker-A');
-      expect(data.leaseId).toBe('lease-B');
+      expect(data.workerId).toBe('worker-B');
+      expect(data.leaseId).toBeDefined();
       expect(data.attempts).toBe(2);
       expect(data.errorCode).toBeUndefined();
     });
@@ -1647,17 +1649,14 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       await setDoc(docRef, {
         taskId,
         taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
+        status: 'pending',
+        attempts: 0,
         maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
         createdAt: nowIso,
         updatedAt: nowIso,
       });
 
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
       queueA.setFirestoreDb(firestoreTaskDb as any);
 
       let releaseHandler: any;
@@ -1671,28 +1670,35 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         return { done: true };
       });
 
-      const execPromise = queueA.executeTask(taskId);
+      // Start execution with short lease (50ms configured on queue)
+      const execPromise = queueA.executeTask(taskId, 'worker-A');
       await startedGate;
 
-      // Simulate lease reclaim while handler is executing under lease-A: task is now owned by worker-A with lease-B
-      const futureLease = new Date(Date.now() + 120000).toISOString();
-      await updateDoc(docRef, {
-        leaseId: 'lease-B',
-        leaseExpiresAt: futureLease,
-        attempts: 2,
-      });
+      // Allow lease to expire naturally on real Firestore
+      await new Promise((resolve) => setTimeout(resolve, 60));
 
-      // Let success handler finish
+      // Worker B executes the actual transactional reclaim against the real Firestore emulator
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(firestoreTaskDb as any);
+
+      const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
+      expect(reclaimed).toBe(true);
+
+      // Let Worker A's handler finish successfully from its stale attempt
       releaseHandler();
-      await execPromise;
+      const resA = await execPromise;
+      // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
+      expect(resA.workerId).toBe('worker-B');
+      expect(resA.status).toBe('processing');
 
-      // Authoritative state in real Firestore remains processing under lease-B (not succeeded)
+      // Authoritative state in real Firestore remains processing under Worker B's lease (not succeeded by Worker A)
       const snap = await getDoc(docRef);
       const data = snap.data()!;
       expect(data.status).toBe('processing');
-      expect(data.workerId).toBe('worker-A');
-      expect(data.leaseId).toBe('lease-B');
+      expect(data.workerId).toBe('worker-B');
+      expect(data.leaseId).toBeDefined();
       expect(data.attempts).toBe(2);
+      expect(data.completedAt).toBeUndefined();
     });
 
     it('Task 13E Invariant 6: Different worker cannot finalize success or failure on real Firestore', async () => {
@@ -1854,8 +1860,9 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(snapDead.data()!.status).toBe('dead_letter');
     });
 
-    it('Task 13E Invariant 9: Transaction failures in stale recovery propagate without silent swallowing', async () => {
+    it('Task 13E Invariant 9: Transaction failures in stale recovery propagate without silent swallowing on real Firestore emulator', async () => {
       const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv9', { role: 'admin', admin: true }).firestore();
+      const unauthorizedDb = testEnv!.authenticatedContext('unauthorized_worker_inv9', { role: 'customer' }).firestore();
 
       const taskId = `task_t13e_tx_fail_${Date.now()}`;
       const nowIso = new Date().toISOString();
@@ -1874,20 +1881,94 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         updatedAt: nowIso,
       });
 
-      const realTaskDb = createRealFirestoreTaskDb(adminDb);
-      const failingDb = {
-        ...realTaskDb,
-        runTransaction: async () => {
-          throw new Error('Simulated Firestore transaction conflict / network abort');
-        },
+      const realAdminDb = createRealFirestoreTaskDb(adminDb);
+      const realUnauthDb = createRealFirestoreTaskDb(unauthorizedDb);
+
+      // Query runs with admin context to locate stale tasks on the real Firestore emulator,
+      // while the transactional update executes with an unauthorized context on the real emulator.
+      // The real Firestore emulator's transaction runner evaluates security rules,
+      // rejects the update, and throws an authentic FirebaseError.
+      const emulatorFailingDb = {
+        collection: (name: string) => realAdminDb.collection(name),
+        runTransaction: realUnauthDb.runTransaction,
       };
 
       const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
-      queue.setFirestoreDb(failingDb as any);
+      queue.setFirestoreDb(emulatorFailingDb as any);
 
-      await expect(queue.recoverStaleTasksAsync()).rejects.toThrow(
-        /Simulated Firestore transaction conflict \/ network abort/
-      );
+      // The real Firestore emulator's runTransaction must reject and propagate the authentic FirebaseError without swallowing
+      let caughtError: any = null;
+      try {
+        await queue.recoverStaleTasksAsync();
+      } catch (err) {
+        caughtError = err;
+      }
+
+      expect(caughtError).toBeDefined();
+      expect(caughtError.name).toBe('FirebaseError');
+      expect(caughtError.message).toMatch(/permission|denied|PERMISSION_DENIED/i);
+
+      // Additionally verify real Firestore emulator transaction retry exhaustion & abort under high contention
+      const taskIdContention = `task_t13e_tx_contention_${Date.now()}`;
+      await setDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+        taskId: taskIdContention,
+        taskType: 'job_extraction',
+        status: 'processing',
+        attempts: 1,
+        maxAttempts: 3,
+        workerId: 'worker-A',
+        leaseId: 'lease-A',
+        leaseExpiresAt: expiredLease,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      let contentionAttempts = 0;
+      const contentionDb = {
+        collection: (name: string) => ({
+          where: () => ({
+            get: async () => ({
+              empty: false,
+              docs: [{ id: taskIdContention }],
+            }),
+          }),
+          doc: realAdminDb.collection(name).doc,
+        }),
+        runTransaction: async <T>(updateFunction: (tx: any) => Promise<T>): Promise<T> => {
+          return runTransaction(adminDb, async (rawTx) => {
+            contentionAttempts++;
+            // Concurrently mutate the task in Firestore outside rawTx to trigger real emulator transaction conflict
+            await updateDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+              updatedAt: new Date().toISOString(),
+              contentionCount: contentionAttempts,
+            });
+            const col = 'intelligence_tasks';
+            const docRef = doc(adminDb, col, taskIdContention);
+            const snap = await rawTx.get(docRef);
+            const txWrapper = {
+              get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
+              update: (ref: any, data: any) => rawTx.update(docRef, data),
+              set: (ref: any, data: any) => rawTx.set(docRef, data),
+              delete: (ref: any) => rawTx.delete(docRef),
+            };
+            return await updateFunction(txWrapper);
+          });
+        },
+      };
+
+      const queueContention = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+      queueContention.setFirestoreDb(contentionDb as any);
+
+      let contentionError: any = null;
+      try {
+        await queueContention.recoverStaleTasksAsync();
+      } catch (err) {
+        contentionError = err;
+      }
+
+      expect(contentionError).toBeDefined();
+      expect(contentionError.name).toBe('FirebaseError');
+      expect(contentionAttempts).toBeGreaterThanOrEqual(1);
     });
   });
 
