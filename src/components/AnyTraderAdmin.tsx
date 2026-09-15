@@ -273,16 +273,16 @@ export default function AnyTraderAdmin() {
       (error) => handleGlobalFirestoreError(error, OperationType.GET, "broadcasts")
     );
 
-    const unsubReviews = onSnapshot(collection(db, "reviews"), (snapshot) => {
+    const unsubReviews = onSnapshot(query(collection(db, "reviews"), limit(100)), (snapshot) => {
       setReviews(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "reviews"));
 
-    const unsubSearchLogs = onSnapshot(collection(db, "search_logs"), (snapshot) => {
+    const unsubSearchLogs = onSnapshot(query(collection(db, "search_logs"), limit(100)), (snapshot) => {
       setSearchLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => handleGlobalFirestoreError(error, OperationType.GET, "search_logs"));
 
     const unsubSecurityAlerts = onSnapshot(
-      collection(db, "security_alerts"),
+      query(collection(db, "security_alerts"), limit(100)),
       (snapshot) => {
         setSecurityAlerts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       },

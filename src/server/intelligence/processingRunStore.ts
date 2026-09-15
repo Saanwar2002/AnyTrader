@@ -365,8 +365,6 @@ export class IntelligenceProcessingRunStore {
           'attempt',
           'workerId',
           'leaseId',
-          'startedAt',
-          'createdAt',
           'runId'
         ];
         for (const key of serverOwnedKeys) {

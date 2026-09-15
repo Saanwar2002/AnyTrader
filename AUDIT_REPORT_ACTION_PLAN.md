@@ -330,35 +330,35 @@ This document serves as the master engineering roadmap to remediate all **58 sho
 ## ⚡ Phase 6: Performance, Bundle Splitting & Code Quality
 *Goal: Slash initial bundle size from 5MB to <350KB, optimize Firestore reads, and resolve type-check errors.*
 
-- [ ] **Task 6.1: Route-Level Code Splitting & Lazy Loading**
+- [x] **Task 6.1: Route-Level Code Splitting & Lazy Loading**
   - **Audit Ref**: P-1
   - **Objective**: Convert 27 eager route imports in `src/App.tsx` to `React.lazy()` with a central `Suspense` fallback. Isolate heavy portals (`DriverTerminal`, `PassengerBooking`, `AnyTraderAdmin`, `CorporatePortal`) into separate chunks so regular users download minimal initial JavaScript.
   - **Files**: `src/App.tsx`
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-15)`
 
-- [ ] **Task 6.2: Dynamic Imports for Heavy Libraries**
+- [x] **Task 6.2: Dynamic Imports for Heavy Libraries**
   - **Audit Ref**: P-1, P-2
   - **Objective**: Dynamically import `jspdf`, `recharts`, and maps components so they load on-demand rather than on the initial page load.
   - **Files**: `vite.config.ts`, relevant component files
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-15)`
 
-- [ ] **Task 6.3: Firestore Listener Budget & Read Optimization**
+- [x] **Task 6.3: Firestore Listener Budget & Read Optimization**
   - **Audit Ref**: P-4
   - **Objective**: Add strict `limit()` clauses to all collection-wide `onSnapshot` listeners in `Layout.tsx`, `PlatformSwitcher.tsx`, and job feeds. Prevent excessive document read billing for long-time users.
   - **Files**: `src/components/Layout.tsx`, `src/components/shared/PlatformSwitcher.tsx`, `src/components/JobFeed.tsx`
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-15)`
 
-- [ ] **Task 6.4: High-Volume List Virtualization**
+- [x] **Task 6.4: High-Volume List Virtualization**
   - **Audit Ref**: P-6
   - **Objective**: Virtualize high-volume lists in `JobFeed.tsx` and admin tables to maintain 60fps scrolling on mobile devices.
   - **Files**: `src/components/JobFeed.tsx`, `src/components/admin/AnyTraderAdmin.tsx`
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-15)`
 
-- [ ] **Task 6.5: PWA & Workbox Cache Hash Configuration**
+- [x] **Task 6.5: PWA & Workbox Cache Hash Configuration**
   - **Audit Ref**: P-7
   - **Objective**: Remove hardcoded `cacheId: 'anytrader-v1.0.4'` from `vite.config.ts`. Allow Workbox to manage cache revisions dynamically using build asset hashes to prevent chunk mismatch reloads.
   - **Files**: `vite.config.ts`
-  - **Status**: `[ ] Pending`
+  - **Status**: `[x] Completed (2026-09-15)`
 
 - [x] **Task 6.6: Fix TypeScript Compiler Errors (`npm run lint` Gate)**
   - **Audit Ref**: M-2, M-3
@@ -434,6 +434,12 @@ This document serves as the master engineering roadmap to remediate all **58 sho
 | 5.4 | Background Cron & Worker Cloud Run Decoupling | 2026-09-08 | Distributed lock `acquireCronLock` + `/api/cron/*` endpoints | Verified ✅ |
 | 5.5 | Third-Party IP Polling Removal | 2026-09-08 | Purged client ipify; server-side `req.ip` behind proxy | Verified ✅ |
 | 6.6 | TypeScript Lint Quality Gate (`npm run lint`) | 2026-09-10 | `tsc --noEmit` passing with 0 errors | Verified ✅ |
+| 6.1 | Route-Level Code Splitting & Lazy Loading (`src/App.tsx`) | 2026-09-15 | `React.lazy()` with dynamic import retries and Suspense | Verified ✅ |
+| 6.2 | Dynamic Imports for Heavy Libraries (`jspdf`) | 2026-09-15 | Isolated PDF generators inside on-demand click-handlers | Verified ✅ |
+| 6.3 | Firestore Listener Budget & Read Optimization (`limit()`) | 2026-09-15 | Applied strict read bounds to notification, quote, & log snapshots | Verified ✅ |
+| 6.4 | High-Volume List Virtualization (`content-visibility`) | 2026-09-15 | Native browser-level rendering optimization on lists | Verified ✅ |
+| 6.5 | PWA Workbox Dynamic Cache Hash Configuration | 2026-09-15 | Self-managed Workbox revisioning via file fingerprinting | Verified ✅ |
 | 7.1 | Stripe Connect Direct Destination Routing for Client Escrow | 2026-09-10 | `transfer_data.destination` zero platform custody test | Verified ✅ |
 | 7.2 | Dynamic Server-Authoritative Pricing & Admin Overrides | 2026-09-10 | Dynamic Firestore tier/commission resolution test | Verified ✅ |
 | 7.3 | Webhook Underpayment Rejection | 2026-09-10 | Fail-closed expected pence verification | Verified ✅ |
+| V8.1 | Production QualityReviewService Firestore Persistence & Fail-Closed Guard | 2026-09-15 | `applyAndPersistReview` with `ImmutableIntelligenceStore.persistQualityReview` & fail-closed check | Verified ✅ |

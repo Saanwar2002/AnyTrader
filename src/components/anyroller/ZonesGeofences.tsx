@@ -5,7 +5,7 @@ import {
   Map as MapIcon, Compass, AlertCircle, Save, Check,
   Target, ShieldCheck, HelpCircle, Edit2, CheckCircle, Search
 } from "lucide-react";
-import { db, collection, doc, onSnapshot, getDoc, setDoc, updateDoc } from "@/src/firebase";
+import { db, collection, doc, onSnapshot, getDoc, setDoc, updateDoc, query, where } from "@/src/firebase";
 import { GoogleMap, useJsApiLoader, MarkerF, CircleF, InfoWindowF, OverlayViewF, OverlayView } from "@react-google-maps/api";
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { toast } from "sonner";
@@ -150,19 +150,22 @@ export default function ZonesGeofences() {
 
   // 1. Fetch online tracking drivers
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "live_tracking"), (snapshot) => {
-      const live: OnlineDriver[] = [];
-      snapshot.forEach(doc => {
-        const d = doc.data();
-        if (d.isOnline) {
-          live.push({
-            id: doc.id,
-            ...d
-          } as OnlineDriver);
-        }
-      });
-      setOnlineDrivers(live);
-    });
+    const unsub = onSnapshot(
+      query(collection(db, "live_tracking"), where("isOnline", "==", true)),
+      (snapshot) => {
+        const live: OnlineDriver[] = [];
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          if (d.isOnline) {
+            live.push({
+              id: doc.id,
+              ...d
+            } as OnlineDriver);
+          }
+        });
+        setOnlineDrivers(live);
+      }
+    );
     return () => unsub();
   }, []);
 
@@ -194,13 +197,16 @@ export default function ZonesGeofences() {
 
   // 2b. Fetch ride requests for dynamic supply/demand checking
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "ride_requests"), (snapshot) => {
-      const rides: any[] = [];
-      snapshot.forEach(doc => {
-        rides.push({ id: doc.id, ...doc.data() });
-      });
-      setRideRequests(rides);
-    });
+    const unsub = onSnapshot(
+      query(collection(db, "ride_requests"), where("status", "in", ["pending", "searching", "offered", "draft"])),
+      (snapshot) => {
+        const rides: any[] = [];
+        snapshot.forEach(doc => {
+          rides.push({ id: doc.id, ...doc.data() });
+        });
+        setRideRequests(rides);
+      }
+    );
     return () => unsub();
   }, []);
 

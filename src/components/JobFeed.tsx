@@ -574,7 +574,8 @@ export default function JobFeed() {
     try {
       const quotesQuery = query(
         collectionGroup(db, "quotes"),
-        where("tradespersonId", "==", user.uid)
+        where("tradespersonId", "==", user.uid),
+        limit(200)
       );
 
       const unsubscribe = onSnapshot(quotesQuery, (snapshot) => {
@@ -1937,6 +1938,7 @@ export default function JobFeed() {
               return (
                 <div
                   key={job.id}
+                  style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
                   className="bg-white/80 rounded-[2rem] border border-black shadow-sm overflow-hidden group relative"
                 >
                   <div className="p-5 flex items-center gap-4 relative">
@@ -1986,6 +1988,7 @@ export default function JobFeed() {
             <Link
               key={job.id}
               to={`/job/${job.id}?quickQuote=true`}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '0 280px' }}
               className={cn(
                 "block w-full bg-white rounded-[2rem] border shadow-sm hover:shadow-lg transition-all overflow-hidden group relative text-left",
                 isEmergency

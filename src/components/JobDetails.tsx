@@ -15,7 +15,6 @@ import {
   BarChart3, ShieldCheck, Info, QrCode, TrendingDown, Home, Navigation,
   MessageCircle, Mail, Check, Plus, ImageIcon, Mic, Play, CreditCard, Award
 } from "lucide-react";
-import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
 import { getGoogleMapsApiKey } from "@/src/lib/capacitor";
 import { GoogleMap, useJsApiLoader, MarkerF, OverlayViewF, OverlayView } from "@react-google-maps/api";
@@ -1244,7 +1243,8 @@ const libraries: any[] = ['places', 'geometry'];
     }
   };
 
-  const handleDownloadQuote = (quote: any) => {
+  const handleDownloadQuote = async (quote: any) => {
+    const { default: jsPDF } = await import('jspdf');
     const doc = new jsPDF();
     const tpProfile = tradespersonProfiles[quote.tradespersonId];
     
@@ -2142,7 +2142,7 @@ const libraries: any[] = ['places', 'geometry'];
     try {
       const tpProfile = tradespersonProfiles[activeQuote.tradespersonId] || profile;
       const invoiceData = await createOrGetJobInvoice(job, activeQuote, tpProfile, homeownerProfile);
-      downloadInvoicePDF(invoiceData);
+      await downloadInvoicePDF(invoiceData);
       toast.success(`Downloaded ${invoiceData.isBrandedPro ? "Pro Branded" : "Standard"} Invoice PDF (${invoiceData.invoiceNumber})`);
     } catch (err) {
       console.error("Error downloading PDF invoice:", err);

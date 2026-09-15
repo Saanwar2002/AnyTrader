@@ -1,6 +1,5 @@
 import { db, sendNotification } from "@/src/firebase";
 import { collection, doc, setDoc, getDoc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
-import jsPDF from "jspdf";
 import { calculatePayoutBreakdown, normalizeTraderTier } from "./stripeIntegrationService";
 import { exportInvoicesToSheets } from "./googleSheetsService";
 
@@ -183,7 +182,8 @@ export async function createOrGetJobInvoice(
 /**
  * Downloads a high-quality PDF invoice using jsPDF.
  */
-export function downloadInvoicePDF(invoice: InvoiceData): void {
+export async function downloadInvoicePDF(invoice: InvoiceData): Promise<void> {
+  const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const isPro = invoice.isBrandedPro;
 

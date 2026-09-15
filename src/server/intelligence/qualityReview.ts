@@ -11,9 +11,15 @@
 import { computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { QualityReviewInputSchema } from './schemas';
 import { CanonicalIntelligenceEvent, QualityReview } from './types';
+import { immutableIntelligenceStore, FirestoreDbLike } from './immutableStore';
 
 export class QualityReviewService {
   private reviews = new Map<string, QualityReview>();
+  private db: FirestoreDbLike | null = null;
+
+  public setFirestoreDb(db: FirestoreDbLike | null): void {
+    this.db = db;
+  }
 
   /**
    * Applies an admin quality review to a candidate intelligence record
@@ -104,6 +110,37 @@ export class QualityReviewService {
       review,
       auditEvent,
     };
+  }
+
+  /**
+   * Applies an admin quality review and transactionally persists it to Firestore (Fail-Closed production storage).
+   */
+  public async applyAndPersistReview(
+    input: {
+      targetCollection: 'intelligence_jobs' | 'intelligence_properties' | 'intelligence_events';
+      targetId: string;
+      action: 'approve' | 'reject' | 'correct';
+      reviewerId: string;
+      reason: string;
+      originalCandidate: Record<string, unknown>;
+      correctedResult?: Record<string, unknown>;
+    },
+    customDb?: FirestoreDbLike | null
+  ): Promise<{ review: QualityReview; auditEvent: CanonicalIntelligenceEvent }> {
+    const effectiveDb = customDb || this.db;
+    if (!effectiveDb) {
+      throw new Error('[QualityReviewService] Firestore database is not configured or ready. Operational failure (Fail Closed) — zero production memory fallback.');
+    }
+
+    const { review, auditEvent } = this.applyReview(input);
+
+    await immutableIntelligenceStore.persistQualityReview({
+      db: effectiveDb,
+      review,
+      auditEvent,
+    });
+
+    return { review, auditEvent };
   }
 
   /**

@@ -970,14 +970,23 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
 };
 
 const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized: missing token" });
+  let decodedToken = (req as any).user;
+  if (!decodedToken) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Unauthorized: missing token" });
+    }
+    const token = authHeader.split("Bearer ")[1];
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+      (req as any).user = decodedToken;
+    } catch (error) {
+      console.error("Admin Token err:", error);
+      return res.status(401).json({ error: "Unauthorized: invalid token" });
+    }
   }
-  const token = authHeader.split("Bearer ")[1];
+
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    
     // 1. Primary check: Firebase Custom User Claims
     const hasAdminClaim = decodedToken.admin === true || decodedToken.role === "admin" || decodedToken.role === "ecosystem_manager";
     
@@ -997,24 +1006,25 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
 
         // Auto-migrate verified admin by applying custom claim for future requests
         try {
+          const userRecord = await admin.auth().getUser(decodedToken.uid);
+          const currentClaims = userRecord.customClaims || {};
           await admin.auth().setCustomUserClaims(decodedToken.uid, {
-            ...decodedToken,
+            ...currentClaims,
             admin: true,
             role: role || "admin",
           });
         } catch (claimErr) {
-          console.warn("[Admin Claim Auto-Sync Note]:", (claimErr as any)?.message);
+          console.error("[Admin Claim Auto-Sync FAILED]", decodedToken.uid, claimErr);
         }
       } else {
         return res.status(403).json({ error: "Forbidden: database offline and no admin claim found" });
       }
     }
 
-    (req as any).user = decodedToken;
     next();
   } catch (error) {
-    console.error("Admin Token err:", error);
-    return res.status(401).json({ error: "Unauthorized: invalid token" });
+    console.error("Admin check err:", error);
+    return res.status(500).json({ error: "Internal server error during admin validation" });
   }
 };
 
@@ -1024,9 +1034,6 @@ const requireCronOrAdmin = (req: express.Request, res: express.Response, next: e
   const cronHeader = req.headers["x-cloudscheduler"] || req.headers["x-cron-secret"];
 
   if (cronSecret && (cronHeader === cronSecret || authHeader === `Bearer ${cronSecret}`)) {
-    return next();
-  }
-  if (process.env.NODE_ENV !== "production" && !cronSecret) {
     return next();
   }
   return requireAdmin(req, res, next);
@@ -1080,25 +1087,29 @@ async function startServer() {
   });
 
   // Rate limiters
+  const limitKeyGenerator = (req: express.Request) => {
+    return (req as any).user?.uid || req.ip || "unknown-ip";
+  };
+
   const aiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 500,
-    validate: { trustProxy: false },
-    message: { error: "Too many AI requests from this IP, please try again after a minute" },
+    max: 50,
+    keyGenerator: limitKeyGenerator,
+    message: { error: "Too many AI requests, please try again after a minute" },
   });
   
   const paymentLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 500,
-    validate: { trustProxy: false },
-    message: { error: "Too many payment requests from this IP" },
+    max: 50,
+    keyGenerator: limitKeyGenerator,
+    message: { error: "Too many payment requests, please try again after a minute" },
   });
   
   const generalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
-    max: 10000, // Generous capacity for rapid navigation, polling, and iframe reloading
-    validate: { trustProxy: false },
-    message: { error: "Too many requests from this IP" },
+    max: 1000, // Bounded capacity for rapid navigation, polling, and iframe reloading
+    keyGenerator: limitKeyGenerator,
+    message: { error: "Too many requests, please try again after a minute" },
   });
 
   // Apply general limiter to all API routes

@@ -229,6 +229,7 @@ service cloud.firestore {
         resource.data.get('passengerId', '') == request.auth.uid || 
         resource.data.get('riderId', '') == request.auth.uid || 
         rideId == request.auth.uid || 
+        resource.data.get('isOnline', false) == true ||
         isAdmin()
       );
       allow write: if isSignedIn() && (
@@ -303,17 +304,17 @@ service cloud.firestore {
     }
 
     match /materials_arbitrage_alerts/{alertId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     match /demand_surge_forecasts/{forecastId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
     match /platform_counters/{counterId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 
@@ -1065,7 +1066,7 @@ service cloud.firestore {
     }
 
     match /platform_settings/{settingId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin();
     }
 

@@ -110,15 +110,21 @@ export default function DispatchEngine() {
 
   // 1. Fetch real-time live ride requests and available drivers from Firestore
   useEffect(() => {
-    const unsubRides = onSnapshot(collection(db, "ride_requests"), (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setDbRides(list);
-    });
+    const unsubRides = onSnapshot(
+      query(collection(db, "ride_requests"), where("status", "in", ["pending", "searching", "offered", "draft"])),
+      (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setDbRides(list);
+      }
+    );
 
-    const unsubDrivers = onSnapshot(collection(db, "live_tracking"), (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setDbDrivers(list);
-    });
+    const unsubDrivers = onSnapshot(
+      query(collection(db, "live_tracking"), where("isOnline", "==", true)),
+      (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setDbDrivers(list);
+      }
+    );
 
     const unsubConfig = onSnapshot(doc(db, "platform_config", "rides"), (docSnap) => {
       setIsLoadingConfig(false);

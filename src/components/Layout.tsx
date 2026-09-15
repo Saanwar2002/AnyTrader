@@ -215,7 +215,8 @@ export default function Layout() {
     const q = query(
       collection(db, "notifications"),
       where("userId", "==", user.uid),
-      where("read", "==", false)
+      where("read", "==", false),
+      limit(100)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
