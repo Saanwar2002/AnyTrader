@@ -1071,5 +1071,147 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
         )
       ).rejects.toThrow(/Malicious update rejected: caller-supplied attempt/);
     });
+
+    it('G. recordRunStarted() enforces deterministic runId matching', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+
+      // Correct runId
+      const correctRunId = buildProcessingRunId('task_det', 1, 'lease_det');
+      const started = await store.recordRunStarted(
+        {
+          runId: correctRunId,
+          taskId: 'task_det',
+          attempt: 1,
+          leaseId: 'lease_det',
+          aggregateType: 'job',
+          aggregateId: 'j1',
+          taskType: 'job_extraction',
+          workerId: 'w1',
+        },
+        mockDb as any
+      );
+      expect(started.runId).toBe(correctRunId);
+
+      // Mismatched runId
+      await expect(
+        store.recordRunStarted(
+          {
+            runId: 'mismatched_run_id',
+            taskId: 'task_det',
+            attempt: 1,
+            leaseId: 'lease_det',
+            aggregateType: 'job',
+            aggregateId: 'j1',
+            taskType: 'job_extraction',
+            workerId: 'w1',
+          },
+          mockDb as any
+        )
+      ).rejects.toThrow(/Deterministic identity mismatch/);
+
+      // Missing taskId/attempt/leaseId
+      await expect(
+        store.recordRunStarted(
+          {
+            attempt: 1,
+            leaseId: 'lease_det',
+          },
+          mockDb as any
+        )
+      ).rejects.toThrow(/Field 'taskId' is required/);
+    });
+
+    it('H. execution metadata keys cannot be overwritten by recordRunSucceeded()', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_meta_s', 1, 'lease_meta_s');
+
+      await store.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_meta_s',
+          attempt: 1,
+          leaseId: 'lease_meta_s',
+          aggregateType: 'job',
+          aggregateId: 'j1',
+          taskType: 'job_extraction',
+          workerId: 'w1',
+          provider: 'google_genai',
+          modelVersion: 'gemini-3.8-flash',
+          promptVersion: 'default_v8.1',
+          pipelineVersion: 'v8.1.0',
+          schemaVersion: 'v8.1.0',
+          pricingVersion: '2026-09-v1',
+        },
+        mockDb as any
+      );
+
+      // Attempt to modify provider
+      await expect(
+        store.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'w1',
+            leaseId: 'lease_meta_s',
+            provider: 'hacked_provider',
+          } as any,
+          mockDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied provider/);
+
+      // Attempt to modify modelVersion
+      await expect(
+        store.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'w1',
+            leaseId: 'lease_meta_s',
+            modelVersion: 'gpt-4o-malicious',
+          } as any,
+          mockDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied modelVersion/);
+    });
+
+    it('I. execution metadata keys cannot be overwritten by recordRunFailed()', async () => {
+      const mockDb = createMockFirestore();
+      const store = new IntelligenceProcessingRunStore();
+      const runId = buildProcessingRunId('task_meta_f', 1, 'lease_meta_f');
+
+      await store.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_meta_f',
+          attempt: 1,
+          leaseId: 'lease_meta_f',
+          aggregateType: 'job',
+          aggregateId: 'j1',
+          taskType: 'job_extraction',
+          workerId: 'w1',
+          provider: 'google_genai',
+          modelVersion: 'gemini-3.8-flash',
+          promptVersion: 'default_v8.1',
+          pipelineVersion: 'v8.1.0',
+          schemaVersion: 'v8.1.0',
+          pricingVersion: '2026-09-v1',
+        },
+        mockDb as any
+      );
+
+      // Attempt to modify pricingVersion on failure
+      await expect(
+        store.recordRunFailed(
+          runId,
+          new Error('Simulated failure'),
+          {
+            workerId: 'w1',
+            leaseId: 'lease_meta_f',
+            pricingVersion: 'free-pricing-hack',
+          } as any,
+          mockDb as any
+        )
+      ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+    });
   });
 });

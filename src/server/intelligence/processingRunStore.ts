@@ -296,11 +296,24 @@ export class IntelligenceProcessingRunStore {
       throw new Error('[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed).');
     }
 
-    const runId = runInput.runId || (
-      runInput.taskId && runInput.attempt && runInput.leaseId
-        ? buildProcessingRunId(runInput.taskId, runInput.attempt, runInput.leaseId)
-        : undefined
-    );
+    if (!runInput.taskId) {
+      throw new ProcessingRunValidationError("Field 'taskId' is required to start a processing run");
+    }
+    if (runInput.attempt === undefined || runInput.attempt === null) {
+      throw new ProcessingRunValidationError("Field 'attempt' is required to start a processing run");
+    }
+    if (!runInput.leaseId) {
+      throw new ProcessingRunValidationError("Field 'leaseId' is required to start a processing run");
+    }
+
+    const expectedRunId = buildProcessingRunId(runInput.taskId, runInput.attempt, runInput.leaseId);
+    if (runInput.runId !== undefined && runInput.runId !== null && runInput.runId !== expectedRunId) {
+      throw new ProcessingRunValidationError(
+        `Deterministic identity mismatch: supplied runId '${runInput.runId}' does not match expected deterministic runId '${expectedRunId}'`
+      );
+    }
+
+    const runId = expectedRunId;
 
     const now = new Date().toISOString();
     const validated = validateProcessingRunRecord({
@@ -395,6 +408,12 @@ export class IntelligenceProcessingRunStore {
         'taskType',
         'startedAt',
         'createdAt',
+        'provider',
+        'modelVersion',
+        'promptVersion',
+        'pipelineVersion',
+        'schemaVersion',
+        'pricingVersion',
       ];
       for (const key of identityKeys) {
         if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
@@ -437,7 +456,7 @@ export class IntelligenceProcessingRunStore {
         errorClass: undefined,
         retryable: undefined,
         sanitizedDiagnostic: undefined,
-        // Override with strictly authoritative server-owned identity
+        // Override with strictly authoritative server-owned identity and execution metadata
         runId,
         taskId: existing.taskId,
         attempt: existing.attempt,
@@ -448,6 +467,12 @@ export class IntelligenceProcessingRunStore {
         createdAt: existing.createdAt,
         workerId: existing.workerId,
         leaseId: existing.leaseId,
+        provider: existing.provider,
+        modelVersion: existing.modelVersion,
+        promptVersion: existing.promptVersion,
+        pipelineVersion: existing.pipelineVersion,
+        schemaVersion: existing.schemaVersion,
+        pricingVersion: existing.pricingVersion,
       };
 
       const validated = validateProcessingRunRecord(mergedRaw);
@@ -507,6 +532,12 @@ export class IntelligenceProcessingRunStore {
           'taskType',
           'startedAt',
           'createdAt',
+          'provider',
+          'modelVersion',
+          'promptVersion',
+          'pipelineVersion',
+          'schemaVersion',
+          'pricingVersion',
         ];
         for (const key of identityKeys) {
           if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== existing[key]) {
@@ -558,7 +589,7 @@ export class IntelligenceProcessingRunStore {
           errorClass: errorClassification.errorClass,
           retryable: errorClassification.retryable,
           sanitizedDiagnostic: errorClassification.sanitizedDiagnostic,
-          // Override with strictly authoritative server-owned identity
+          // Override with strictly authoritative server-owned identity and execution metadata
           runId,
           taskId: existing.taskId,
           attempt: existing.attempt,
@@ -569,6 +600,12 @@ export class IntelligenceProcessingRunStore {
           createdAt: existing.createdAt,
           workerId: existing.workerId,
           leaseId: existing.leaseId,
+          provider: existing.provider,
+          modelVersion: existing.modelVersion,
+          promptVersion: existing.promptVersion,
+          pipelineVersion: existing.pipelineVersion,
+          schemaVersion: existing.schemaVersion,
+          pricingVersion: existing.pricingVersion,
         };
 
         const validated = validateProcessingRunRecord(mergedRaw);
@@ -589,7 +626,11 @@ export class IntelligenceProcessingRunStore {
         attempt: updates?.attempt || 1,
         workerId: updates?.workerId || 'unknown_worker',
         leaseId: updates?.leaseId || 'unknown_lease',
-        startedAt: updates?.startedAt || now,
+        startedAt: updates?.startedAt || (
+          updates?.finishedAt
+            ? new Date(new Date(updates.finishedAt).getTime() - (updates.durationMs || 0)).toISOString()
+            : now
+        ),
         finishedAt: updates?.finishedAt || now,
         durationMs: updates?.durationMs !== undefined ? updates.durationMs : 0,
         errorCode: errorClassification.errorCode,
