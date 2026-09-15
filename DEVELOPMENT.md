@@ -7,7 +7,10 @@
   - **Zero Build/Lint Errors**: Verified zero TypeScript diagnostics via `lint_applet` and verified production build via `compile_applet`.
 
 ## 🧠 AnyTrader V8.1 — Structured Intelligence Foundation & Task Queue Hardening (September 14, 2026)
-- **V8.1 Task 13E — Real Firestore Emulator Verification for Task Ownership**:
+- **V8.1 Task 13E / Production Task 13 Verification Suite Hardening**:
+  - **Complete Verification Coverage (Zero Remaining Coverage Gaps)**:
+    - Added comprehensive end-to-end unit test coverage in `tests/unit/task13BTaskQueueRegression.test.ts` (Section 7: "Task 13E: End-to-End Stale Recovery Takeover & Old-Worker Rejection", 13/13 tests passing) and updated Firestore emulator tests in `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` (Invariants 4 & 5).
+    - Verified the complete production recovery lifecycle: Worker A lease expires -> `recoverStaleTasksAsync()` discovers the expired lease and recovers the task to `retrying` with `workerId` and `leaseId` cleared -> Worker B transactionally claims the task under a new valid lease (`attempts = 2`) -> Worker A's delayed execution finishes and attempts finalization (both success and failure paths) -> Worker A detects lease ownership loss and cleanly aborts finalization without throwing unhandled exceptions or corrupting Worker B's authoritative state in Firestore.
   - **Authoritative Firestore Emulator Ownership Suite (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
     - Validated all Task 13 task ownership invariants on the live Firebase Firestore emulator using real documents, real collections (`intelligence_tasks`), real transactions (`runTransaction`), and real transactional contention.
     - Verified Invariant 1: Primary lease ownership verification (workerId + leaseId) during successful task completion.

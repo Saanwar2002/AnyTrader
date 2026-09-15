@@ -1614,10 +1614,20 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       // Allow lease-A to expire naturally on real Firestore
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      // Worker B executes the actual transactional reclaim against the real Firestore emulator
+      // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
       const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
       queueB.setFirestoreDb(firestoreTaskDb as any);
 
+      // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
+      const recovered = await queueB.recoverStaleTasksAsync();
+      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+      // Verify the task transitioned to retrying and stripped stale workerId/leaseId
+      const snapRecovered = await getDoc(docRef);
+      expect(snapRecovered.data()!.status).toBe('retrying');
+      expect(snapRecovered.data()!.workerId).toBeUndefined();
+
+      // 2. Worker B transactionally claims the retrying task under a new valid lease
       const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
       expect(reclaimed).toBe(true);
 
@@ -1677,10 +1687,20 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       // Allow lease to expire naturally on real Firestore
       await new Promise((resolve) => setTimeout(resolve, 60));
 
-      // Worker B executes the actual transactional reclaim against the real Firestore emulator
+      // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
       const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
       queueB.setFirestoreDb(firestoreTaskDb as any);
 
+      // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
+      const recovered = await queueB.recoverStaleTasksAsync();
+      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+      // Verify the task transitioned to retrying and stripped stale workerId/leaseId
+      const snapRecovered = await getDoc(docRef);
+      expect(snapRecovered.data()!.status).toBe('retrying');
+      expect(snapRecovered.data()!.workerId).toBeUndefined();
+
+      // 2. Worker B transactionally claims the retrying task under a new valid lease
       const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
       expect(reclaimed).toBe(true);
 

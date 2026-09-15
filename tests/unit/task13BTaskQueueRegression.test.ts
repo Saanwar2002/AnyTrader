@@ -632,4 +632,236 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
       expect(snapFail.leaseId).toBe('lease-B');
     });
   });
+
+  // ==========================================================
+  // 7. TASK 13E: END-TO-END STALE RECOVERY TAKEOVER & OLD-WORKER REJECTION
+  // ==========================================================
+  describe('7. Task 13E: End-to-End Stale Recovery Takeover & Old-Worker Rejection', () => {
+    it('exercises full production recovery: Worker A lease expires -> recoverStaleTasksAsync() reclaims -> Worker B claims -> Worker A late success cannot overwrite', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskId = 'task_13e_stale_recovery_succ_takeover';
+      const nowIso = new Date().toISOString();
+      const expiredLeaseTime = new Date(Date.now() - 60000).toISOString();
+
+      // Seed task initially pending ready for Worker A
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            where(field: string, op: string, val: any) {
+              return {
+                get: async () => {
+                  const matchingDocs = Array.from(mockDocs.entries())
+                    .filter(([_, d]) => d[field] === val)
+                    .map(([id, d]) => ({
+                      id,
+                      data: () => d,
+                    }));
+                  return {
+                    empty: matchingDocs.length === 0,
+                    docs: matchingDocs,
+                  };
+                },
+              };
+            },
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
+      queueA.setFirestoreDb(mockDb as any);
+
+      let releaseHandlerResolve: any;
+      let handlerStartedResolve: any;
+      const releaseHandlerPromise = new Promise((resolve) => {
+        releaseHandlerResolve = resolve;
+      });
+      const handlerStartedPromise = new Promise((resolve) => {
+        handlerStartedResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        handlerStartedResolve();
+        // Wait for recovery scan and Worker B takeover before finishing
+        await releaseHandlerPromise;
+        return { extracted: true, result: 'late_success_from_stale_worker_A' };
+      });
+
+      // 1. Worker A begins execution on the task
+      const execPromise = queueA.executeTask(taskId, 'worker-A');
+      await handlerStartedPromise;
+
+      // Allow lease to expire
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      // 2. Recovery Worker / Queue B runs recoverStaleTasksAsync()
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(mockDb as any);
+
+      const recovered = await queueB.recoverStaleTasksAsync();
+      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+      // Verify the task was recovered: status is 'retrying', and workerId/leaseId are stripped
+      const intermediateDoc = mockDocs.get(taskId);
+      expect(intermediateDoc.status).toBe('retrying');
+      expect(intermediateDoc.workerId).toBeUndefined();
+      expect(intermediateDoc.leaseId).toBeUndefined();
+      expect(intermediateDoc.errorCode).toBe('STALE_LEASE_RECOVERED');
+
+      // 3. Worker B claims the task transactionally under a fresh lease
+      const claimedB = await queueB.claimTaskTransactional(taskId, 'worker-B', 60000);
+      expect(claimedB).toBe(true);
+
+      const claimedDoc = mockDocs.get(taskId);
+      expect(claimedDoc.status).toBe('processing');
+      expect(claimedDoc.workerId).toBe('worker-B');
+      expect(claimedDoc.leaseId).toBeDefined();
+      expect(claimedDoc.attempts).toBe(2);
+
+      // 4. Release Worker A's late-finishing handler
+      releaseHandlerResolve();
+      const resA = await execPromise;
+
+      // Worker A must abort finalization because ownership was lost
+      expect(resA.workerId).toBe('worker-B');
+      expect(resA.status).toBe('processing');
+
+      // Final authoritative state in Firestore must remain Worker B's active processing lease
+      const finalDoc = mockDocs.get(taskId);
+      expect(finalDoc.status).toBe('processing');
+      expect(finalDoc.workerId).toBe('worker-B');
+      expect(finalDoc.attempts).toBe(2);
+      expect(finalDoc.completedAt).toBeUndefined();
+    });
+
+    it('exercises full production recovery: Worker A lease expires -> recoverStaleTasksAsync() reclaims -> Worker B claims -> Worker A late failure cannot overwrite', async () => {
+      const mockDocs = new Map<string, any>();
+      const taskId = 'task_13e_stale_recovery_fail_takeover';
+      const nowIso = new Date().toISOString();
+      const expiredLeaseTime = new Date(Date.now() - 60000).toISOString();
+
+      // Seed task initially pending ready for Worker A
+      mockDocs.set(taskId, {
+        taskId,
+        taskType: 'job_extraction',
+        status: 'pending',
+        attempts: 0,
+        maxAttempts: 3,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+
+      const mockDb = {
+        collection(name: string) {
+          return {
+            where(field: string, op: string, val: any) {
+              return {
+                get: async () => {
+                  const matchingDocs = Array.from(mockDocs.entries())
+                    .filter(([_, d]) => d[field] === val)
+                    .map(([id, d]) => ({
+                      id,
+                      data: () => d,
+                    }));
+                  return {
+                    empty: matchingDocs.length === 0,
+                    docs: matchingDocs,
+                  };
+                },
+              };
+            },
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+              };
+            },
+          };
+        },
+        runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
+          const transaction = {
+            get: async (ref: any) => ref.get(),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(transaction);
+        },
+      };
+
+      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
+      queueA.setFirestoreDb(mockDb as any);
+
+      let releaseHandlerResolve: any;
+      let handlerStartedResolve: any;
+      const releaseHandlerPromise = new Promise((resolve) => {
+        releaseHandlerResolve = resolve;
+      });
+      const handlerStartedPromise = new Promise((resolve) => {
+        handlerStartedResolve = resolve;
+      });
+
+      queueA.registerHandler('job_extraction', async () => {
+        handlerStartedResolve();
+        await releaseHandlerPromise;
+        throw new Error('Late failure from stale worker A');
+      });
+
+      // 1. Worker A begins execution on the task
+      const execPromise = queueA.executeTask(taskId, 'worker-A');
+      await handlerStartedPromise;
+
+      // Allow lease to expire
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      // 2. Recovery Worker / Queue B runs recoverStaleTasksAsync()
+      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+      queueB.setFirestoreDb(mockDb as any);
+
+      const recovered = await queueB.recoverStaleTasksAsync();
+      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+      // 3. Worker B claims the task transactionally under a fresh lease
+      const claimedB = await queueB.claimTaskTransactional(taskId, 'worker-B', 60000);
+      expect(claimedB).toBe(true);
+
+      // 4. Release Worker A's late failing handler
+      releaseHandlerResolve();
+      const resA = await execPromise;
+
+      // Worker A must abort finalization because ownership was lost
+      expect(resA.workerId).toBe('worker-B');
+      expect(resA.status).toBe('processing');
+
+      // Final authoritative state must remain Worker B's active processing lease with no error from Worker A
+      const finalDoc = mockDocs.get(taskId);
+      expect(finalDoc.status).toBe('processing');
+      expect(finalDoc.workerId).toBe('worker-B');
+      expect(finalDoc.attempts).toBe(2);
+      expect(finalDoc.lastError).not.toContain('stale worker A');
+      expect(finalDoc.lastError).toBe('Lease expired / Worker timeout recovered');
+    });
+  });
 });
