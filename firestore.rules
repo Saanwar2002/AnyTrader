@@ -85,7 +85,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /dynamic_search_synonyms/{synonymId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow write: if isAdmin() || (isSignedIn() && (request.resource.data.get('addedBy', '') == request.auth.uid || resource.data.get('addedBy', '') == request.auth.uid));
     }
     match /unmatched_search_telemetry/{telemetryId} {
@@ -409,7 +409,7 @@ service cloud.firestore {
 
     match /search_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if true;
+      allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
 

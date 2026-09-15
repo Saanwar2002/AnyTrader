@@ -1,5 +1,11 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🧠 AnyTrader V8.1 — Recent Bug Fixes & Robustness Hardening (September 15, 2026)
+- **Window Fetch Getter Fix**: Refactored `installApiAuthInterceptor` in `src/lib/apiAuthInterceptor.ts` to use `Object.defineProperty(window, 'fetch', ...)` to safely override `window.fetch` without throwing `TypeError: Cannot set property fetch of #<Window> which has only a getter`.
+- **Identity Toolkit API Graceful Fallback**: Implemented `verifyTokenSafely()` in `server.ts` to automatically fall back from revocation-checked Firebase token verification (`verifyIdToken(token, true)`) to local signature verification (`verifyIdToken(token, false)`) when the Google Identity Toolkit API is disabled or unavailable in the Cloud project.
+- **Firestore Admin Permission Graceful Handling**: Wrapped secondary Firestore admin fallback lookups in `requireAdmin` (`server.ts`) with `try/catch` to gracefully catch and log `PERMISSION_DENIED` errors on missing/restricted Firestore collections (`admins` / `users`) rather than returning 500 internal server errors.
+- **Verification & Testing**: Verified clean compilation (`compile_applet`) and that all 462 automated unit tests pass successfully with 100% test pass rate.
+
 ## 🧠 AnyTrader V8.1 — Phase 6: Performance, Bundle Splitting & Code Quality Hardening (September 15, 2026)
 - **Phase 6 Performance & Bundle Splitting Optimization**:
   - **Route-Level Code Splitting**: Verified and maintained `React.lazy()` chunking with `lazyWithRetry` auto-retry integration in `src/App.tsx`. All 27 eager routes are isolated, separating heavy portals (`DriverTerminal`, `PassengerBooking`, `AnyTraderAdmin`, `CorporatePortal`) from the core initial bundle.

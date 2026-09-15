@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
+import crypto from "crypto";
 
 import dotenv from "dotenv";
 import admin from "firebase-admin";
@@ -954,6 +955,18 @@ function getStripe(): Stripe {
 }
 
 // --- Authentication Middlewares ---
+async function verifyTokenSafely(token: string) {
+  try {
+    return await admin.auth().verifyIdToken(token, true);
+  } catch (err: any) {
+    if (err?.message?.includes("identitytoolkit.googleapis.com") || err?.code === "auth/internal-error" || err?.message?.includes("SERVICE_DISABLED")) {
+      console.warn("[Auth Warning] Identity Toolkit API disabled; falling back to local signature verification without revocation check.");
+      return await admin.auth().verifyIdToken(token, false);
+    }
+    throw err;
+  }
+}
+
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -961,11 +974,11 @@ const requireAuth = async (req: express.Request, res: express.Response, next: ex
   }
   const token = authHeader.split("Bearer ")[1];
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
+    const decodedToken = await verifyTokenSafely(token);
     (req as any).user = decodedToken;
     next();
   } catch (error) {
-    console.error("Token err:", error); return res.status(401).json({ error: "Unauthorized: invalid token" });
+    console.error("Token err:", error); return res.status(401).json({ error: "Unauthorized: invalid or revoked token" });
   }
 };
 
@@ -978,11 +991,11 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
     }
     const token = authHeader.split("Bearer ")[1];
     try {
-      decodedToken = await admin.auth().verifyIdToken(token);
+      decodedToken = await verifyTokenSafely(token);
       (req as any).user = decodedToken;
     } catch (error) {
       console.error("Admin Token err:", error);
-      return res.status(401).json({ error: "Unauthorized: invalid token" });
+      return res.status(401).json({ error: "Unauthorized: invalid or revoked token" });
     }
   }
 
@@ -993,14 +1006,26 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
     if (!hasAdminClaim) {
       // 2. Secondary check / migration fallback: Firestore admins & users collections
       if (db) {
-        const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
+        let isAdminFound = false;
         let role = null;
-        if (!adminDoc.exists) {
-          const userDoc = await db.collection("users").doc(decodedToken.uid).get();
-          role = userDoc.data()?.role;
+        try {
+          const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
+          if (adminDoc.exists) {
+            isAdminFound = true;
+          } else {
+            const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+            role = userDoc.data()?.role;
+            if (role === "admin" || role === "ecosystem_manager") {
+              isAdminFound = true;
+            }
+          }
+        } catch (dbErr: any) {
+          if (!dbErr?.message?.includes("PERMISSION_DENIED")) {
+            console.warn("[Admin Check Warning] Firestore fallback lookup failed due to permissions/network:", dbErr);
+          }
         }
 
-        if (!adminDoc.exists && role !== "admin" && role !== "ecosystem_manager") {
+        if (!isAdminFound) {
           return res.status(403).json({ error: "Forbidden: requires admin privileges" });
         }
 
@@ -1028,12 +1053,26 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
   }
 };
 
+const timingSafeEqualStr = (a: string, b: string) => {
+  try {
+    const ab = Buffer.from(a);
+    const bb = Buffer.from(b);
+    return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+  } catch {
+    return false;
+  }
+};
+
 const requireCronOrAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.authorization;
-  const cronHeader = req.headers["x-cloudscheduler"] || req.headers["x-cron-secret"];
+  if (!cronSecret && process.env.NODE_ENV === "production") {
+    return res.status(500).json({ error: "Server misconfiguration: CRON_SECRET not set" });
+  }
 
-  if (cronSecret && (cronHeader === cronSecret || authHeader === `Bearer ${cronSecret}`)) {
+  const authHeader = req.headers.authorization;
+  const providedSecret = (req.headers["x-cron-secret"] as string) || (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined);
+
+  if (cronSecret && providedSecret && timingSafeEqualStr(providedSecret, cronSecret)) {
     return next();
   }
   return requireAdmin(req, res, next);
@@ -1069,6 +1108,7 @@ async function startServer() {
       if (isAllowed) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Credentials", "true");
+        res.setHeader("Vary", "Origin");
       }
     }
     res.setHeader(
@@ -1955,12 +1995,33 @@ async function startServer() {
         return res.status(403).json({ error: "Forbidden: Not your payment method" });
       }
 
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: "User profile not found" });
+      }
+
+      const stripeCustomerId = userDoc.data()?.stripeCustomerId;
+      if (!stripeCustomerId) {
+        return res.status(400).json({ error: "No Stripe customer found for this profile" });
+      }
+
       let stripe;
       try {
         stripe = getStripe();
       } catch (e) {
         return res.json({ success: true, mock: true });
       }
+
+      // Verify ownership of the payment method in Stripe
+      const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (paymentMethod.customer !== stripeCustomerId) {
+        return res.status(403).json({ error: "Forbidden: Payment method does not belong to your account" });
+      }
+
       await stripe.paymentMethods.detach(paymentMethodId);
       res.json({ success: true });
     } catch (error: any) {
@@ -2545,7 +2606,17 @@ async function startServer() {
       }
 
       // Create a payout
-      const payoutAmount = amount ? amount * 100 : available; // Default to full available balance
+      const payoutAmount = amount !== undefined && amount !== null && amount !== "" 
+        ? Math.round(Number(amount) * 100) 
+        : available; // Default to full available balance
+
+      if (isNaN(payoutAmount) || payoutAmount <= 0) {
+        throw new BadRequestError("Invalid payout amount. Must be a positive number.");
+      }
+
+      if (payoutAmount > available) {
+        throw new BadRequestError(`Requested payout (£${(payoutAmount / 100).toFixed(2)}) exceeds available balance (£${(available / 100).toFixed(2)})`);
+      }
       
       const payout = await stripe.payouts.create({
         amount: payoutAmount,

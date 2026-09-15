@@ -23,7 +23,7 @@ export function installApiAuthInterceptor(): void {
 
   const originalFetch = window.fetch;
 
-  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const interceptedFetch = async function (input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     try {
       let rawUrl = '';
       if (typeof input === 'string') {
@@ -113,8 +113,23 @@ export function installApiAuthInterceptor(): void {
       console.warn('[API Interceptor] Error during fetch preprocessing:', interceptorErr);
     }
 
-    return originalFetch.apply(this, [input, init]);
+    return originalFetch.apply(window, [input, init]);
   };
+
+  try {
+    Object.defineProperty(window, 'fetch', {
+      writable: true,
+      configurable: true,
+      value: interceptedFetch,
+    });
+  } catch {
+    try {
+      (window as any).fetch = interceptedFetch;
+    } catch (err) {
+      console.warn('[API Interceptor] Could not override window.fetch:', err);
+      return;
+    }
+  }
 
   isInterceptorInstalled = true;
   console.log('[API Interceptor] Global API Auth Interceptor successfully mounted.');
