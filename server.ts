@@ -181,8 +181,11 @@ async function getCachedConfig(docId: string): Promise<any> {
                 resolve();
               }
             },
-            (error) => {
-              console.error(`Real-time config listener error for ${docId}:`, error);
+            (error: any) => {
+              const msg = error?.message || String(error);
+              if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+                console.error(`Real-time config listener error for ${docId}:`, error);
+              }
               if (!isResolved) {
                 isResolved = true;
                 resolve();
@@ -190,8 +193,11 @@ async function getCachedConfig(docId: string): Promise<any> {
             }
           );
           cacheUnsubscribers.set(docId, unsub);
-        } catch (err) {
-          console.error(`Failed to register real-time config listener for ${docId}:`, err);
+        } catch (err: any) {
+          const msg = err?.message || String(err);
+          if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+            console.error(`Failed to register real-time config listener for ${docId}:`, err);
+          }
           isResolved = true;
           resolve();
         }
@@ -245,13 +251,19 @@ async function runDailyAggregation() {
           netProfit: totalRevenue - totalSpend,
           updatedAt: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
-      } catch (e) {
-        console.error(`Error updating profitability for ${uid}:`, e);
+      } catch (e: any) {
+        const msg = e?.message || String(e);
+        if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+          console.error(`Error updating profitability for ${uid}:`, e);
+        }
       }
     }
     console.log("Daily profitability aggregation completed.");
-  } catch (error) {
-    console.error("Error in daily aggregation:", error);
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+      console.error("Error in daily aggregation:", error);
+    }
   }
 }
 
@@ -321,8 +333,11 @@ async function processSmsQueue() {
         await docSnap.ref.update({ status: "sent", sentAt: admin.firestore.FieldValue.serverTimestamp(), mockStatus: true });
       }
     }
-  } catch (err) {
-    console.error("SMS Queue Processor Error:", err);
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+      console.error("SMS Queue Processor Error:", err);
+    }
   }
 }
 
@@ -419,7 +434,10 @@ async function runDriverPayoutOrchestration() {
     console.log(`Automated payout orchestration complete. Processed ${processedCount} payouts totaling £${totalDisbursed.toFixed(2)}.`);
     return { success: true, processedCount, totalDisbursed };
   } catch (error: any) {
-    console.error("Orchestration error:", error.message);
+    const msg = error?.message || String(error);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+      console.error("Orchestration error:", error.message);
+    }
     return { success: false, error: error.message };
   }
 }
@@ -434,8 +452,11 @@ async function runConsultancyRecurringSessionCreator() {
       .get();
       
      console.log(`Checked ${recurringEventsSnapshot.size} recurring events.`);
-  } catch (error) {
-     console.error("Error in recurring session creator:", error);
+  } catch (error: any) {
+     const msg = error?.message || String(error);
+     if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+       console.error("Error in recurring session creator:", error);
+     }
   }
 }
 
@@ -446,8 +467,11 @@ async function runConsultancyScoreRecalculator() {
   try {
      const usersSnapshot = await db.collection("users").where("role", "==", "consultant").get();
      console.log(`Recalculated match scores for ${usersSnapshot.size} consultants.`);
-  } catch (error) {
-     console.error("Error recalculating match scores:", error);
+  } catch (error: any) {
+     const msg = error?.message || String(error);
+     if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+       console.error("Error recalculating match scores:", error);
+     }
   }
 }
 
@@ -464,8 +488,11 @@ async function runComplianceGuardianAudit() {
       status: "success",
       triggerSource: "autonomous_cron"
     });
-  } catch (e) {
-    console.warn("Compliance guardian audit error:", e);
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+      console.warn("Compliance guardian audit error:", e);
+    }
   }
 }
 
@@ -482,8 +509,11 @@ async function runSentinelAnomalyScan() {
       status: "success",
       triggerSource: "autonomous_cron"
     });
-  } catch (e) {
-    console.warn("Sentinel anomaly scan error:", e);
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+      console.warn("Sentinel anomaly scan error:", e);
+    }
   }
 }
 
