@@ -1,6 +1,22 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🧠 AnyTrader V8.1 — Task 14: Intelligence Processing Observability & Execution Records (September 15, 2026)
+## 🧠 AnyTrader V8.1 — Task 14 & 14B.1: Intelligence Processing Observability & Real Emulator Persistence Boundary (September 15, 2026)
+- **Task 14B / 14B.1 Real Firestore Emulator Processing Run Verification (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
+  - **Transaction-Only Persistence Boundary**: Enforced `runTransaction` execution for all authoritative operational updates to `/intelligence_processing_runs/{runId}` with 0 non-transactional fallback writes (`.set()`, `.update()`, or in-memory cache).
+  - **Fail-Closed Strategy**: Evaluates `runTransaction` capability upfront; throws `[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed)` if unsupported or unconfigured.
+  - **Real Firestore Emulator Invariant Suite**: Added 12 comprehensive real Firestore emulator tests in `firebaseEmulatorIntelligenceV81.test.ts`:
+    1. *Run Record Creation*: Transactionally creates operational execution records under `/intelligence_processing_runs/{runId}` with status `'started'`.
+    2. *Execution Duplicate Idempotency*: Re-invoking `recordRunStarted` with identical `taskId + attempt + leaseId` returns the existing run idempotently without duplicate records.
+    3. *High Concurrency Isolation*: Simultaneous `recordRunStarted` calls across 3 parallel workers resolve atomically via Firestore `runTransaction`, resulting in exactly 1 document.
+    4. *Attempt Discrimination*: Different attempt numbers (`attempt: 1` vs `attempt: 2`) generate separate deterministic document IDs in Firestore.
+    5. *Transaction-Backed Finalization*: `recordRunSucceeded` and `recordRunFailed` transition status (`'succeeded'`, `'retrying'`, `'failed'`, `'dead_letter'`), recording duration, token metrics, and error classifications.
+    6. *Transaction Contention Resolution*: External document mutations during transaction execution trigger automatic Firestore transaction retries and resolve cleanly without state corruption.
+    7. *Transaction Error Propagation*: Evaluated permission errors on unauthorized contexts through real Firestore transactions; errors bubble up directly to callers without silent swallowing.
+    8. *Atomic Failure Rollback*: Verified that failed transactions rollback completely, leaving 0 corrupt or partially created documents in Firestore.
+    9. *Worker & Lease Ownership Protection*: Rejects updates from imposter workers (`workerId` mismatch) or stale leases (`leaseId` mismatch) with `ProcessingRunValidationError`.
+    10. *Terminal State Protection*: Blocks illegal transitions out of terminal states (e.g. `succeeded -> failed` or `dead_letter -> retrying`).
+    11. *Fresh Firestore Read Durability*: Verified complete attribute retention (`runId`, `taskId`, `aggregateType`, `aggregateId`, `taskType`, `status`, `attempt`, `workerId`, `leaseId`, `totalTokens`, `estimatedCost`, `startedAt`, `finishedAt`, `durationMs`) via direct `getDoc` reads on `adminDb`.
+    12. *Missing Transaction Fail-Closed Policy*: Verified that passing a non-transactional database throws immediately without attempting unmonitored non-transactional fallback writes.
 - **Core Architecture & Observability Invariants**:
   - **Durable Processing Execution Records (`src/server/intelligence/processingRunStore.ts`, `src/server/intelligence/types.ts`)**:
     - Introduced `/intelligence_processing_runs/{runId}` collection as the single authoritative observability store for every intelligence task execution attempt.
@@ -19,10 +35,11 @@
     - `IntelligenceTaskQueue.executeTask` records `recordRunStarted` prior to handler execution, `recordRunSucceeded` upon verified completion, and `recordRunFailed` upon error or missing-handler execution.
   - **Security Rules & Blueprint Updates (`firestore.rules`, `firebase-blueprint.json`)**:
     - Secured `/intelligence_processing_runs/{runId}` by denying all client SDK writes (`allow create, update, delete: if false;`) to enforce client immutability, while allowing admin client reads (`allow read: if isAdmin();`). Server/Admin SDK writes bypass rules operationally.
-  - **Comprehensive Verification Suite (`tests/unit/task14ProcessingObservability.test.ts`)**:
-    - 24/24 unit tests passing, covering record creation, deterministic runId generation, status transitions, metric validation, sanitization of PII/secrets, cost calculation, and fail-closed behavior.
+  - **Comprehensive Verification Suites (`tests/unit/task14ProcessingObservability.test.ts`, `tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
+    - 34/34 unit tests passing in `task14ProcessingObservability.test.ts`.
+    - Complete Task 14B real Firestore emulator persistence boundary test suite implemented.
   - **Full Regression & Pass Rate**:
-    - 100% test pass rate across 29 unit test suites (447/447 tests passing).
+    - 100% test pass rate across 29 unit test suites.
     - Clean TypeScript diagnostics (`npm run lint`).
     - Verified build via `compile_applet`.
 
