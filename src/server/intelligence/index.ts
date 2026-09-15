@@ -37,4 +37,7 @@ export * from './canonicalSchema';
 export * from './canonicalizer';
 export * from './aiCandidateSchema';
 export * from './aiCandidateBoundary';
+export * from './processingErrorClassifier';
+export * from './costModel';
+export * from './processingRunStore';
 

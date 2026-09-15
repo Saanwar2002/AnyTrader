@@ -4311,6 +4311,12 @@
         "$ref": "#/entities/Job"
       },
       "description": "Admin quality review and human correction records with cryptographic audit provenance."
+    },
+    "/intelligence_processing_runs/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Durable intelligence task execution observability and processing run records."
     }
   }
 }

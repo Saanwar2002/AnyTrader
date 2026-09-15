@@ -18,6 +18,7 @@
 import { createHash } from 'node:crypto';
 import { IntelligenceTask, TaskStatus, TaskType, IntelligenceAggregateType } from './types';
 import { AICandidateSecurityError } from './aiCandidateBoundary';
+import { processingRunStore, buildProcessingRunId, setGlobalProcessingRunDb } from './processingRunStore';
 
 export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unknown>>;
 
@@ -173,6 +174,7 @@ export class IntelligenceTaskQueue {
 
   public setFirestoreDb(db: FirestoreTaskDb | null): void {
     this.firestoreDb = db;
+    setGlobalProcessingRunDb(db as any);
   }
 
   public getFirestoreDb(): FirestoreTaskDb | null {
@@ -674,6 +676,48 @@ export class IntelligenceTaskQueue {
     }
 
     const activeLeaseId = task.leaseId || claimLeaseId;
+    const currentAttempt = task.attempts || 1;
+    const runId = buildProcessingRunId(taskId, currentAttempt, activeLeaseId);
+    const startIso = new Date().toISOString();
+    const effectiveAggregateType = task.aggregateType || 'job';
+    const effectiveAggregateId = task.aggregateId || taskId;
+
+    // Durable Processing Run: Record attempt started (Fail Closed in Production)
+    try {
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId,
+          aggregateType: effectiveAggregateType,
+          aggregateId: effectiveAggregateId,
+          taskType: task.taskType || 'job_extraction',
+          status: 'started',
+          attempt: currentAttempt,
+          workerId: effectiveWorkerId,
+          leaseId: activeLeaseId,
+          startedAt: startIso,
+          pipelineVersion: task.pipelineVersion || 'v8.1.0',
+          schemaVersion: 'v8.1.0',
+          provider: task.provider || 'google_genai',
+          modelVersion: task.modelVersion || 'gemini-3.8-flash',
+          promptVersion: 'default_v8.1',
+          inputEvidenceCount: 0,
+          inputBytes: 0,
+          outputBytes: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCost: 0,
+          costCurrency: 'USD',
+          pricingVersion: '2026-09-v1',
+          createdAt: startIso,
+        },
+        this.firestoreDb
+      );
+    } catch (runStartErr) {
+      console.warn(`[IntelligenceTaskQueue] Warning recording started processing run ${runId}:`, runStartErr);
+    }
+
     const handler = this.handlers.get(task.taskType);
 
     if (!handler) {
@@ -683,6 +727,27 @@ export class IntelligenceTaskQueue {
         timestamp: new Date().toISOString(),
       };
       const nowIso = new Date().toISOString();
+
+      try {
+        await processingRunStore.recordRunFailed(
+          runId,
+          new Error(missingError.message),
+          {
+            taskId,
+            aggregateType: effectiveAggregateType,
+            aggregateId: effectiveAggregateId,
+            taskType: task.taskType || 'job_extraction',
+            attempt: currentAttempt,
+            workerId: effectiveWorkerId,
+            leaseId: activeLeaseId,
+            status: 'dead_letter',
+            finishedAt: nowIso,
+          },
+          this.firestoreDb
+        );
+      } catch (runFailErr) {
+        console.warn(`[IntelligenceTaskQueue] Warning recording failed run for missing handler:`, runFailErr);
+      }
 
       try {
         await this.firestoreDb.runTransaction(async (transaction: any) => {
@@ -739,7 +804,38 @@ export class IntelligenceTaskQueue {
       const nowIso = new Date().toISOString();
       const durationMs = Date.now() - startTime;
 
-      // SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
+      // Extract metrics safely for processing run record
+      const tokenUsage = (result as any)?.tokenUsage || (task as any)?.tokenUsage || {};
+      const inputTokens = typeof tokenUsage.inputTokens === 'number' ? tokenUsage.inputTokens : 0;
+      const outputTokens = typeof tokenUsage.outputTokens === 'number' ? tokenUsage.outputTokens : 0;
+      const totalTokens = typeof tokenUsage.totalTokens === 'number' ? tokenUsage.totalTokens : (inputTokens + outputTokens);
+      const inputBytes = typeof (result as any)?.inputBytes === 'number' ? (result as any).inputBytes : 0;
+      const outputBytes = typeof (result as any)?.outputBytes === 'number' ? (result as any).outputBytes : 0;
+      const inputEvidenceCount = Array.isArray((result as any)?.evidenceIds)
+        ? (result as any).evidenceIds.length
+        : (typeof (result as any)?.inputEvidenceCount === 'number' ? (result as any).inputEvidenceCount : 0);
+
+      // 1. Mark processing run succeeded in Firestore FIRST
+      try {
+        await processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            finishedAt: nowIso,
+            durationMs,
+            inputTokens,
+            outputTokens,
+            totalTokens,
+            inputBytes,
+            outputBytes,
+            inputEvidenceCount,
+          },
+          this.firestoreDb
+        );
+      } catch (recordSuccErr) {
+        console.warn(`[IntelligenceTaskQueue] Warning recording succeeded processing run ${runId}:`, recordSuccErr);
+      }
+
+      // 2. SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       await this.firestoreDb.runTransaction(async (transaction: any) => {
         const docSnap = await transaction.get(taskRef);
         if (!docSnap || !docSnap.exists) {
@@ -802,7 +898,30 @@ export class IntelligenceTaskQueue {
 
       const classificationValue = isExhausted ? 'MAX_RETRIES_EXCEEDED' : errorInfo.classification;
 
-      // FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
+      // 1. Record failure in processing run store
+      try {
+        await processingRunStore.recordRunFailed(
+          runId,
+          err,
+          {
+            taskId,
+            aggregateType: effectiveAggregateType,
+            aggregateId: effectiveAggregateId,
+            taskType: task.taskType || 'job_extraction',
+            attempt: attempts,
+            workerId: effectiveWorkerId,
+            leaseId: activeLeaseId,
+            status: newStatus,
+            durationMs,
+            finishedAt: nowIso,
+          },
+          this.firestoreDb
+        );
+      } catch (recordFailErr) {
+        console.warn(`[IntelligenceTaskQueue] Warning recording failed run ${runId}:`, recordFailErr);
+      }
+
+      // 2. FAILURE FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       try {
         await this.firestoreDb.runTransaction(async (transaction: any) => {
           const docSnap = await transaction.get(taskRef);

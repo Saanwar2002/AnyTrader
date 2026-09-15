@@ -506,3 +506,62 @@ export type CanonicalIntelligenceInput = Partial<
   generatedAt?: string;
 };
 
+/**
+ * Task 14: Processing Execution Records & Observability Types
+ */
+export type ProcessingRunStatus =
+  | 'started'
+  | 'succeeded'
+  | 'failed'
+  | 'retrying'
+  | 'dead_letter';
+
+export type ControlledErrorCode =
+  | 'validation_error'
+  | 'lineage_error'
+  | 'authentication_error'
+  | 'authorization_error'
+  | 'provider_error'
+  | 'rate_limit'
+  | 'timeout'
+  | 'network_error'
+  | 'storage_error'
+  | 'firestore_error'
+  | 'configuration_error'
+  | 'payload_too_large'
+  | 'unknown_error';
+
+export interface IntelligenceProcessingRun {
+  runId: string;
+  taskId: string;
+  aggregateType: IntelligenceAggregateType;
+  aggregateId: string;
+  taskType: TaskType | string;
+  status: ProcessingRunStatus;
+  attempt: number;
+  workerId: string;
+  leaseId: string;
+  startedAt: string;
+  finishedAt?: string;
+  durationMs?: number;
+  pipelineVersion: string;
+  schemaVersion: string;
+  provider: string;
+  modelVersion: string;
+  promptVersion: string;
+  inputEvidenceCount: number;
+  inputBytes: number;
+  outputBytes: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  costCurrency: string;
+  pricingVersion: string;
+  errorCode?: ControlledErrorCode | string;
+  errorClass?: string;
+  retryable?: boolean;
+  sanitizedDiagnostic?: string;
+  createdAt: string;
+}
+

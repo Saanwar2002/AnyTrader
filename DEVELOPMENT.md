@@ -1,5 +1,31 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🧠 AnyTrader V8.1 — Task 14: Intelligence Processing Observability & Execution Records (September 15, 2026)
+- **Core Architecture & Observability Invariants**:
+  - **Durable Processing Execution Records (`src/server/intelligence/processingRunStore.ts`, `src/server/intelligence/types.ts`)**:
+    - Introduced `/intelligence_processing_runs/{runId}` collection as the single authoritative observability store for every intelligence task execution attempt.
+    - Deterministic Identity: `runId = run_${taskId}_att${attempt}_${leaseId_hash}` derived deterministically from `taskId`, `attempt`, and a cryptographic hash of `leaseId`.
+    - Fail-Closed Store: Zero in-memory fallback in production. The store strictly operates against Firestore, throwing if the database reference is missing or unavailable.
+    - Lifecycle Status Tracking: Records transition through `started` -> `succeeded` / `retrying` / `dead_letter` with accurate duration, timestamp, worker, and lease identifiers.
+  - **Sanitized Error Classification & PII Containment (`src/server/intelligence/processingErrorClassifier.ts`)**:
+    - Error Classification: Deterministically classifies errors into `model_overloaded`, `rate_limited`, `timeout`, `context_window_exceeded`, `content_filtered`, `provider_5xx`, `unauthorized_or_forbidden`, `schema_validation_failed`, `evidence_missing_or_invalid`, `lease_lost`, `internal_unhandled`.
+    - PII & Secret Scrubbing: Automatically scrubs Bearer tokens, API keys (AIza, sk-, etc.), email addresses, UK phone numbers, postcodes, and credit cards from error messages, diagnostics, and stack traces before storage. Limits stack traces and diagnostic messages to 2048 characters.
+  - **Versioned Cost & Usage Modeling (`src/server/intelligence/costModel.ts`)**:
+    - Versioned Pricing Catalog (`pricingVersion: '2026-09-v1'`): Strict pricing per 1M input/output tokens across supported models (`gemini-3.8-flash`, `gemini-3.8-pro`, `gemini-2.5-flash`, etc.).
+    - Strict Metric Validation: Rejects negative values, `NaN`, `Infinity`, non-integer token counts, and unknown currency codes.
+  - **Zero Raw Data / PII Storage Guarantee**:
+    - Storage guarantees strictly prohibit storing raw AI prompts, raw responses, raw user descriptions, photo binaries, passwords, auth tokens, or payment credentials in the observability layer.
+  - **Authoritative Queue Integration (`src/server/intelligence/intelligenceTaskQueue.ts`)**:
+    - `IntelligenceTaskQueue.executeTask` records `recordRunStarted` prior to handler execution, `recordRunSucceeded` upon verified completion, and `recordRunFailed` upon error or missing-handler execution.
+  - **Security Rules & Blueprint Updates (`firestore.rules`, `firebase-blueprint.json`)**:
+    - Secured `/intelligence_processing_runs/{runId}` with strict backend/admin-only write access (`allow read, write: if isBackendAdmin()`) and immutable execution records.
+  - **Comprehensive Verification Suite (`tests/unit/task14ProcessingObservability.test.ts`)**:
+    - 24/24 unit tests passing, covering record creation, deterministic runId generation, status transitions, metric validation, sanitization of PII/secrets, cost calculation, and fail-closed behavior.
+  - **Full Regression & Pass Rate**:
+    - 100% test pass rate across 29 unit test suites (443/443 tests passing).
+    - Clean TypeScript diagnostics (`npm run lint`).
+    - Verified build via `compile_applet`.
+
 ## 🛠️ Server Bootstrap & Container Environment Readiness (September 15, 2026)
 - **Container Environment Firestore Readiness & Worker Error Handling (`server.ts`, `instantMatchWorker.ts`, `src/server/intelligence/intelligenceTaskQueue.ts`)**:
   - **Graceful Background Worker & Scheduled Tasks Loop Execution**: Enhanced the background worker loops and cron tasks (`IntelligenceTaskQueue.workerTick`, `instantMatchWorker`, `acquireCronLock`, `runMatchingCycle`, `processSmsQueue`, `runDriverPayoutOrchestration`, `runDailyAggregation`, `runConsultancyRecurringSessionCreator`, `runConsultancyScoreRecalculator`, `runComplianceGuardianAudit`, `runSentinelAnomalyScan`, `getCachedConfig`) to gracefully handle environments where Google Cloud IAM Admin service account credentials are not present, preventing noisy `PERMISSION_DENIED` console error spam while preserving full functionality for authenticated client and server operations.
