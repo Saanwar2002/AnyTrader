@@ -344,7 +344,14 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
-                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
+                update: async (data: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, { ...existing, ...data });
+                },
               };
             },
           };
@@ -352,7 +359,16 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
-            update: (ref: any, data: any) => ref.update(data),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
+            update: (ref: any, data: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, { ...existing, ...data });
+            },
           };
           return fn(transaction);
         },
@@ -422,7 +438,14 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
-                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
+                update: async (data: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, { ...existing, ...data });
+                },
               };
             },
           };
@@ -430,7 +453,16 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
-            update: (ref: any, data: any) => ref.update(data),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
+            update: (ref: any, data: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, { ...existing, ...data });
+            },
           };
           return fn(transaction);
         },
@@ -445,7 +477,6 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
       });
 
       queueA.registerHandler('job_extraction', async () => {
-        // Concurrently simulate lease expiry/reclaim: leaseId becomes lease-B AFTER executeTask has resolved activeLeaseId
         mockDocs.set(taskId, {
           ...mockDocs.get(taskId),
           leaseId: 'lease-B',
@@ -498,6 +529,10 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
                 update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
               };
             },
@@ -506,6 +541,11 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
             update: (ref: any, data: any) => ref.update(data),
           };
           return fn(transaction);
@@ -584,6 +624,10 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
                 update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
               };
             },
@@ -592,6 +636,11 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
             update: (ref: any, data: any) => ref.update(data),
           };
           return fn(transaction);
@@ -677,6 +726,10 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
                 update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
               };
             },
@@ -685,6 +738,11 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
             update: (ref: any, data: any) => ref.update(data),
           };
           return fn(transaction);
@@ -797,6 +855,10 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               return {
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
+                set: async (data: any, options?: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+                },
                 update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
               };
             },
@@ -805,6 +867,11 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         runTransaction: async <T>(fn: (t: any) => Promise<T>): Promise<T> => {
           const transaction = {
             get: async (ref: any) => ref.get(),
+            set: (ref: any, data: any, options?: any) => {
+              const id = ref.id;
+              const existing = mockDocs.get(id) || {};
+              mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
+            },
             update: (ref: any, data: any) => ref.update(data),
           };
           return fn(transaction);

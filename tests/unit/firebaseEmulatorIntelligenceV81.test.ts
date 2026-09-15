@@ -327,6 +327,30 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         await assertFails(deleteDoc(docRef));
       }
     });
+
+    it('blocks all client SDK writes (create, update, delete) on intelligence_processing_runs while allowing admin client reads', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
+      const userDb = testEnv!.authenticatedContext('user_bob', { role: 'customer' }).firestore();
+      const unauthDb = testEnv!.unauthenticatedContext().firestore();
+
+      const runDocRefAdmin = doc(adminDb, 'intelligence_processing_runs', 'run_test_1');
+      const runDocRefUser = doc(userDb, 'intelligence_processing_runs', 'run_test_1');
+      const runDocRefUnauth = doc(unauthDb, 'intelligence_processing_runs', 'run_test_1');
+
+      // Unauthenticated & non-admin client reads denied
+      await assertFails(getDoc(runDocRefUnauth));
+      await assertFails(getDoc(runDocRefUser));
+
+      // Admin client read succeeds
+      await assertSucceeds(getDoc(runDocRefAdmin));
+
+      // All client SDK writes (create, update, delete) MUST BE DENIED (even for admin)
+      await assertFails(setDoc(runDocRefAdmin, { status: 'running' }));
+      await assertFails(setDoc(runDocRefUser, { status: 'running' }));
+      await assertFails(setDoc(runDocRefUnauth, { status: 'running' }));
+      await assertFails(updateDoc(runDocRefAdmin, { status: 'completed' }));
+      await assertFails(deleteDoc(runDocRefAdmin));
+    });
   });
 
   // ==========================================================

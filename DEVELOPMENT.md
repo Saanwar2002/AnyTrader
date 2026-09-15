@@ -18,7 +18,7 @@
   - **Authoritative Queue Integration (`src/server/intelligence/intelligenceTaskQueue.ts`)**:
     - `IntelligenceTaskQueue.executeTask` records `recordRunStarted` prior to handler execution, `recordRunSucceeded` upon verified completion, and `recordRunFailed` upon error or missing-handler execution.
   - **Security Rules & Blueprint Updates (`firestore.rules`, `firebase-blueprint.json`)**:
-    - Secured `/intelligence_processing_runs/{runId}` with strict backend/admin-only write access (`allow read, write: if isBackendAdmin()`) and immutable execution records.
+    - Secured `/intelligence_processing_runs/{runId}` by denying all client SDK writes (`allow create, update, delete: if false;`) to enforce client immutability, while allowing admin client reads (`allow read: if isAdmin();`). Server/Admin SDK writes bypass rules operationally.
   - **Comprehensive Verification Suite (`tests/unit/task14ProcessingObservability.test.ts`)**:
     - 24/24 unit tests passing, covering record creation, deterministic runId generation, status transitions, metric validation, sanitization of PII/secrets, cost calculation, and fail-closed behavior.
   - **Full Regression & Pass Rate**:

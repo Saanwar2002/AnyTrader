@@ -234,8 +234,8 @@ export class IntelligenceProcessingRunStore {
     db?: FirestoreDbLike | null
   ): Promise<IntelligenceProcessingRun> {
     const effectiveDb = db !== undefined ? db : globalProcessingRunDb;
-    if (!effectiveDb) {
-      throw new Error('[ProcessingRunStore] Firestore database is not configured. Operational failure (Fail Closed).');
+    if (!effectiveDb || typeof effectiveDb.runTransaction !== 'function') {
+      throw new Error('[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed).');
     }
 
     const runId = runInput.runId || (
@@ -256,24 +256,17 @@ export class IntelligenceProcessingRunStore {
     const docRef = effectiveDb.collection('intelligence_processing_runs').doc(validated.runId);
     const sanitized = cleanUndefinedFields(validated);
 
-    if (typeof effectiveDb.runTransaction === 'function') {
-      await effectiveDb.runTransaction(async (transaction: any) => {
-        const snap = await transaction.get(docRef);
-        if (typeof transaction.set === 'function') {
-          if (snap && snap.exists) {
-            transaction.set(docRef, sanitized, { merge: true });
-          } else {
-            transaction.set(docRef, sanitized);
-          }
-        } else if (typeof transaction.update === 'function' && snap && snap.exists) {
-          transaction.update(docRef, sanitized);
-        } else if (typeof docRef.set === 'function') {
-          await docRef.set(sanitized, { merge: true });
-        }
-      });
-    } else {
-      await docRef.set(sanitized, { merge: true });
-    }
+    await effectiveDb.runTransaction(async (transaction: any) => {
+      if (!transaction || typeof transaction.set !== 'function') {
+        throw new Error('[ProcessingRunStore] Transaction object missing set method (Fail Closed).');
+      }
+      const snap = typeof transaction.get === 'function' ? await transaction.get(docRef) : null;
+      if (snap && snap.exists) {
+        transaction.set(docRef, sanitized, { merge: true });
+      } else {
+        transaction.set(docRef, sanitized);
+      }
+    });
 
     return validated;
   }
@@ -288,8 +281,8 @@ export class IntelligenceProcessingRunStore {
     db?: FirestoreDbLike | null
   ): Promise<IntelligenceProcessingRun> {
     const effectiveDb = db !== undefined ? db : globalProcessingRunDb;
-    if (!effectiveDb) {
-      throw new Error('[ProcessingRunStore] Firestore database is not configured. Operational failure (Fail Closed).');
+    if (!effectiveDb || typeof effectiveDb.runTransaction !== 'function') {
+      throw new Error('[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed).');
     }
 
     if (!runId || typeof runId !== 'string') {
@@ -300,6 +293,9 @@ export class IntelligenceProcessingRunStore {
     const now = new Date().toISOString();
 
     return await effectiveDb.runTransaction(async (transaction: any) => {
+      if (!transaction || typeof transaction.get !== 'function' || typeof transaction.set !== 'function') {
+        throw new Error('[ProcessingRunStore] Transaction object missing required get or set method (Fail Closed).');
+      }
       const snap = await transaction.get(docRef);
       if (!snap || !snap.exists) {
         throw new Error(`[ProcessingRunStore] Cannot mark nonexistent processing run '${runId}' as succeeded`);
@@ -326,13 +322,7 @@ export class IntelligenceProcessingRunStore {
 
       const validated = validateProcessingRunRecord(mergedRaw);
       const sanitized = cleanUndefinedFields(validated);
-      if (typeof transaction.set === 'function') {
-        transaction.set(docRef, sanitized, { merge: true });
-      } else if (typeof transaction.update === 'function') {
-        transaction.update(docRef, sanitized);
-      } else if (typeof docRef.set === 'function') {
-        await docRef.set(sanitized, { merge: true });
-      }
+      transaction.set(docRef, sanitized, { merge: true });
       return validated;
     });
   }
@@ -348,8 +338,8 @@ export class IntelligenceProcessingRunStore {
     db?: FirestoreDbLike | null
   ): Promise<IntelligenceProcessingRun> {
     const effectiveDb = db !== undefined ? db : globalProcessingRunDb;
-    if (!effectiveDb) {
-      throw new Error('[ProcessingRunStore] Firestore database is not configured. Operational failure (Fail Closed).');
+    if (!effectiveDb || typeof effectiveDb.runTransaction !== 'function') {
+      throw new Error('[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed).');
     }
 
     if (!runId || typeof runId !== 'string') {
@@ -361,7 +351,10 @@ export class IntelligenceProcessingRunStore {
     const now = new Date().toISOString();
 
     return await effectiveDb.runTransaction(async (transaction: any) => {
-      const snap = await transaction.get(docRef);
+      if (!transaction || typeof transaction.set !== 'function') {
+        throw new Error('[ProcessingRunStore] Transaction object missing required set method (Fail Closed).');
+      }
+      const snap = typeof transaction.get === 'function' ? await transaction.get(docRef) : null;
       const existing = (snap && snap.exists && snap.data)
         ? ((typeof snap.data === 'function' ? snap.data() : snap.data) as IntelligenceProcessingRun)
         : {
@@ -403,13 +396,7 @@ export class IntelligenceProcessingRunStore {
 
       const validated = validateProcessingRunRecord(mergedRaw);
       const sanitized = cleanUndefinedFields(validated);
-      if (typeof transaction.set === 'function') {
-        transaction.set(docRef, sanitized, { merge: true });
-      } else if (typeof transaction.update === 'function') {
-        transaction.update(docRef, sanitized);
-      } else if (typeof docRef.set === 'function') {
-        await docRef.set(sanitized, { merge: true });
-      }
+      transaction.set(docRef, sanitized, { merge: true });
       return validated;
     });
   }

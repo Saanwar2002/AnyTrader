@@ -1147,8 +1147,7 @@ service cloud.firestore {
     }
     match /intelligence_processing_runs/{runId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin() && isValidId(runId);
-      allow delete: if false; // Execution records are immutable audit trails
+      allow create, update, delete: if false; // Execution records are immutable audit trails; clients cannot create, update, or delete processing runs
     }
   }
 }

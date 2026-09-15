@@ -557,7 +557,135 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
           },
           null
         )
-      ).rejects.toThrow(/Firestore database is not configured/);
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+    });
+
+    it('fails closed when runTransaction is missing on database (rejects direct write fallbacks)', async () => {
+      const standaloneStore = new IntelligenceProcessingRunStore();
+      let docSetCalled = false;
+      const dbWithoutTransaction = {
+        collection: () => ({
+          doc: () => ({
+            set: async () => {
+              docSetCalled = true;
+            },
+          }),
+        }),
+      };
+
+      await expect(
+        standaloneStore.recordRunStarted(
+          {
+            runId: 'r_no_tx',
+            taskId: 't1',
+            aggregateType: 'job',
+            aggregateId: 'j1',
+            taskType: 'job_extraction',
+            status: 'started',
+            attempt: 1,
+            workerId: 'w1',
+            leaseId: 'l1',
+            startedAt: new Date().toISOString(),
+          },
+          dbWithoutTransaction as any
+        )
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+
+      expect(docSetCalled).toBe(false);
+
+      await expect(
+        standaloneStore.recordRunSucceeded('r_no_tx', {}, dbWithoutTransaction as any)
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+
+      await expect(
+        standaloneStore.recordRunFailed('r_no_tx', new Error('test'), {}, dbWithoutTransaction as any)
+      ).rejects.toThrow(/Firestore database or transaction support is unavailable/);
+    });
+
+    it('fails closed when recordRunStarted throws (handler is not executed, task is not succeeded)', async () => {
+      let handlerCalled = false;
+      const testQueue = new IntelligenceTaskQueue();
+      const mockDbFailingStart = {
+        collection: (name: string) => {
+          if (name === 'intelligence_processing_runs') {
+            return {
+              doc: () => ({
+                set: async () => {
+                  throw new Error('Firestore disk write error during recordRunStarted');
+                },
+              }),
+            };
+          }
+          return mockDb.collection(name);
+        },
+        runTransaction: mockDb.runTransaction,
+      };
+
+      testQueue.setFirestoreDb(mockDbFailingStart as any);
+      testQueue.registerHandler('job_extraction', async () => {
+        handlerCalled = true;
+        return { success: true };
+      });
+
+      const task = await testQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_fail_start',
+        'idem_fail_start_key',
+        { title: 'Test Fail Start' }
+      );
+
+      const executedTask = await testQueue.executeTask(task.taskId);
+      expect(handlerCalled).toBe(false);
+      expect(executedTask.status).not.toBe('succeeded');
+    });
+
+    it('fails closed when recordRunSucceeded throws (task is not marked succeeded)', async () => {
+      const testQueue = new IntelligenceTaskQueue();
+      const mockDbFailingSucc = {
+        collection: (name: string) => {
+          if (name === 'intelligence_processing_runs') {
+            return {
+              doc: () => ({
+                get: async () => ({ exists: true, data: () => ({ startedAt: new Date().toISOString() }) }),
+                set: async () => {},
+                update: async () => {},
+              }),
+            };
+          }
+          return mockDb.collection(name);
+        },
+        runTransaction: async (fn: any) => {
+          // If transaction is called for intelligence_processing_runs, fail it
+          const tx = {
+            get: async (ref: any) => {
+              if (ref.id?.startsWith('run_')) {
+                throw new Error('Firestore transaction error during recordRunSucceeded');
+              }
+              return ref.get();
+            },
+            set: (ref: any, data: any, opts: any) => ref.set(data, opts),
+            update: (ref: any, data: any) => ref.update(data),
+          };
+          return fn(tx);
+        },
+      };
+
+      testQueue.setFirestoreDb(mockDbFailingSucc as any);
+      testQueue.registerHandler('job_extraction', async () => {
+        return { success: true };
+      });
+
+      const task = await testQueue.enqueueTaskAsync(
+        'job_extraction',
+        'job',
+        'job_fail_succ',
+        'idem_fail_succ_key',
+        { title: 'Test Fail Succ' }
+      );
+
+      const executedTask = await testQueue.executeTask(task.taskId);
+      expect(executedTask.status).not.toBe('succeeded');
     });
   });
 });

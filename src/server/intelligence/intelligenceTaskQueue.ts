@@ -681,9 +681,10 @@ export class IntelligenceTaskQueue {
     const startIso = new Date().toISOString();
     const effectiveAggregateType = task.aggregateType || 'job';
     const effectiveAggregateId = task.aggregateId || taskId;
+    const startTime = Date.now();
 
-    // Durable Processing Run: Record attempt started (Fail Closed in Production)
     try {
+      // 1. Durable Processing Run: Record attempt started (Fail Closed - throws if write fails)
       await processingRunStore.recordRunStarted(
         {
           runId,
@@ -714,92 +715,12 @@ export class IntelligenceTaskQueue {
         },
         this.firestoreDb
       );
-    } catch (runStartErr) {
-      console.warn(`[IntelligenceTaskQueue] Warning recording started processing run ${runId}:`, runStartErr);
-    }
 
-    const handler = this.handlers.get(task.taskType);
-
-    if (!handler) {
-      const missingError = {
-        classification: 'NON_RETRYABLE' as const,
-        message: `No handler registered for task type: ${task.taskType}`,
-        timestamp: new Date().toISOString(),
-      };
-      const nowIso = new Date().toISOString();
-
-      try {
-        await processingRunStore.recordRunFailed(
-          runId,
-          new Error(missingError.message),
-          {
-            taskId,
-            aggregateType: effectiveAggregateType,
-            aggregateId: effectiveAggregateId,
-            taskType: task.taskType || 'job_extraction',
-            attempt: currentAttempt,
-            workerId: effectiveWorkerId,
-            leaseId: activeLeaseId,
-            status: 'dead_letter',
-            finishedAt: nowIso,
-          },
-          this.firestoreDb
-        );
-      } catch (runFailErr) {
-        console.warn(`[IntelligenceTaskQueue] Warning recording failed run for missing handler:`, runFailErr);
+      const handler = this.handlers.get(task.taskType);
+      if (!handler) {
+        throw new Error(`No handler registered for task type: ${task.taskType}`);
       }
 
-      try {
-        await this.firestoreDb.runTransaction(async (transaction: any) => {
-          const docSnap = await transaction.get(taskRef);
-          if (!docSnap || !docSnap.exists) {
-            throw new OwnershipLostError(taskId, effectiveWorkerId);
-          }
-          const data = docSnap.data() as IntelligenceTask;
-
-          if (
-            data.status !== 'processing' ||
-            data.workerId !== effectiveWorkerId ||
-            data.leaseId !== activeLeaseId
-          ) {
-            console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during missing-handler finalization. Aborting state write.`);
-            throw new OwnershipLostError(taskId, effectiveWorkerId);
-          }
-
-          transaction.update(taskRef, {
-            status: 'dead_letter',
-            errorCode: 'MISSING_HANDLER',
-            lastError: missingError.message,
-            error: missingError,
-            updatedAt: nowIso,
-            workerId: null,
-            leaseId: null,
-            leaseExpiresAt: null,
-          });
-        });
-      } catch (err) {
-        if (err instanceof OwnershipLostError) {
-          console.warn(`[IntelligenceTaskQueue] ${err.message}`);
-          return (await this.getTaskAsync(taskId)) || task;
-        }
-        throw err;
-      }
-
-      task.status = 'dead_letter';
-      task.errorCode = 'MISSING_HANDLER';
-      task.lastError = missingError.message;
-      task.error = missingError;
-      task.updatedAt = nowIso;
-      delete task.workerId;
-      delete task.leaseId;
-      delete task.leaseExpiresAt;
-      this.tasks.set(taskId, task);
-      return task;
-    }
-
-    const startTime = Date.now();
-
-    try {
       const result = await handler(task);
       const nowIso = new Date().toISOString();
       const durationMs = Date.now() - startTime;
@@ -815,27 +736,23 @@ export class IntelligenceTaskQueue {
         ? (result as any).evidenceIds.length
         : (typeof (result as any)?.inputEvidenceCount === 'number' ? (result as any).inputEvidenceCount : 0);
 
-      // 1. Mark processing run succeeded in Firestore FIRST
-      try {
-        await processingRunStore.recordRunSucceeded(
-          runId,
-          {
-            finishedAt: nowIso,
-            durationMs,
-            inputTokens,
-            outputTokens,
-            totalTokens,
-            inputBytes,
-            outputBytes,
-            inputEvidenceCount,
-          },
-          this.firestoreDb
-        );
-      } catch (recordSuccErr) {
-        console.warn(`[IntelligenceTaskQueue] Warning recording succeeded processing run ${runId}:`, recordSuccErr);
-      }
+      // 2. Mark processing run succeeded in Firestore FIRST (Fail Closed - throws if write fails)
+      await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          finishedAt: nowIso,
+          durationMs,
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          inputBytes,
+          outputBytes,
+          inputEvidenceCount,
+        },
+        this.firestoreDb
+      );
 
-      // 2. SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
+      // 3. SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       await this.firestoreDb.runTransaction(async (transaction: any) => {
         const docSnap = await transaction.get(taskRef);
         if (!docSnap || !docSnap.exists) {
