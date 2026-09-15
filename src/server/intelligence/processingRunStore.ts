@@ -100,31 +100,65 @@ export function buildProcessingRunId(taskId: string, attempt: number, leaseId: s
   return `run_${sanitizedTask}_att${attempt}_${hash}`;
 }
 
+export function validateStringField(value: unknown, name: string, maxLength: number, isRequired: boolean = false): string {
+  if (value === undefined || value === null) {
+    if (isRequired) {
+      throw new ProcessingRunValidationError(`Field '${name}' is required`);
+    }
+    return '';
+  }
+  if (typeof value !== 'string') {
+    throw new ProcessingRunValidationError(`Field '${name}' must be a string, received ${typeof value}`);
+  }
+  const trimmed = value.trim();
+  if (isRequired && trimmed.length === 0) {
+    throw new ProcessingRunValidationError(`Field '${name}' is required and cannot be empty`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new ProcessingRunValidationError(`Field '${name}' exceeds maximum length of ${maxLength} characters`);
+  }
+  return trimmed;
+}
+
 /**
  * Validates that an object contains no forbidden privacy-violating attributes.
  */
 export function validateRunPrivacy(record: Record<string, unknown>): void {
+  // Enforce strict schema keys: no unknown fields allowed!
+  const ALLOWED_KEYS = new Set([
+    'runId', 'taskId', 'aggregateType', 'aggregateId', 'taskType', 'status', 'attempt', 'workerId', 'leaseId',
+    'startedAt', 'finishedAt', 'durationMs', 'pipelineVersion', 'schemaVersion', 'provider', 'modelVersion',
+    'promptVersion', 'inputEvidenceCount', 'inputBytes', 'outputBytes', 'inputTokens', 'outputTokens',
+    'totalTokens', 'estimatedCost', 'costCurrency', 'pricingVersion', 'errorCode', 'errorClass', 'retryable',
+    'sanitizedDiagnostic', 'createdAt', 'contentionTouch'
+  ]);
+
   for (const key of Object.keys(record)) {
-    const lowerKey = key.toLowerCase();
-    for (const forbidden of FORBIDDEN_PRIVACY_KEYS) {
-      if (lowerKey === forbidden.toLowerCase() || lowerKey.includes(forbidden.toLowerCase())) {
+    if (!ALLOWED_KEYS.has(key)) {
+      throw new ProcessingRunPrivacyViolationError(
+        `Field '${key}' is not allowed in processing run record. Only schema-defined observability attributes can be persisted.`
+      );
+    }
+
+    const value = record[key];
+    if (typeof value === 'string') {
+      const lowerVal = value.toLowerCase();
+      for (const forbidden of FORBIDDEN_PRIVACY_KEYS) {
+        if (lowerVal.includes(forbidden.toLowerCase())) {
+          throw new ProcessingRunPrivacyViolationError(
+            `Field '${key}' contains forbidden privacy-violating string. Raw AI data/secrets must not be stored.`
+          );
+        }
+      }
+      if (
+        value.includes('AIza') ||
+        value.includes('sk-') ||
+        value.includes('Bearer ')
+      ) {
         throw new ProcessingRunPrivacyViolationError(
-          `Processing run record contains forbidden privacy-violating field '${key}'. Raw AI data/secrets must not be stored.`
+          `Field '${key}' contains sensitive key or auth tokens. Redaction required.`
         );
       }
-    }
-  }
-
-  // Check diagnostic for raw prompts or keys
-  if (record.sanitizedDiagnostic && typeof record.sanitizedDiagnostic === 'string') {
-    if (
-      record.sanitizedDiagnostic.includes('AIza') ||
-      record.sanitizedDiagnostic.includes('sk-') ||
-      record.sanitizedDiagnostic.includes('Bearer ')
-    ) {
-      throw new ProcessingRunPrivacyViolationError(
-        'Sanitized diagnostic contains sensitive key or auth tokens. Redaction required.'
-      );
     }
   }
 }
@@ -133,35 +167,40 @@ export function validateRunPrivacy(record: Record<string, unknown>): void {
  * Strictly validates a complete IntelligenceProcessingRun record against the schema.
  */
 export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingRun>): IntelligenceProcessingRun {
-  if (!run.runId || typeof run.runId !== 'string' || run.runId.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'runId'");
+  const runId = validateStringField(run.runId, 'runId', 128, true);
+  const taskId = validateStringField(run.taskId, 'taskId', 64, true);
+  const aggregateId = validateStringField(run.aggregateId, 'aggregateId', 64, true);
+  const workerId = validateStringField(run.workerId, 'workerId', 64, true);
+  const leaseId = validateStringField(run.leaseId, 'leaseId', 64, true);
+
+  const pipelineVersion = validateStringField(run.pipelineVersion || 'v8.1.0', 'pipelineVersion', 16);
+  const schemaVersion = validateStringField(run.schemaVersion || 'v8.1.0', 'schemaVersion', 16);
+  const pricingVersion = validateStringField(run.pricingVersion, 'pricingVersion', 16);
+  const costCurrency = validateStringField(run.costCurrency, 'costCurrency', 16);
+
+  const statusStr = validateStringField(run.status, 'status', 32, true);
+  if (!VALID_STATUSES.has(statusStr as ProcessingRunStatus)) {
+    throw new ProcessingRunValidationError(`Invalid processing run status: '${statusStr}'`);
   }
-  if (!run.taskId || typeof run.taskId !== 'string' || run.taskId.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'taskId'");
-  }
-  if (!run.aggregateType || typeof run.aggregateType !== 'string' || run.aggregateType.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'aggregateType'");
-  }
-  if (!run.aggregateId || typeof run.aggregateId !== 'string' || run.aggregateId.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'aggregateId'");
-  }
-  if (!run.taskType || typeof run.taskType !== 'string' || run.taskType.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'taskType'");
-  }
-  if (!run.status || !VALID_STATUSES.has(run.status as ProcessingRunStatus)) {
-    throw new ProcessingRunValidationError(`Invalid processing run status: '${run.status}'`);
-  }
+
+  const taskType = validateStringField(run.taskType, 'taskType', 32, true);
+  const aggregateType = validateStringField(run.aggregateType, 'aggregateType', 32, true);
+  const provider = validateStringField(run.provider || 'google_genai', 'provider', 32);
+  const modelVersion = validateStringField(run.modelVersion || 'gemini-3.8-flash', 'modelVersion', 32);
+  const promptVersion = validateStringField(run.promptVersion || 'default_v8.1', 'promptVersion', 32);
+  const errorCode = validateStringField(run.errorCode, 'errorCode', 32);
+  const errorClass = validateStringField(run.errorClass, 'errorClass', 32);
+
   if (typeof run.attempt !== 'number' || run.attempt < 1 || !Number.isInteger(run.attempt) || Number.isNaN(run.attempt) || !Number.isFinite(run.attempt)) {
     throw new ProcessingRunValidationError(`Invalid attempt: '${run.attempt}'. Must be an integer >= 1.`);
   }
-  if (!run.workerId || typeof run.workerId !== 'string' || run.workerId.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'workerId'");
-  }
-  if (!run.leaseId || typeof run.leaseId !== 'string' || run.leaseId.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'leaseId'");
-  }
-  if (!run.startedAt || typeof run.startedAt !== 'string' || run.startedAt.trim().length === 0) {
-    throw new ProcessingRunValidationError("Missing required field 'startedAt'");
+
+  const startedAt = validateStringField(run.startedAt, 'startedAt', 64, true);
+  const finishedAt = run.finishedAt ? validateStringField(run.finishedAt, 'finishedAt', 64) : undefined;
+
+  const startedTime = Date.parse(startedAt);
+  if (Number.isNaN(startedTime)) {
+    throw new ProcessingRunValidationError("Field 'startedAt' is not a valid ISO date string");
   }
 
   // Validate metrics and economics
@@ -175,12 +214,31 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
       inputBytes: run.inputBytes,
       outputBytes: run.outputBytes,
       inputEvidenceCount: run.inputEvidenceCount,
-      costCurrency: run.costCurrency,
-      pricingVersion: run.pricingVersion,
+      costCurrency: costCurrency || undefined,
+      pricingVersion: pricingVersion || undefined,
     },
-    run.provider || 'google_genai',
-    run.modelVersion || 'gemini-3.8-flash'
+    provider,
+    modelVersion
   );
+
+  if (finishedAt) {
+    const finishedTime = Date.parse(finishedAt);
+    if (Number.isNaN(finishedTime)) {
+      throw new ProcessingRunValidationError("Field 'finishedAt' is not a valid ISO date string");
+    }
+    if (finishedTime < startedTime) {
+      throw new ProcessingRunValidationError("Field 'finishedAt' cannot be earlier than 'startedAt'");
+    }
+    const calculatedDuration = finishedTime - startedTime;
+    if (normalizedMetrics.durationMs !== undefined) {
+      const diff = Math.abs(normalizedMetrics.durationMs - calculatedDuration);
+      if (diff > 5000) {
+        throw new ProcessingRunValidationError(
+          `Recorded durationMs (${normalizedMetrics.durationMs}) contradicts calculated interval (${calculatedDuration}ms) beyond 5000ms tolerance`
+        );
+      }
+    }
+  }
 
   // Validate privacy & data minimization
   validateRunPrivacy(run as Record<string, unknown>);
@@ -188,23 +246,23 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
   const now = new Date().toISOString();
 
   const validated: IntelligenceProcessingRun = {
-    runId: run.runId.trim(),
-    taskId: run.taskId.trim(),
-    aggregateType: run.aggregateType as IntelligenceAggregateType,
-    aggregateId: run.aggregateId.trim(),
-    taskType: run.taskType.trim(),
-    status: run.status as ProcessingRunStatus,
+    runId,
+    taskId,
+    aggregateType: aggregateType as IntelligenceAggregateType,
+    aggregateId,
+    taskType,
+    status: statusStr as ProcessingRunStatus,
     attempt: run.attempt,
-    workerId: run.workerId.trim(),
-    leaseId: run.leaseId.trim(),
-    startedAt: run.startedAt.trim(),
-    finishedAt: run.finishedAt ? String(run.finishedAt).trim() : undefined,
+    workerId,
+    leaseId,
+    startedAt,
+    finishedAt,
     durationMs: run.durationMs !== undefined ? normalizedMetrics.durationMs : undefined,
-    pipelineVersion: run.pipelineVersion ? String(run.pipelineVersion).trim() : 'v8.1.0',
-    schemaVersion: run.schemaVersion ? String(run.schemaVersion).trim() : 'v8.1.0',
-    provider: run.provider ? String(run.provider).trim() : 'google_genai',
-    modelVersion: run.modelVersion ? String(run.modelVersion).trim() : 'gemini-3.8-flash',
-    promptVersion: run.promptVersion ? String(run.promptVersion).trim() : 'default_v8.1',
+    pipelineVersion,
+    schemaVersion,
+    provider,
+    modelVersion,
+    promptVersion,
     inputEvidenceCount: normalizedMetrics.inputEvidenceCount,
     inputBytes: normalizedMetrics.inputBytes,
     outputBytes: normalizedMetrics.outputBytes,
@@ -212,10 +270,10 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
     outputTokens: normalizedMetrics.outputTokens,
     totalTokens: normalizedMetrics.totalTokens,
     estimatedCost: normalizedMetrics.estimatedCost,
-    costCurrency: normalizedMetrics.costCurrency || DEFAULT_COST_CURRENCY,
-    pricingVersion: normalizedMetrics.pricingVersion || DEFAULT_PRICING_VERSION,
-    errorCode: run.errorCode ? String(run.errorCode).trim() : undefined,
-    errorClass: run.errorClass ? String(run.errorClass).trim() : undefined,
+    costCurrency: normalizedMetrics.costCurrency,
+    pricingVersion: normalizedMetrics.pricingVersion,
+    errorCode: errorCode || undefined,
+    errorClass: errorClass || undefined,
     retryable: typeof run.retryable === 'boolean' ? run.retryable : undefined,
     sanitizedDiagnostic: run.sanitizedDiagnostic ? String(run.sanitizedDiagnostic).trim() : undefined,
     createdAt: run.createdAt ? String(run.createdAt).trim() : now,

@@ -552,9 +552,9 @@ export interface IntelligenceProcessingRun {
   inputEvidenceCount: number;
   inputBytes: number;
   outputBytes: number;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
   estimatedCost: number;
   costCurrency: string;
   pricingVersion: string;

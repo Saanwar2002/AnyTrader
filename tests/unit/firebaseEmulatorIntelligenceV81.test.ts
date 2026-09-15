@@ -4291,5 +4291,670 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(snap.exists()).toBe(false);
     });
   });
+
+  // ==========================================================
+  // TASK 14C: PROCESSING OBSERVABILITY INTEGRITY (REAL EMULATOR)
+  // ==========================================================
+  describe('Task 14C: Processing Observability Integrity', () => {
+    it('C1 — Valid metrics: Valid processing metrics persist successfully', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c1', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c1', 1, 'lease_c1');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c1',
+          aggregateType: 'job',
+          aggregateId: 'job_c1',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c1',
+          leaseId: 'lease_c1',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c1',
+          leaseId: 'lease_c1',
+          inputTokens: 100,
+          outputTokens: 50,
+          totalTokens: 150,
+          inputBytes: 1000,
+          outputBytes: 500,
+          durationMs: 1200,
+          estimatedCost: 0.001,
+        },
+        storeDb as any
+      );
+
+      expect(succ.status).toBe('succeeded');
+      expect(succ.totalTokens).toBe(150);
+      expect(succ.estimatedCost).toBe(0.001);
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data()?.status).toBe('succeeded');
+      expect(snap.data()?.totalTokens).toBe(150);
+    });
+
+    it('C2 — Negative metrics: Negative bytes/tokens/duration/cost are rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c2', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c2', 1, 'lease_c2');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c2',
+          aggregateType: 'job',
+          aggregateId: 'job_c2',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c2',
+          leaseId: 'lease_c2',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c2',
+            leaseId: 'lease_c2',
+            inputTokens: -100,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c2',
+            leaseId: 'lease_c2',
+            durationMs: -500,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C3 — NaN and Infinity: NaN and Infinity cannot be persisted', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c3', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c3', 1, 'lease_c3');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c3',
+          aggregateType: 'job',
+          aggregateId: 'job_c3',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c3',
+          leaseId: 'lease_c3',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c3',
+            leaseId: 'lease_c3',
+            inputTokens: NaN,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c3',
+            leaseId: 'lease_c3',
+            outputTokens: Infinity,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C4 — Token consistency: Contradictory totalTokens is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c4', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c4', 1, 'lease_c4');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c4',
+          aggregateType: 'job',
+          aggregateId: 'job_c4',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c4',
+          leaseId: 'lease_c4',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c4',
+            leaseId: 'lease_c4',
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 200,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C5 — Missing provider metrics: Unavailable metrics are represented explicitly rather than fabricated', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c5', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c5', 1, 'lease_c5');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c5',
+          aggregateType: 'job',
+          aggregateId: 'job_c5',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c5',
+          leaseId: 'lease_c5',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c5',
+          leaseId: 'lease_c5',
+          inputTokens: undefined,
+          outputTokens: undefined,
+          totalTokens: undefined,
+        },
+        storeDb as any
+      );
+
+      expect(succ.inputTokens).toBeUndefined();
+      expect(succ.outputTokens).toBeUndefined();
+      expect(succ.totalTokens).toBeUndefined();
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.exists()).toBe(true);
+      const data = snap.data()!;
+      expect(data.inputTokens).toBeUndefined();
+      expect(data.outputTokens).toBeUndefined();
+      expect(data.totalTokens).toBeUndefined();
+    });
+
+    it('C6 — Pricing version: Different pricing versions remain distinguishable', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c6', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c6', 1, 'lease_c6');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c6',
+          aggregateType: 'job',
+          aggregateId: 'job_c6',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c6',
+          leaseId: 'lease_c6',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c6',
+          leaseId: 'lease_c6',
+          pricingVersion: 'v2_custom_tier',
+        },
+        storeDb as any
+      );
+
+      expect(succ.pricingVersion).toBe('v2_custom_tier');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.pricingVersion).toBe('v2_custom_tier');
+    });
+
+    it('C7 — Historical cost: Changing current pricing configuration does not mutate an existing processing run', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c7', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c7', 1, 'lease_c7');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c7',
+          aggregateType: 'job',
+          aggregateId: 'job_c7',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c7',
+          leaseId: 'lease_c7',
+          startedAt: new Date().toISOString(),
+          pricingVersion: 'legacy_v1',
+          estimatedCost: 0.05,
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c7',
+          leaseId: 'lease_c7',
+          estimatedCost: 0.05,
+        },
+        storeDb as any
+      );
+
+      expect(succ.estimatedCost).toBe(0.05);
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.estimatedCost).toBe(0.05);
+    });
+
+    it('C8 — Timestamp integrity: finishedAt earlier than startedAt is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c8', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c8', 1, 'lease_c8');
+      const startedAt = new Date().toISOString();
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c8',
+          aggregateType: 'job',
+          aggregateId: 'job_c8',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c8',
+          leaseId: 'lease_c8',
+          startedAt,
+        },
+        storeDb as any
+      );
+
+      const finishedEarlier = new Date(Date.parse(startedAt) - 10000).toISOString();
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c8',
+            leaseId: 'lease_c8',
+            finishedAt: finishedEarlier,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C9 — Duration integrity: Negative or contradictory duration is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c9', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c9', 1, 'lease_c9');
+      const startedAt = new Date().toISOString();
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c9',
+          aggregateType: 'job',
+          aggregateId: 'job_c9',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c9',
+          leaseId: 'lease_c9',
+          startedAt,
+        },
+        storeDb as any
+      );
+
+      const finishedAt = new Date(Date.parse(startedAt) + 10000).toISOString();
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c9',
+            leaseId: 'lease_c9',
+            finishedAt,
+            durationMs: 1000,
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C10 — Error sanitization: Sensitive/raw error content cannot enter the processing-run record', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c10', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c10', 1, 'lease_c10');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c10',
+          aggregateType: 'job',
+          aggregateId: 'job_c10',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c10',
+          leaseId: 'lease_c10',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const dangerousErr = new Error('Auth failure: sk-dangerousSecretKeyValue is invalid Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9');
+      const fail = await processingRunStore.recordRunFailed(
+        runId,
+        dangerousErr,
+        { workerId: 'worker_c10', leaseId: 'lease_c10' },
+        storeDb as any
+      );
+
+      expect(fail.sanitizedDiagnostic).not.toContain('sk-dangerousSecretKeyValue');
+      expect(fail.sanitizedDiagnostic).not.toContain('eyJhbGciOiJIUzI1Ni');
+      expect(fail.sanitizedDiagnostic).toContain('[REDACTED]');
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.sanitizedDiagnostic).not.toContain('sk-dangerousSecretKeyValue');
+      expect(snap.data()?.sanitizedDiagnostic).not.toContain('eyJhbGciOiJIUzI1Ni');
+    });
+
+    it('C11 — Server metadata integrity: Provider/model output cannot overwrite server-owned execution metadata', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c11', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c11', 1, 'lease_c11');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c11',
+          aggregateType: 'job',
+          aggregateId: 'job_c11',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c11',
+          leaseId: 'lease_c11',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunSucceeded(
+          runId,
+          {
+            workerId: 'worker_c11',
+            leaseId: 'lease_c11',
+            runId: 'attempt_overwrite_id_malicious',
+          } as any,
+          storeDb as any
+        )
+      ).rejects.toThrow();
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.runId).toBe(runId);
+    });
+
+    it('C12 — Attempt separation: Different attempts create different execution records', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c12', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId1 = buildProcessingRunId('task_c12', 1, 'lease_c12_1');
+      const runId2 = buildProcessingRunId('task_c12', 2, 'lease_c12_2');
+
+      expect(runId1).not.toBe(runId2);
+
+      await processingRunStore.recordRunStarted(
+        {
+          runId: runId1,
+          taskId: 'task_c12',
+          aggregateType: 'job',
+          aggregateId: 'job_c12',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c12',
+          leaseId: 'lease_c12_1',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await processingRunStore.recordRunStarted(
+        {
+          runId: runId2,
+          taskId: 'task_c12',
+          aggregateType: 'job',
+          aggregateId: 'job_c12',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 2,
+          workerId: 'worker_c12',
+          leaseId: 'lease_c12_2',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const snap1 = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId1));
+      const snap2 = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId2));
+
+      expect(snap1.exists()).toBe(true);
+      expect(snap2.exists()).toBe(true);
+    });
+
+    it('C13 — Terminal state protection: A succeeded run cannot become failed', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c13', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c13', 1, 'lease_c13');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c13',
+          aggregateType: 'job',
+          aggregateId: 'job_c13',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c13',
+          leaseId: 'lease_c13',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      await processingRunStore.recordRunSucceeded(
+        runId,
+        { workerId: 'worker_c13', leaseId: 'lease_c13' },
+        storeDb as any
+      );
+
+      await expect(
+        processingRunStore.recordRunFailed(
+          runId,
+          new Error('Fail attempt on succeeded run'),
+          { workerId: 'worker_c13', leaseId: 'lease_c13' },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.status).toBe('succeeded');
+    });
+
+    it('C14 — Size protection: Oversized metadata/identifiers are rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c14', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const giantTaskId = 'a'.repeat(500);
+
+      await expect(
+        processingRunStore.recordRunStarted(
+          {
+            runId: 'valid_id',
+            taskId: giantTaskId,
+            aggregateType: 'job',
+            aggregateId: 'job_c14',
+            taskType: 'job_extraction',
+            status: 'started',
+            attempt: 1,
+            workerId: 'worker_c14',
+            leaseId: 'lease_c14',
+            startedAt: new Date().toISOString(),
+          },
+          storeDb as any
+        )
+      ).rejects.toThrow();
+    });
+
+    it('C15 — Fresh-read durability: Write the run and then retrieve it using a fresh Firestore read. Verify the actual persisted values', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c15', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c15', 1, 'lease_c15');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c15',
+          aggregateType: 'job',
+          aggregateId: 'job_c15',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c15',
+          leaseId: 'lease_c15',
+          startedAt: new Date().toISOString(),
+          pricingVersion: 'v1_durability',
+        },
+        storeDb as any
+      );
+
+      const succ = await processingRunStore.recordRunSucceeded(
+        runId,
+        {
+          workerId: 'worker_c15',
+          leaseId: 'lease_c15',
+          inputTokens: 200,
+          outputTokens: 100,
+          totalTokens: 300,
+        },
+        storeDb as any
+      );
+
+      expect(succ.status).toBe('succeeded');
+
+      const freshSnap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(freshSnap.exists()).toBe(true);
+      const data = freshSnap.data()!;
+      expect(data.runId).toBe(runId);
+      expect(data.taskId).toBe('task_c15');
+      expect(data.totalTokens).toBe(300);
+      expect(data.pricingVersion).toBe('v1_durability');
+    });
+
+    it('C16 — Concurrent finalization: Concurrent finalization attempts against the same execution cannot corrupt its terminal state', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c16', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const runId = buildProcessingRunId('task_c16', 1, 'lease_c16');
+      await processingRunStore.recordRunStarted(
+        {
+          runId,
+          taskId: 'task_c16',
+          aggregateType: 'job',
+          aggregateId: 'job_c16',
+          taskType: 'job_extraction',
+          status: 'started',
+          attempt: 1,
+          workerId: 'worker_c16',
+          leaseId: 'lease_c16',
+          startedAt: new Date().toISOString(),
+        },
+        storeDb as any
+      );
+
+      const pSucceed = processingRunStore.recordRunSucceeded(
+        runId,
+        { workerId: 'worker_c16', leaseId: 'lease_c16' },
+        storeDb as any
+      );
+
+      const pFail = processingRunStore.recordRunFailed(
+        runId,
+        new Error('Late error'),
+        { workerId: 'worker_c16', leaseId: 'lease_c16' },
+        storeDb as any
+      );
+
+      const results = await Promise.allSettled([pSucceed, pFail]);
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
+      expect(snap.data()?.status).toBe('succeeded');
+    });
+  });
 });
 

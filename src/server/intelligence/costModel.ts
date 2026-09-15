@@ -54,9 +54,9 @@ export interface RawMetricsInput {
 }
 
 export interface ValidatedProcessingMetrics {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
   estimatedCost: number;
   durationMs: number;
   inputBytes: number;
@@ -136,19 +136,48 @@ export function validateAndNormalizeMetrics(
   provider: string = 'google_genai',
   modelVersion: string = 'gemini-3.8-flash'
 ): ValidatedProcessingMetrics {
-  const inputTokens = validateNonNegativeFiniteNumber(raw.inputTokens, 'inputTokens', MAX_ALLOWED_TOKENS, true);
-  const outputTokens = validateNonNegativeFiniteNumber(raw.outputTokens, 'outputTokens', MAX_ALLOWED_TOKENS, true);
-  
-  const expectedTotal = inputTokens + outputTokens;
-  let totalTokens = inputTokens + outputTokens;
-  if (raw.totalTokens !== undefined && raw.totalTokens !== null) {
-    const rawTotal = validateNonNegativeFiniteNumber(raw.totalTokens, 'totalTokens', MAX_ALLOWED_TOKENS, true);
-    if (rawTotal < expectedTotal) {
-      throw new CostModelValidationError(
-        `totalTokens (${rawTotal}) cannot be less than sum of inputTokens (${inputTokens}) + outputTokens (${outputTokens})`
-      );
+  const hasInput = raw.inputTokens !== undefined && raw.inputTokens !== null;
+  const hasOutput = raw.outputTokens !== undefined && raw.outputTokens !== null;
+
+  let inputTokens: number | undefined;
+  let outputTokens: number | undefined;
+  let totalTokens: number | undefined;
+
+  if (hasInput && hasOutput) {
+    inputTokens = validateNonNegativeFiniteNumber(raw.inputTokens, 'inputTokens', MAX_ALLOWED_TOKENS, true);
+    outputTokens = validateNonNegativeFiniteNumber(raw.outputTokens, 'outputTokens', MAX_ALLOWED_TOKENS, true);
+    const expectedTotal = inputTokens + outputTokens;
+    totalTokens = expectedTotal;
+
+    if (raw.totalTokens !== undefined && raw.totalTokens !== null) {
+      const rawTotal = validateNonNegativeFiniteNumber(raw.totalTokens, 'totalTokens', MAX_ALLOWED_TOKENS, true);
+      if (rawTotal !== expectedTotal) {
+        throw new CostModelValidationError(
+          `totalTokens (${rawTotal}) does not equal inputTokens (${inputTokens}) + outputTokens (${outputTokens})`
+        );
+      }
     }
-    totalTokens = rawTotal;
+  } else if (hasInput || hasOutput) {
+    if (hasInput) {
+      inputTokens = validateNonNegativeFiniteNumber(raw.inputTokens, 'inputTokens', MAX_ALLOWED_TOKENS, true);
+    }
+    if (hasOutput) {
+      outputTokens = validateNonNegativeFiniteNumber(raw.outputTokens, 'outputTokens', MAX_ALLOWED_TOKENS, true);
+    }
+    if (raw.totalTokens !== undefined && raw.totalTokens !== null) {
+      totalTokens = validateNonNegativeFiniteNumber(raw.totalTokens, 'totalTokens', MAX_ALLOWED_TOKENS, true);
+      if (inputTokens !== undefined && outputTokens !== undefined) {
+        if (totalTokens !== inputTokens + outputTokens) {
+          throw new CostModelValidationError(
+            `totalTokens (${totalTokens}) does not equal inputTokens (${inputTokens}) + outputTokens (${outputTokens})`
+          );
+        }
+      }
+    }
+  } else {
+    if (raw.totalTokens !== undefined && raw.totalTokens !== null) {
+      totalTokens = validateNonNegativeFiniteNumber(raw.totalTokens, 'totalTokens', MAX_ALLOWED_TOKENS, true);
+    }
   }
 
   const durationMs = validateNonNegativeFiniteNumber(raw.durationMs, 'durationMs', MAX_ALLOWED_DURATION_MS);
@@ -169,12 +198,22 @@ export function validateAndNormalizeMetrics(
     ? raw.costCurrency.trim().toUpperCase()
     : DEFAULT_COST_CURRENCY;
 
-  // Calculate or validate estimated cost
+  // Reject malformed currency values (must be exactly 3 alphabetical letters)
+  if (!/^[A-Z]{3}$/.test(costCurrency)) {
+    throw new CostModelValidationError(`costCurrency must be a valid 3-letter alphabetical code, received '${costCurrency}'`);
+  }
+
+  // Calculate or validate estimated cost with deterministic precision
   let estimatedCost: number;
   if (raw.estimatedCost !== undefined && raw.estimatedCost !== null) {
     estimatedCost = validateNonNegativeFiniteNumber(raw.estimatedCost, 'estimatedCost', MAX_ALLOWED_COST);
+    estimatedCost = Number(estimatedCost.toFixed(6));
   } else {
-    estimatedCost = calculateEstimatedCost(provider, modelVersion, inputTokens, outputTokens, pricingVersion);
+    if (inputTokens !== undefined && outputTokens !== undefined) {
+      estimatedCost = calculateEstimatedCost(provider, modelVersion, inputTokens, outputTokens, pricingVersion);
+    } else {
+      estimatedCost = 0;
+    }
   }
 
   return {

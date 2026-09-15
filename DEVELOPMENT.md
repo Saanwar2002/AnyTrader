@@ -1,6 +1,15 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🧠 AnyTrader V8.1 — Task 14 & 14B.1: Intelligence Processing Observability & Real Emulator Persistence Boundary (September 15, 2026)
+## 🧠 AnyTrader V8.1 — Task 14, 14B & 14C: Intelligence Processing Observability, Real Emulator Persistence & Observability Integrity Boundary (September 15, 2026)
+- **Task 14C — Intelligence Processing Observability Integrity & Metrics Boundary**:
+  - **Comprehensive Observability Hardening (`src/server/intelligence/processingRunStore.ts`, `src/server/intelligence/costModel.ts`)**:
+    - **Structural Validity & Strict Validation**: Added validation layers to enforce schema conformance, rejecting any unknown keys or un-mapped attributes.
+    - **Token and Metric Integrity**: Enforced mathematical metric validation for bytes, tokens, cost, and duration (no negative numbers, NaN, or Infinity). Validates model token sum consistency (`totalTokens === inputTokens + outputTokens`).
+    - **Privacy-Safe Redaction**: Automatically sanitizes errors, diagnostics, and diagnostics records, scrubbing bearer tokens, API keys (`AIza`, `sk-`, etc.), emails, UK phone numbers, postcodes, and credit cards.
+    - **Temporal Consistency**: Checks that `finishedAt` is strictly greater than or equal to `startedAt`, and validates `durationMs` matches the elapsed interval within a tolerance buffer.
+    - **Fail-Closed Execution**: Non-transactional DBs or invalid payloads trigger transactional aborts and throw hard validation errors.
+  - **16 Integration Tests in Firestore Emulator (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
+    - Implemented tests C1 through C16 validating metric ranges, NaN/Infinity rejection, token consistency checks, model cost calculations, error sanitization, timestamp bounds, size budgets, terminal state locks, and high concurrency isolation on a live emulator.
 - **Task 14B / 14B.1 Real Firestore Emulator Processing Run Verification (`tests/unit/firebaseEmulatorIntelligenceV81.test.ts`)**:
   - **Transaction-Only Persistence Boundary**: Enforced `runTransaction` execution for all authoritative operational updates to `/intelligence_processing_runs/{runId}` with 0 non-transactional fallback writes (`.set()`, `.update()`, or in-memory cache).
   - **Fail-Closed Strategy**: Evaluates `runTransaction` capability upfront; throws `[ProcessingRunStore] Firestore database or transaction support is unavailable (Fail Closed)` if unsupported or unconfigured.
