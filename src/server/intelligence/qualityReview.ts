@@ -28,7 +28,6 @@ export function buildQualityReviewId(
 }
 
 export class QualityReviewService {
-  private scratchpadReviews = new Map<string, QualityReview>();
   private db: FirestoreDbLike | null = null;
 
   public setFirestoreDb(db: FirestoreDbLike | null): void {
@@ -80,9 +79,6 @@ export class QualityReviewService {
         hash: provenanceHash,
       },
     };
-
-    // Store in transient scratchpad (non-authoritative test support only)
-    this.scratchpadReviews.set(qualityId, review);
 
     // Audit Event
     const aggregateType = validated.targetCollection === 'intelligence_properties' ? 'property' : 'job';
@@ -197,18 +193,10 @@ export class QualityReviewService {
   }
 
   /**
-   * Retrieves review record from transient test scratchpad.
-   * @deprecated Use `getReviewByIdAsync` for authoritative Firestore retrieval.
-   */
-  public getReview(qualityId: string): QualityReview | undefined {
-    return this.scratchpadReviews.get(qualityId);
-  }
-
-  /**
-   * Clears transient scratchpad (for testing)
+   * Resets database reference (for testing)
    */
   public clear(): void {
-    this.scratchpadReviews.clear();
+    this.db = null;
   }
 }
 

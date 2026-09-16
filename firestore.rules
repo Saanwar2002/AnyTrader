@@ -1094,18 +1094,15 @@ service cloud.firestore {
     // ==========================================
     match /intelligence_events/{eventId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(eventId);
-      allow update, delete: if false; // Append-only immutable event store
+      allow create, update, delete: if false; // Append-only immutable event store; server Admin SDK writes only
     }
     match /intelligence_evidence/{evidenceId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(evidenceId);
-      allow update, delete: if false; // Append-only immutable evidence registry
+      allow create, update, delete: if false; // Append-only immutable evidence registry; server Admin SDK writes only
     }
     match /intelligence_extractions/{extractionId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(extractionId);
-      allow update, delete: if false; // Append-only raw extraction manifests
+      allow create, update, delete: if false; // Append-only raw extraction manifests; server Admin SDK writes only
     }
     match /intelligence_tasks/{taskId} {
       allow read: if isAdmin();
@@ -1153,8 +1150,7 @@ service cloud.firestore {
     }
     match /intelligence_quality/{qualityId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() && isValidId(qualityId);
-      allow update, delete: if false; // Immutable audit log of human quality corrections
+      allow create, update, delete: if false; // Immutable audit log of human quality corrections; server Admin SDK writes only
     }
     match /intelligence_backfill_runs/{runId} {
       allow read: if isAdmin();

@@ -84,6 +84,12 @@ import {
   buildProcessingRunId,
   ProcessingRunValidationError,
 } from '../../src/server/intelligence/processingRunStore';
+import {
+  QualityReviewService,
+  qualityReviewService,
+  buildQualityReviewId,
+} from '../../src/server/intelligence/qualityReview';
+import { QualityReview, CanonicalIntelligenceEvent } from '../../src/server/intelligence/types';
 
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
@@ -5470,6 +5476,493 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
       expect(snap.exists()).toBe(true);
       expect(snap.data()?.status).toBe('started');
+    });
+  });
+
+  // =========================================================================
+  // 15. FINAL CUMULATIVE HARDENING: QUALITY REVIEW, HISTORICAL IMMUTABILITY & CLIENT WRITE PROTECTION
+  // =========================================================================
+  describe('15. Final Cumulative Hardening — Quality Review & Historical Immutability (Emulator)', () => {
+    // TEST 1 — CLIENT TASK CREATE DENIED
+    it('TEST 1 — CLIENT TASK CREATE DENIED: Ordinary client cannot create task in intelligence_tasks', async () => {
+      const userCtx = testEnv!.authenticatedContext('user_ch_t1');
+      const userDb = userCtx.firestore();
+      await assertFails(
+        setDoc(doc(userDb, 'intelligence_tasks', 'task_client_create_denied_1'), {
+          status: 'pending',
+          taskType: 'job_extraction',
+          aggregateId: 'job_123',
+        })
+      );
+    });
+
+    // TEST 2 — CLIENT TASK UPDATE DENIED
+    it('TEST 2 — CLIENT TASK UPDATE DENIED: Ordinary client cannot update task in intelligence_tasks', async () => {
+      const userCtx = testEnv!.authenticatedContext('user_ch_t2');
+      const userDb = userCtx.firestore();
+      await assertFails(
+        updateDoc(doc(userDb, 'intelligence_tasks', 'task_client_update_denied_1'), {
+          status: 'completed',
+        })
+      );
+    });
+
+    // TEST 3 — CLIENT TASK DELETE DENIED
+    it('TEST 3 — CLIENT TASK DELETE DENIED: Ordinary client cannot delete task in intelligence_tasks', async () => {
+      const userCtx = testEnv!.authenticatedContext('user_ch_t3');
+      const userDb = userCtx.firestore();
+      await assertFails(
+        deleteDoc(doc(userDb, 'intelligence_tasks', 'task_client_delete_denied_1'))
+      );
+    });
+
+    // TEST 4 — QUALITY REVIEW FIRST WRITE
+    it('TEST 4 — QUALITY REVIEW FIRST WRITE: Persists quality review and canonical audit event transactionally to Firestore', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t4', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      qrs.setFirestoreDb(storeDb as any);
+
+      const res = await qrs.applyAndPersistReview({
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t4',
+        action: 'correct',
+        reviewerId: 'admin_reviewer_t4',
+        reason: 'Updated budget accurately',
+        originalCandidate: { budget: 500 },
+        correctedResult: { budget: 650 },
+      });
+
+      expect(res.review.qualityId).toContain('qr_job_ch_t4_');
+      expect(res.auditEvent.eventId).toContain('ie_qr_');
+
+      // Fresh Firestore reads
+      const qualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', res.review.qualityId));
+      const eventSnap = await getDoc(doc(adminDb, 'intelligence_events', res.auditEvent.eventId));
+
+      expect(qualitySnap.exists()).toBe(true);
+      expect(qualitySnap.data()?.action).toBe('correct');
+      expect(qualitySnap.data()?.reviewerId).toBe('admin_reviewer_t4');
+
+      expect(eventSnap.exists()).toBe(true);
+      expect(eventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
+      expect(eventSnap.data()?.aggregateId).toBe('job_ch_t4');
+    });
+
+    // TEST 5 — IDENTICAL QUALITY RETRY
+    it('TEST 5 — IDENTICAL QUALITY RETRY: Persisting identical quality review returns idempotent success (isNew: false)', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t5', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t5_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t5',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t5',
+        reason: 'Initial approval',
+        originalCandidate: { verified: true },
+      });
+
+      const firstWrite = await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+      expect(firstWrite.isNew).toBe(true);
+
+      const retryWrite = await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+      expect(retryWrite.isNew).toBe(false);
+      expect(retryWrite.qualityId).toBe(review.qualityId);
+      expect(retryWrite.eventId).toBe(auditEvent.eventId);
+    });
+
+    // TEST 6 — CONFLICTING QUALITY RETRY
+    it('TEST 6 — CONFLICTING QUALITY RETRY: Persisting conflicting review under same identity is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t6', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t6_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t6',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t6',
+        reason: 'Approved properly',
+        originalCandidate: { status: 'valid' },
+      });
+
+      await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+
+      const conflictingReview: QualityReview = {
+        ...review,
+        reason: 'Conflicting tampered reason',
+      };
+
+      await expect(
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review: conflictingReview,
+          auditEvent,
+        })
+      ).rejects.toThrow(/\[Quality Review Immutability Error\]/);
+
+      // Verify original doc untouched
+      const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+      expect(snap.data()?.reason).toBe('Approved properly');
+    });
+
+    // TEST 7 — EVENT IMMUTABILITY
+    it('TEST 7 — EVENT IMMUTABILITY: Attempting to mutate an existing audit event is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t7', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t7_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t7',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t7',
+        reason: 'Initial approval',
+        originalCandidate: { ok: true },
+      });
+
+      await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+
+      const conflictingEvent: CanonicalIntelligenceEvent = {
+        ...auditEvent,
+        eventType: 'EXTRACTION_COMPLETED' as any,
+      };
+
+      await expect(
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent: conflictingEvent,
+        })
+      ).rejects.toThrow(/\[Event Immutability Error\]/);
+    });
+
+    // TEST 8 — QUALITY EXISTS, EVENT MISSING
+    it('TEST 8 — QUALITY EXISTS, EVENT MISSING: Transactionally repairs missing event and returns idempotent result', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t8', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t8_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t8',
+        action: 'correct',
+        reviewerId: 'admin_reviewer_t8',
+        reason: 'Repair test',
+        originalCandidate: { a: 1 },
+        correctedResult: { a: 2 },
+      });
+
+      // Seed ONLY the quality doc directly
+      await setDoc(doc(adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
+      const preEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
+      expect(preEventSnap.exists()).toBe(false);
+
+      // Call production persist
+      const res = await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+
+      expect(res.isNew).toBe(false);
+      expect(res.qualityId).toBe(review.qualityId);
+
+      // Verify event was atomically created and quality doc preserved
+      const postEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
+      expect(postEventSnap.exists()).toBe(true);
+      expect(postEventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
+    });
+
+    // TEST 9 — EVENT EXISTS, QUALITY MISSING
+    it('TEST 9 — EVENT EXISTS, QUALITY MISSING: Transactionally repairs missing quality review and returns idempotent result', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t9', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t9_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t9',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t9',
+        reason: 'Repair test 2',
+        originalCandidate: { b: 1 },
+      });
+
+      // Seed ONLY the event doc directly
+      await setDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
+      const preQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+      expect(preQualitySnap.exists()).toBe(false);
+
+      // Call production persist
+      const res = await immutableIntelligenceStore.persistQualityReview({
+        db: storeDb as any,
+        review,
+        auditEvent,
+      });
+
+      expect(res.isNew).toBe(false);
+      expect(res.eventId).toBe(auditEvent.eventId);
+
+      // Verify quality review doc was atomically created and event preserved
+      const postQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+      expect(postQualitySnap.exists()).toBe(true);
+      expect(postQualitySnap.data()?.action).toBe('approve');
+    });
+
+    // TEST 10 — SERVICE RECREATION DURABILITY
+    it('TEST 10 — SERVICE RECREATION DURABILITY: Fresh service instance retrieves persisted review from Firestore', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t10', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs1 = new QualityReviewService();
+      qrs1.setFirestoreDb(storeDb as any);
+
+      const { review } = await qrs1.applyAndPersistReview({
+        targetCollection: 'intelligence_properties',
+        targetId: 'prop_ch_t10',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t10',
+        reason: 'Durability test',
+        originalCandidate: { epc: 'A' },
+      });
+
+      // Recreate service instance from scratch (zero in-memory state)
+      const qrs2 = new QualityReviewService();
+      qrs2.setFirestoreDb(storeDb as any);
+
+      const fetched = await qrs2.getReviewByIdAsync(review.qualityId);
+      expect(fetched).toBeDefined();
+      expect(fetched?.qualityId).toBe(review.qualityId);
+      expect(fetched?.targetId).toBe('prop_ch_t10');
+      expect(fetched?.reviewerId).toBe('admin_reviewer_t10');
+    });
+
+    // TEST 11 — FIRESTORE FAILURE FAIL-CLOSED
+    it('TEST 11 — FIRESTORE FAILURE FAIL-CLOSED: Fails closed when Firestore is unavailable', async () => {
+      const qrs = new QualityReviewService();
+      // No DB configured
+      await expect(
+        qrs.applyAndPersistReview({
+          targetCollection: 'intelligence_jobs',
+          targetId: 'job_fail_closed',
+          action: 'approve',
+          reviewerId: 'admin_fail',
+          reason: 'Should fail',
+          originalCandidate: {},
+        })
+      ).rejects.toThrow(/Firestore database is not configured or ready\. Operational failure \(Fail Closed\)/);
+
+      await expect(qrs.getReviewByIdAsync('qr_non_existent')).rejects.toThrow(
+        /Firestore database is not configured or ready\. Operational failure \(Fail Closed\)/
+      );
+    });
+
+    // TEST 12 — CONCURRENT IDENTICAL PERSISTENCE
+    it('TEST 12 — CONCURRENT IDENTICAL PERSISTENCE: Concurrent identical persistence results in single canonical record', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t12', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review, auditEvent } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t12_fixed',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t12',
+        action: 'approve',
+        reviewerId: 'admin_reviewer_t12',
+        reason: 'Concurrent identical',
+        originalCandidate: { val: 42 },
+      });
+
+      const [res1, res2] = await Promise.all([
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        }),
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        }),
+      ]);
+
+      expect(res1.qualityId).toBe(review.qualityId);
+      expect(res2.qualityId).toBe(review.qualityId);
+
+      const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data()?.qualityId).toBe(review.qualityId);
+    });
+
+    // TEST 13 — CONCURRENT CONFLICTING PERSISTENCE
+    it('TEST 13 — CONCURRENT CONFLICTING PERSISTENCE: One version wins and conflicting write is rejected', async () => {
+      const adminCtx = testEnv!.authenticatedContext('admin_ch_t13', { admin: true });
+      const adminDb = adminCtx.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb);
+
+      const qrs = new QualityReviewService();
+      const { review: rev1, auditEvent: ev1 } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t13_race',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t13',
+        action: 'approve',
+        reviewerId: 'admin_winner',
+        reason: 'Winning version',
+        originalCandidate: { score: 100 },
+      });
+
+      const { review: rev2, auditEvent: ev2 } = qrs.applyReview({
+        qualityId: 'qr_job_ch_t13_race',
+        targetCollection: 'intelligence_jobs',
+        targetId: 'job_ch_t13',
+        action: 'reject',
+        reviewerId: 'admin_loser',
+        reason: 'Conflicting loser version',
+        originalCandidate: { score: 100 },
+      });
+
+      const results = await Promise.allSettled([
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review: rev1,
+          auditEvent: ev1,
+        }),
+        immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review: rev2,
+          auditEvent: ev2,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+
+      // Verify the surviving record is internally consistent
+      const snap = await getDoc(doc(adminDb, 'intelligence_quality', 'qr_job_ch_t13_race'));
+      expect(snap.exists()).toBe(true);
+      expect(['Winning version', 'Conflicting loser version']).toContain(snap.data()?.reason);
+    });
+
+    // TEST 14 — FRESH FIRESTORE READ
+    it('TEST 14 — FRESH FIRESTORE READ: Directly reading document via independent Firestore client succeeds', async () => {
+      const adminCtx1 = testEnv!.authenticatedContext('admin_ch_t14_writer', { admin: true });
+      const adminDb1 = adminCtx1.firestore();
+      const storeDb = createRealFirestoreStoreDb(adminDb1);
+
+      const qrs = new QualityReviewService();
+      qrs.setFirestoreDb(storeDb as any);
+
+      const { review } = await qrs.applyAndPersistReview({
+        targetCollection: 'intelligence_properties',
+        targetId: 'prop_ch_t14',
+        action: 'approve',
+        reviewerId: 'admin_writer',
+        reason: 'Direct read test',
+        originalCandidate: { sqft: 1200 },
+      });
+
+      // Separate admin reader
+      const adminCtx2 = testEnv!.authenticatedContext('admin_ch_t14_reader', { admin: true });
+      const adminDb2 = adminCtx2.firestore();
+
+      const snap = await getDoc(doc(adminDb2, 'intelligence_quality', review.qualityId));
+      expect(snap.exists()).toBe(true);
+      expect(snap.data()?.targetId).toBe('prop_ch_t14');
+      expect(snap.data()?.reviewerId).toBe('admin_writer');
+    });
+
+    // TEST 15 — HISTORICAL CLIENT WRITE DENIAL
+    it('TEST 15 — HISTORICAL CLIENT WRITE DENIAL: Client SDK cannot create records in historical intelligence collections', async () => {
+      const userCtx = testEnv!.authenticatedContext('user_ch_t15');
+      const userDb = userCtx.firestore();
+
+      await assertFails(
+        setDoc(doc(userDb, 'intelligence_quality', 'qr_client_inject_1'), {
+          action: 'approve',
+          reviewerId: 'user_attacker',
+        })
+      );
+
+      await assertFails(
+        setDoc(doc(userDb, 'intelligence_events', 'ie_client_inject_1'), {
+          eventType: 'QUALITY_REVIEW_APPLIED',
+          aggregateId: 'job_123',
+        })
+      );
+
+      await assertFails(
+        setDoc(doc(userDb, 'intelligence_extractions', 'ex_client_inject_1'), {
+          source: 'user_attacker',
+        })
+      );
+
+      await assertFails(
+        setDoc(doc(userDb, 'intelligence_evidence', 'ev_client_inject_1'), {
+          contentHash: 'hash123',
+        })
+      );
+    });
+
+    // TEST 16 — HISTORICAL UPDATE/DELETE DENIAL
+    it('TEST 16 — HISTORICAL UPDATE/DELETE DENIAL: Client SDK cannot update or delete historical intelligence records', async () => {
+      const userCtx = testEnv!.authenticatedContext('user_ch_t16');
+      const userDb = userCtx.firestore();
+
+      await assertFails(
+        updateDoc(doc(userDb, 'intelligence_quality', 'qr_client_update_1'), {
+          action: 'reject',
+        })
+      );
+
+      await assertFails(
+        deleteDoc(doc(userDb, 'intelligence_quality', 'qr_client_delete_1'))
+      );
+
+      await assertFails(
+        updateDoc(doc(userDb, 'intelligence_events', 'ie_client_update_1'), {
+          status: 'retracted',
+        })
+      );
+
+      await assertFails(
+        deleteDoc(doc(userDb, 'intelligence_events', 'ie_client_delete_1'))
+      );
     });
   });
 });

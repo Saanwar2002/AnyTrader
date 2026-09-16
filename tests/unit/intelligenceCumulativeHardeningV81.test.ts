@@ -9,6 +9,13 @@ import { computeStructuredDataHash } from '../../src/server/intelligence/provena
 class MockMemoryFirestore implements FirestoreDbLike {
   public collections: Map<string, Map<string, any>> = new Map();
 
+  public seedDoc(col: string, id: string, data: any): void {
+    if (!this.collections.has(col)) {
+      this.collections.set(col, new Map());
+    }
+    this.collections.get(col)!.set(id, JSON.parse(JSON.stringify(data)));
+  }
+
   public getDocData(col: string, id: string): any {
     return this.collections.get(col)?.get(id);
   }
@@ -133,8 +140,7 @@ describe('V8.1 Cumulative Intelligence Security & Immutability Hardening', () =>
       expect(match).toBeTruthy();
       const block = match![1];
       expect(block).toContain('allow read: if isAdmin();');
-      expect(block).toContain('allow create: if isAdmin() && isValidId(qualityId);');
-      expect(block).toContain('allow update, delete: if false;');
+      expect(block).toContain('allow create, update, delete: if false;');
     });
 
     it('5. Enforces append-only immutable rules on /intelligence_events, /intelligence_evidence, /intelligence_extractions', () => {
@@ -143,7 +149,7 @@ describe('V8.1 Cumulative Intelligence Security & Immutability Hardening', () =>
         const match = rules.match(new RegExp(`match \\/${col}\\/\\{${idVar}\\} \\{([\\s\\S]*?)\\}`));
         expect(match).toBeTruthy();
         const block = match![1];
-        expect(block).toContain('allow update, delete: if false;');
+        expect(block).toContain('allow create, update, delete: if false;');
       }
     });
   });
@@ -267,30 +273,42 @@ describe('V8.1 Cumulative Intelligence Security & Immutability Hardening', () =>
       ).rejects.toThrow(/\[Quality Review Immutability Error\]/);
     });
 
-    it('7. Rejects conflicting re-submission of audit event with [Event Immutability Error]', async () => {
-      await immutableIntelligenceStore.persistQualityReview({
+    it('7b. Quality exists but Event is missing -> repairs missing event and returns isNew: false', async () => {
+      // Seed only the quality review document
+      mockDb.seedDoc('intelligence_quality', sampleReview.qualityId, sampleReview);
+      expect(mockDb.getDocData('intelligence_events', sampleEvent.eventId)).toBeUndefined();
+
+      const res = await immutableIntelligenceStore.persistQualityReview({
         db: mockDb,
         review: sampleReview,
         auditEvent: sampleEvent,
       });
 
-      const conflictingEvent: CanonicalIntelligenceEvent = {
-        ...sampleEvent,
-        eventType: 'EXTRACTION_COMPLETED' as any,
-      };
+      expect(res.isNew).toBe(false);
+      expect(res.qualityId).toBe(sampleReview.qualityId);
+      // Event must now be created!
+      const repairedEvent = mockDb.getDocData('intelligence_events', sampleEvent.eventId);
+      expect(repairedEvent).toBeDefined();
+      expect(repairedEvent.eventType).toBe('QUALITY_REVIEW_APPLIED');
+    });
 
-      const newReviewWithSameId: QualityReview = {
-        ...sampleReview,
-        qualityId: 'qr_another_test',
-      };
+    it('7c. Event exists but Quality is missing -> repairs missing quality review and returns isNew: false', async () => {
+      // Seed only the event document
+      mockDb.seedDoc('intelligence_events', sampleEvent.eventId, sampleEvent);
+      expect(mockDb.getDocData('intelligence_quality', sampleReview.qualityId)).toBeUndefined();
 
-      await expect(
-        immutableIntelligenceStore.persistQualityReview({
-          db: mockDb,
-          review: newReviewWithSameId,
-          auditEvent: conflictingEvent,
-        })
-      ).rejects.toThrow(/\[Event Immutability Error\]/);
+      const res = await immutableIntelligenceStore.persistQualityReview({
+        db: mockDb,
+        review: sampleReview,
+        auditEvent: sampleEvent,
+      });
+
+      expect(res.isNew).toBe(false);
+      expect(res.eventId).toBe(sampleEvent.eventId);
+      // Quality review must now be created!
+      const repairedQuality = mockDb.getDocData('intelligence_quality', sampleReview.qualityId);
+      expect(repairedQuality).toBeDefined();
+      expect(repairedQuality.action).toBe('correct');
     });
 
     it('8. Fails closed if Firestore database is null or transaction fails', async () => {
@@ -417,9 +435,6 @@ describe('V8.1 Cumulative Intelligence Security & Immutability Hardening', () =>
       // Create completely separate service instance (zero memory state)
       const qrs2 = new QualityReviewService();
       qrs2.setFirestoreDb(mockDb);
-
-      // In-memory lookup on qrs2 returns undefined
-      expect(qrs2.getReview(review.qualityId)).toBeUndefined();
 
       // Authoritative Firestore lookup on qrs2 successfully retrieves record
       const authoritativeReview = await qrs2.getReviewByIdAsync(review.qualityId);

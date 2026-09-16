@@ -1,5 +1,17 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Cumulative Intelligence Security Hardening & Immutability Architecture (September 16, 2026)
+- **1. Server-Authoritative Intelligence Task State**: Client SDKs are strictly blocked from creating, updating, or deleting documents in `/intelligence_tasks/{taskId}`, `/intelligence_backfill_runs/{runId}`, and `/intelligence_processing_runs/{runId}` (`allow create, update, delete: if false;`). All task state transitions (claim, start, fail, complete, retry, dead-letter) are strictly executed via server-authoritative Admin SDK transactions.
+- **2. Immutable Historical Intelligence Collections**: Client SDK writes to `/intelligence_events`, `/intelligence_evidence`, `/intelligence_extractions`, and `/intelligence_quality` are strictly denied (`allow create, update, delete: if false;`). Documents in these collections are write-once, append-only historical audit records.
+- **3. Removal of In-Memory Map Authority in Quality Review**: Removed the scratchpad `Map<string, QualityReview>` and the synchronous `getReview` method from `QualityReviewService`. All read and write operations are now strictly backed by authoritative Firestore transactions via `getReviewByIdAsync` and `getReviewsForTargetAsync`.
+- **4. 4-Branch Transactional Consistency for Quality Reviews (`persistQualityReview`)**: Implemented atomic 4-branch transactional persistence in `immutableStore.ts` using deterministic document IDs:
+  - *Branch 1 (Both Missing)*: Creates both the Quality Review document and the canonical Intelligence Audit Event atomically (`isNew: true`).
+  - *Branch 2 (Both Exist)*: Idempotent success if content hashes match (`isNew: false`); rejects conflicting mutations with `[Quality Review Immutability Error]` or `[Event Immutability Error]`.
+  - *Branch 3 (Quality Exists, Event Missing)*: Transactionally repairs the missing event without modifying the existing quality review.
+  - *Branch 4 (Event Exists, Quality Missing)*: Transactionally repairs the missing quality review without modifying the existing event.
+- **5. Fail-Closed Durability & Zero Bypass**: All intelligence persistence and retrieval operations fail closed if Firestore is unconfigured or encounters an error. No in-memory fallback, bypass, or mock storage is permitted in production code paths.
+- **6. Verification & Test Suite**: 510/510 automated tests passing across 32 test suites (including 16 dedicated unit tests in `intelligenceCumulativeHardeningV81.test.ts` and 16 emulator-ready invariant tests in `firebaseEmulatorIntelligenceV81.test.ts`). Clean TypeScript compilation (`npm run lint`) and successful production build (`compile_applet`).
+
 ## 🛡️ AnyTrader V8.1 — Comprehensive Security Hardening & Vulnerability Remediation (Parts 1 & 2 - September 16, 2026)
 - **Part 1 - Vulnerability 1: Rate Limiting Attached to AI Endpoints**: Attached `aiLimiter` middleware (50 requests/min per IP/UID) to both `/api/gemini/call` and `/api/gemini/stream` in `server.ts`, preventing runaway API billing and unauthenticated/unthrottled model abuse.
 - **Part 1 - Vulnerability 2: Search Telemetry Write Protection**: Hardened `/unmatched_search_telemetry/{telemetryId}` in `firestore.rules` to require `isSignedIn()`, enforce string length caps (`query.size() <= 200`), restrict read and delete access to administrators, and prevent users from modifying sensitive categorization fields (`status`, `suggestedCategory`, `suggestedTrade`).
