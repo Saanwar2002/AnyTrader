@@ -38,7 +38,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         firestore: {
           rules: firestoreRules,
           host: "127.0.0.1",
-          port: 8080,
+          port: 8088,
         },
         storage: {
           rules: storageRules,
