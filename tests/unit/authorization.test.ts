@@ -22,15 +22,15 @@ describe("Authorization & Security Guards", () => {
   });
 
   describe("assertIsAdmin", () => {
-    it("passes for super admin or admin/ecosystem_manager roles", () => {
+    it("passes for super admin with custom claims (admin: true or isAdmin: true)", () => {
       expect(() => assertIsAdmin({ uid: "admin_1", isAdmin: true })).not.toThrow();
-      expect(() => assertIsAdmin({ uid: "admin_2", role: "admin" })).not.toThrow();
-      expect(() => assertIsAdmin({ uid: "mgr_1", role: "ecosystem_manager" })).not.toThrow();
+      expect(() => assertIsAdmin({ uid: "admin_2", admin: true })).not.toThrow();
     });
 
-    it("throws ForbiddenError for regular customers and tradespeople", () => {
+    it("throws ForbiddenError for regular customers, tradespeople, or unverified role attributes", () => {
       expect(() => assertIsAdmin({ uid: "cust_1", role: "customer" })).toThrow(ForbiddenError);
       expect(() => assertIsAdmin({ uid: "trad_1", role: "tradesperson" })).toThrow(ForbiddenError);
+      expect(() => assertIsAdmin({ uid: "unverified_admin", role: "admin" })).toThrow(ForbiddenError);
     });
   });
 

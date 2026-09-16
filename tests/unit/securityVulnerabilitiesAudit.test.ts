@@ -46,11 +46,11 @@ describe("Security Vulnerabilities Remediation Audit", () => {
       expect(isUserAdminClaim(user)).toBe(true);
     });
 
-    it("recognizes role === 'admin' and role === 'ecosystem_manager' as administrator", () => {
+    it("rejects untrusted role strings (role === 'admin' or 'ecosystem_manager') without server-minted custom claims", () => {
       const user1: AuthenticatedUser = { uid: "admin_3", role: "admin" };
       const user2: AuthenticatedUser = { uid: "admin_4", role: "ecosystem_manager" };
-      expect(isUserAdminClaim(user1)).toBe(true);
-      expect(isUserAdminClaim(user2)).toBe(true);
+      expect(isUserAdminClaim(user1)).toBe(false);
+      expect(isUserAdminClaim(user2)).toBe(false);
     });
 
     it("rejects regular users without admin claims or roles", () => {
@@ -170,6 +170,70 @@ describe("Security Vulnerabilities Remediation Audit", () => {
       expect(serverCode).toContain("SAMEORIGIN");
       expect(serverCode).toContain("Content-Security-Policy");
       expect(serverCode).toContain("frame-ancestors 'self'");
+    });
+  });
+
+  // Part 2 Vulnerability 11: Private User Profiles PII Access Control
+  describe("Part 2 - Vulnerability 11: Private User Profiles PII Access Control", () => {
+    it("verifies firestore.rules restricts /users/{userId} reads strictly to owner or admin", () => {
+      const rulesCode = fs.readFileSync(path.resolve(__dirname, "../../firestore.rules"), "utf-8");
+      expect(rulesCode).toContain("match /users/{userId}");
+      const userMatchBlock = rulesCode.split("match /users/{userId}")[1].split("match /")[0];
+      expect(userMatchBlock).toContain("allow read: if isOwner(userId) || isAdmin();");
+      // Must not allow arbitrary cross-user reading of private user documents
+      expect(userMatchBlock).not.toContain("resource.data.get('isPublic', false) == true");
+      expect(userMatchBlock).not.toContain("resource.data.get('role', '') in ['tradesperson', 'trader', 'business']");
+    });
+  });
+
+  // Part 2 Vulnerability 12: Secrets Subtree Defense
+  describe("Part 2 - Vulnerability 12: Secrets Subtree Defense", () => {
+    it("verifies firestore.rules completely denies access to /platform_config/secrets subtree", () => {
+      const rulesCode = fs.readFileSync(path.resolve(__dirname, "../../firestore.rules"), "utf-8");
+      expect(rulesCode).toContain("match /platform_config/secrets/{subPath=**}");
+      expect(rulesCode).toContain("match /platform_config/secrets");
+    });
+  });
+
+  // Part 2 Vulnerability 13: Test Path Denial
+  describe("Part 2 - Vulnerability 13: Test Path Denial", () => {
+    it("verifies firestore.rules explicitly denies all reads and writes to test collection paths", () => {
+      const rulesCode = fs.readFileSync(path.resolve(__dirname, "../../firestore.rules"), "utf-8");
+      expect(rulesCode).toContain("match /test/{subPath=**}");
+    });
+  });
+
+  // Part 2 Vulnerability 14: Postcode SSRF and Rate Limiting Protection
+  describe("Part 2 - Vulnerability 14: Postcode Proxy SSRF & Rate Limiting", () => {
+    it("verifies server.ts validates postcode regex and applies postcodeLimiter", () => {
+      const serverCode = fs.readFileSync(path.resolve(__dirname, "../../server.ts"), "utf-8");
+      expect(serverCode).toContain('app.get("/api/postcode/:postcode", postcodeLimiter,');
+      expect(serverCode).toContain("/^[A-Z0-9]{2,8}$/.test(formattedPostcode)");
+      expect(serverCode).toContain("encodeURIComponent(formattedPostcode)");
+    });
+  });
+
+  // Part 2 Vulnerability 15: Comprehensive Content-Security-Policy (CSP)
+  describe("Part 2 - Vulnerability 15: Comprehensive CSP Policy", () => {
+    it("verifies server.ts sets full script, style, font, img, and connect CSP directives", () => {
+      const serverCode = fs.readFileSync(path.resolve(__dirname, "../../server.ts"), "utf-8");
+      expect(serverCode).toContain("default-src 'self'");
+      expect(serverCode).toContain("script-src 'self'");
+      expect(serverCode).toContain("style-src 'self'");
+      expect(serverCode).toContain("font-src 'self'");
+      expect(serverCode).toContain("img-src 'self'");
+      expect(serverCode).toContain("connect-src 'self'");
+      expect(serverCode).toContain("object-src 'none'");
+      expect(serverCode).toContain("base-uri 'self'");
+    });
+  });
+
+  // Part 2 Vulnerability 16: IPv6 Grouped Rate Limiting
+  describe("Part 2 - Vulnerability 16: IPv6 Grouped Rate Limiting", () => {
+    it("verifies server.ts normalizes and groups IPv6 addresses into /64 blocks", () => {
+      const serverCode = fs.readFileSync(path.resolve(__dirname, "../../server.ts"), "utf-8");
+      expect(serverCode).toContain("normalizeIpForRateLimiting");
+      expect(serverCode).toContain("::/64");
     });
   });
 });

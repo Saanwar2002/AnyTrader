@@ -18,7 +18,7 @@ export interface AuthenticatedUser {
  */
 export function isUserAdminClaim(user?: AuthenticatedUser | null): boolean {
   if (!user) return false;
-  return user.isAdmin === true || user.admin === true || user.role === "admin" || user.role === "ecosystem_manager";
+  return user.isAdmin === true || user.admin === true;
 }
 
 /**

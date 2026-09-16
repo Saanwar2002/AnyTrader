@@ -9,7 +9,6 @@ service cloud.firestore {
       return isSignedIn() && (
         ('admin' in request.auth.token && request.auth.token.admin == true) ||
         ('isAdmin' in request.auth.token && request.auth.token.isAdmin == true) ||
-        ('role' in request.auth.token && (request.auth.token.role == 'admin' || request.auth.token.role == 'ecosystem_manager')) ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       ); 
     }
@@ -56,8 +55,8 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    match /test/connection {
-      allow read: if true;
+    match /test/{subPath=**} {
+      allow read, write: if false;
     }
 
     // Collection group rule for quotes (strictly scoped to quoting trader, homeowner, or admin)
@@ -72,13 +71,16 @@ service cloud.firestore {
       );
     }
 
-    // --- Platform Config (Readable by all for init, strictly forbidding secrets) ---
-    match /platform_config/secrets {
-      allow read, write: if false; // Deny all client SDK access to API keys & secrets
+    // --- Platform Config (Strictly forbidding secrets and sub-paths) ---
+    match /platform_config/secrets/{subPath=**} {
+      allow read, write: if false; // Deny all client SDK access to API keys & secrets subtree
     }
-    match /platform_config/{document=**} {
-      allow read: if document != 'secrets';
-      allow write: if isAdmin() && document != 'secrets';
+    match /platform_config/secrets {
+      allow read, write: if false;
+    }
+    match /platform_config/{doc} {
+      allow read: if doc != 'secrets';
+      allow write: if isAdmin() && doc != 'secrets';
     }
     match /platform_categories/{document=**} {
       allow read: if true;
@@ -150,12 +152,8 @@ service cloud.firestore {
 
     // --- User Profiles (Private PII & Full Profile) ---
     match /users/{userId} {
-      // Authenticated users can read their own profile, admins can read all, or public profiles of providers (excluding private drivers)
-      allow read: if isOwner(userId) || isAdmin() || 
-                     (isSignedIn() && resource != null && (
-                       resource.data.get('role', '') in ['tradesperson', 'trader', 'business'] ||
-                       resource.data.get('isPublic', false) == true
-                     ));
+      // Strictly restricted to document owner or administrators to protect private PII (email, phone, address)
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) && (
         isAdmin() || (
           request.resource.data.get('isAdmin', false) == false && 

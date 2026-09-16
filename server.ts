@@ -1041,32 +1041,24 @@ async function verifyTokenSafely(token: string) {
 
 /**
  * Server-authoritative check verifying if a caller holds administrator privileges.
- * Honours custom claims (admin: true, isAdmin: true), roles ('admin', 'ecosystem_manager'),
- * and the Firestore 'admins' and 'users' collections to ensure real admins are never refused.
+ * Strictly trusts ONLY server-controlled evidence:
+ * 1. Firebase Custom User Claims (admin: true, isAdmin: true)
+ * 2. Firestore 'admins' collection record (admins/{uid})
+ * Untrusted client fields or user document 'role' fields are strictly ignored to prevent privilege escalation.
  */
 export async function checkIsAdmin(user: any): Promise<boolean> {
   if (!user || !user.uid) return false;
 
-  // 1. Primary check: Firebase Custom User Claims & token attributes
-  if (
-    user.admin === true ||
-    user.isAdmin === true ||
-    user.role === "admin" ||
-    user.role === "ecosystem_manager"
-  ) {
+  // 1. Primary check: Firebase Custom User Claims (server-minted only)
+  if (user.admin === true || user.isAdmin === true) {
     return true;
   }
 
-  // 2. Secondary check / migration fallback: Firestore admins & users collections
+  // 2. Secondary check: Server-authoritative admins collection
   if (db) {
     try {
       const adminDoc = await db.collection("admins").doc(user.uid).get();
       if (adminDoc.exists) {
-        return true;
-      }
-      const userDoc = await db.collection("users").doc(user.uid).get();
-      const role = userDoc.data()?.role;
-      if (role === "admin" || role === "ecosystem_manager") {
         return true;
       }
     } catch (dbErr: any) {
@@ -1247,7 +1239,7 @@ async function startServer() {
     next();
   });
 
-  // Production Security Headers: HSTS, Clickjacking Protection, MIME-sniffing defense, Referrer & Permissions Policies
+  // Production Security Headers: Comprehensive CSP, HSTS, Clickjacking Protection, MIME-sniffing defense, Referrer & Permissions Policies
   // Applied globally to all requests (pages, assets, and API endpoints)
   app.use((req, res, next) => {
     // 1. Strict-Transport-Security (HSTS): Enforce HTTPS connections for 1 year with subdomains and preload
@@ -1256,21 +1248,33 @@ async function startServer() {
       "max-age=31536000; includeSubDomains; preload"
     );
 
-    // 2. Clickjacking Protection across ALL pages and routes
-    // SAMEORIGIN for legacy clients + CSP frame-ancestors allowing self, Google Cloud Run previews, and AI Studio
-    res.setHeader("X-Frame-Options", "SAMEORIGIN");
-    res.setHeader(
-      "Content-Security-Policy",
-      "frame-ancestors 'self' https://*.run.app https://*.google.com https://ai.studio https://studio.google.com;"
-    );
+    // 2. Comprehensive Content-Security-Policy (CSP)
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.googleapis.com https://js.stripe.com https://maps.googleapis.com https://*.firebaseapp.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' data: https://fonts.gstatic.com",
+      "img-src 'self' data: blob: https:",
+      "media-src 'self' data: blob: https:",
+      "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com https://api.stripe.com https://*.cloudfunctions.net https://*.run.app wss://*.firebaseio.com https://api.postcodes.io",
+      "frame-src 'self' https://js.stripe.com https://accounts.google.com https://*.firebaseapp.com https://*.google.com",
+      "frame-ancestors 'self' https://*.run.app https://*.google.com https://ai.studio https://studio.google.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+    ].join('; ');
 
-    // 3. MIME-type sniffing defense
+    res.setHeader("Content-Security-Policy", csp);
+
+    // 3. Clickjacking Protection fallback for legacy clients
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+
+    // 4. MIME-type sniffing defense
     res.setHeader("X-Content-Type-Options", "nosniff");
 
-    // 4. Referrer Policy
+    // 5. Referrer Policy
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-    // 5. Permissions Policy
+    // 6. Permissions Policy
     res.setHeader(
       "Permissions-Policy",
       "geolocation=(self), microphone=(self), camera=(self)"
@@ -1279,9 +1283,21 @@ async function startServer() {
     next();
   });
 
-  // Rate limiters
+  // Normalizes client IP address, grouping IPv6 addresses into /64 prefix subnets to prevent rotation bypass
+  function normalizeIpForRateLimiting(rawIp?: string): string {
+    if (!rawIp) return "unknown-ip";
+    const ip = rawIp.trim().replace(/^::ffff:/, ''); // strip IPv4-mapped IPv6 prefix
+    if (ip.includes(':')) {
+      // Group IPv6 addresses into /64 blocks (first 4 hextets)
+      const parts = ip.split(':');
+      return parts.slice(0, 4).join(':') + '::/64';
+    }
+    return ip;
+  }
+
+  // Rate limiters (UID first, grouped IPv6/IPv4 fallback)
   const limitKeyGenerator = (req: express.Request) => {
-    return (req as any).user?.uid || req.ip || "unknown-ip";
+    return (req as any).user?.uid || normalizeIpForRateLimiting(req.ip || req.socket.remoteAddress);
   };
 
   const aiLimiter = rateLimit({
@@ -1296,6 +1312,13 @@ async function startServer() {
     max: 50,
     keyGenerator: limitKeyGenerator,
     message: { error: "Too many payment requests, please try again after a minute" },
+  });
+
+  const postcodeLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 30,
+    keyGenerator: limitKeyGenerator,
+    message: { error: "Too many postcode lookups, please try again after a minute" },
   });
   
   const generalLimiter = rateLimit({
@@ -4013,17 +4036,24 @@ async function startServer() {
   // Postcode lookup proxy cache
   const postcodeCache = new Map<string, { data: any; expiresAt: number }>();
 
-  // Postcode lookup proxy
-  app.get("/api/postcode/:postcode", async (req, res) => {
+  // Postcode lookup proxy with rate limiting and strict alphanumeric format validation
+  app.get("/api/postcode/:postcode", postcodeLimiter, async (req, res) => {
     try {
-      const { postcode } = req.params;
-      const formattedPostcode = postcode.toUpperCase().replace(/\s/g, '');
+      const rawPostcode = req.params.postcode || "";
+      const formattedPostcode = rawPostcode.toUpperCase().replace(/\s/g, '');
+
+      // Strict validation: UK postcodes are 2-8 alphanumeric characters without spaces
+      if (!/^[A-Z0-9]{2,8}$/.test(formattedPostcode)) {
+        return res.status(400).json({ error: "Invalid postcode format" });
+      }
+
       const cached = postcodeCache.get(formattedPostcode);
       if (cached && Date.now() < cached.expiresAt) {
         return res.json(cached.data);
       }
 
-      const response = await fetch(`https://api.postcodes.io/postcodes/${postcode}`);
+      const encoded = encodeURIComponent(formattedPostcode);
+      const response = await fetch(`https://api.postcodes.io/postcodes/${encoded}`);
       const data = await response.json();
       
       // Prevent memory leaks - enforce a safe 1000-entry peak limit
