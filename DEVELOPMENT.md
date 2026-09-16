@@ -550,6 +550,26 @@ PASS / FAIL
     - Verified all **211/211 tests passing across 15 test suites**.
 
 
+## 🧠 AnyTrader V8.1 Intelligence System Security Hardening & Immutability Architecture (Completed September 16, 2026)
+- **Core Objectives & Invariants**:
+  - **1. Server-Authoritative Task Queue State**:
+    - Restricted `/intelligence_tasks/{taskId}`, `/intelligence_backfill_runs/{runId}`, and `/intelligence_processing_runs/{runId}` in `firestore.rules` to `allow create, update, delete: if false;` for client SDKs while preserving `allow read: if isAdmin();`. All task status transitions and execution lifecycle mutations are strictly handled by trusted server backend code.
+  - **2. Transactional & Immutable Quality Review Store (`src/server/intelligence/immutableStore.ts`)**:
+    - Hardened `persistQualityReview()` with atomic `db.runTransaction()`:
+      - Writes `/intelligence_quality/{qualityId}` and `/intelligence_events/{eventId}` transactionally.
+      - Enforces strict historical immutability: identical re-submissions succeed idempotently (`isNew: false`), while conflicting mutations on existing records throw `[Quality Review Immutability Error]` or `[Event Immutability Error]`.
+    - Added authoritative Firestore read queries: `getQualityReviewById()` and `getQualityReviewsForTarget()`.
+  - **3. Removal of Production In-Memory Map Authority (`src/server/intelligence/qualityReview.ts`)**:
+    - Removed in-memory `Map` as an authoritative or read source.
+    - Implemented `getReviewByIdAsync()` and `getReviewsForTargetAsync()` reading directly from Firestore with fail-closed behavior.
+    - Added deterministic identity generation via `buildQualityReviewId()`.
+  - **4. Append-Only Security Rules for Historical Events & Extractions**:
+    - Enforced `allow update, delete: if false;` on `/intelligence_quality/{qualityId}`, `/intelligence_events/{eventId}`, `/intelligence_evidence/{evidenceId}`, and `/intelligence_extractions/{extractionId}`.
+  - **5. Comprehensive Automated Verification**:
+    - Added `tests/unit/intelligenceCumulativeHardeningV81.test.ts` (15 tests, 100% pass).
+    - Full platform test suite now passes with **509/509 tests across 32 test suites (100% pass rate)**.
+    - Linter (`npm run lint` / `tsc --noEmit`) and production compilation (`compile_applet`) build with zero errors.
+
 ## 🔐 Firestore Security Rules Permission Fixes for Live Tracking & Demand Surge (September 10, 2026)
 - **Root Cause & Fix**:
   - **Live Driver Tracking Permission Fix (`match /live_tracking/{rideId}`)**: Updated read rule to `allow read: if isSignedIn()`, enabling passengers, drivers, and dispatch engines to query online driver locations (`isOnline == true`) and track active ride locations without permission errors.

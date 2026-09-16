@@ -282,13 +282,16 @@ export class ImmutableIntelligenceStore {
    * Persists an admin quality review and its associated historical audit event transactionally.
    * - `intelligence_quality/{qualityId}` stores the quality review record.
    * - `intelligence_events/{eventId}` stores the immutable canonical audit event.
+   * - Enforces historical immutability:
+   *   - Identical re-submission is idempotent (isNew: false).
+   *   - Conflicting re-submission throws [Quality Review Immutability Error] or [Event Immutability Error].
    * - Requires `db.runTransaction()` (Fails closed if unavailable).
    */
   public async persistQualityReview(options: {
     db?: FirestoreDbLike | null;
     review: QualityReview;
     auditEvent: CanonicalIntelligenceEvent;
-  }): Promise<{ qualityId: string; eventId: string }> {
+  }): Promise<{ qualityId: string; eventId: string; isNew: boolean; review: QualityReview }> {
     const db = options.db || globalIntelligenceDb;
     if (!db) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
@@ -300,18 +303,170 @@ export class ImmutableIntelligenceStore {
       );
     }
 
-    const qualityRef = db.collection('intelligence_quality').doc(options.review.qualityId);
-    const eventRef = db.collection('intelligence_events').doc(options.auditEvent.eventId);
+    const { review, auditEvent } = options;
+    const qualityRef = db.collection('intelligence_quality').doc(review.qualityId);
+    const eventRef = db.collection('intelligence_events').doc(auditEvent.eventId);
 
-    await db.runTransaction(async (transaction: any) => {
-      transaction.set(qualityRef, options.review);
-      transaction.set(eventRef, options.auditEvent);
+    const reviewHash = computeStructuredDataHash({
+      qualityId: review.qualityId,
+      targetCollection: review.targetCollection,
+      targetId: review.targetId,
+      targetVersionId: review.targetVersionId,
+      action: review.action,
+      reviewerId: review.reviewerId,
+      reason: review.reason,
+      originalCandidate: review.originalCandidate,
+      correctedResult: review.correctedResult,
     });
 
-    return {
-      qualityId: options.review.qualityId,
-      eventId: options.auditEvent.eventId,
-    };
+    const eventHash = computeStructuredDataHash({
+      eventId: auditEvent.eventId,
+      aggregateType: auditEvent.aggregateType,
+      aggregateId: auditEvent.aggregateId,
+      eventType: auditEvent.eventType,
+      payload: auditEvent.payload,
+    });
+
+    return await db.runTransaction(async (transaction: any) => {
+      const existingQualitySnap = await transaction.get(qualityRef);
+
+      if (existingQualitySnap && existingQualitySnap.exists) {
+        const existingQualityData = (
+          typeof existingQualitySnap.data === 'function' ? existingQualitySnap.data() : existingQualitySnap.data
+        ) as QualityReview;
+
+        const existingQualityHash = computeStructuredDataHash({
+          qualityId: existingQualityData.qualityId,
+          targetCollection: existingQualityData.targetCollection,
+          targetId: existingQualityData.targetId,
+          targetVersionId: existingQualityData.targetVersionId,
+          action: existingQualityData.action,
+          reviewerId: existingQualityData.reviewerId,
+          reason: existingQualityData.reason,
+          originalCandidate: existingQualityData.originalCandidate,
+          correctedResult: existingQualityData.correctedResult,
+        });
+
+        if (existingQualityHash !== reviewHash) {
+          throw new Error(
+            `[Quality Review Immutability Error] Cannot mutate historical quality review '${review.qualityId}'. Historical quality reviews are append-only. Submit a new review record instead.`
+          );
+        }
+
+        // Check event if existing
+        const existingEventSnap = await transaction.get(eventRef);
+        if (existingEventSnap && existingEventSnap.exists) {
+          const existingEventData = (
+            typeof existingEventSnap.data === 'function' ? existingEventSnap.data() : existingEventSnap.data
+          ) as CanonicalIntelligenceEvent;
+
+          const existingEventHash = computeStructuredDataHash({
+            eventId: existingEventData.eventId,
+            aggregateType: existingEventData.aggregateType,
+            aggregateId: existingEventData.aggregateId,
+            eventType: existingEventData.eventType,
+            payload: existingEventData.payload,
+          });
+
+          if (existingEventHash !== eventHash) {
+            throw new Error(
+              `[Event Immutability Error] Cannot mutate historical audit event '${auditEvent.eventId}'. Historical intelligence events are append-only.`
+            );
+          }
+        }
+
+        return {
+          qualityId: review.qualityId,
+          eventId: auditEvent.eventId,
+          isNew: false,
+          review: existingQualityData,
+        };
+      }
+
+      // Check event doc existence to prevent overwriting mismatched historical events
+      const existingEventSnap = await transaction.get(eventRef);
+      if (existingEventSnap && existingEventSnap.exists) {
+        const existingEventData = (
+          typeof existingEventSnap.data === 'function' ? existingEventSnap.data() : existingEventSnap.data
+        ) as CanonicalIntelligenceEvent;
+
+        const existingEventHash = computeStructuredDataHash({
+          eventId: existingEventData.eventId,
+          aggregateType: existingEventData.aggregateType,
+          aggregateId: existingEventData.aggregateId,
+          eventType: existingEventData.eventType,
+          payload: existingEventData.payload,
+        });
+
+        if (existingEventHash !== eventHash) {
+          throw new Error(
+            `[Event Immutability Error] Cannot mutate historical audit event '${auditEvent.eventId}'. Historical intelligence events are append-only.`
+          );
+        }
+      }
+
+      const sanitizedReview = cleanUndefinedFields(review);
+      const sanitizedEvent = cleanUndefinedFields(auditEvent);
+
+      transaction.set(qualityRef, sanitizedReview);
+      transaction.set(eventRef, sanitizedEvent);
+
+      return {
+        qualityId: review.qualityId,
+        eventId: auditEvent.eventId,
+        isNew: true,
+        review: sanitizedReview,
+      };
+    });
+  }
+
+  /**
+   * Retrieves a quality review by qualityId. Fails closed if Firestore is unavailable.
+   */
+  public async getQualityReviewById(
+    db: FirestoreDbLike | null,
+    qualityId: string
+  ): Promise<QualityReview | null> {
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error(
+        '[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).'
+      );
+    }
+
+    const docSnap = await effectiveDb.collection('intelligence_quality').doc(qualityId).get();
+    if (docSnap && docSnap.exists) {
+      return (typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data) as QualityReview;
+    }
+    return null;
+  }
+
+  /**
+   * Retrieves all quality reviews for a targetId. Fails closed if Firestore is unavailable.
+   */
+  public async getQualityReviewsForTarget(
+    db: FirestoreDbLike | null,
+    targetId: string
+  ): Promise<QualityReview[]> {
+    const effectiveDb = db || globalIntelligenceDb;
+    if (!effectiveDb) {
+      throw new Error(
+        '[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).'
+      );
+    }
+
+    const snap = await effectiveDb
+      .collection('intelligence_quality')
+      .where('targetId', '==', targetId)
+      .get();
+
+    if (snap && snap.docs) {
+      const docs = snap.docs.map((d: any) => (typeof d.data === 'function' ? d.data() : d.data || d));
+      return docs.sort((a: QualityReview, b: QualityReview) =>
+        (a.reviewedAt || '').localeCompare(b.reviewedAt || '')
+      );
+    }
+    return [];
   }
 
   /**

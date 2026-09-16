@@ -251,7 +251,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // 1. FIRESTORE SECURITY RULES FOR INTELLIGENCE COLLECTIONS
   // ==========================================================
   describe('1. Intelligence Collections Security Rules (Emulator)', () => {
-    const intelligenceCollections = [
+    const allIntelligenceCollections = [
       'intelligence_events',
       'intelligence_evidence',
       'intelligence_extractions',
@@ -260,12 +260,28 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       'intelligence_properties',
       'intelligence_quality',
       'intelligence_backfill_runs',
+      'intelligence_processing_runs',
+    ];
+
+    const clientAdminWritableCollections = [
+      'intelligence_events',
+      'intelligence_evidence',
+      'intelligence_extractions',
+      'intelligence_jobs',
+      'intelligence_properties',
+      'intelligence_quality',
+    ];
+
+    const serverAuthoritativeCollections = [
+      'intelligence_tasks',
+      'intelligence_backfill_runs',
+      'intelligence_processing_runs',
     ];
 
     it('rejects unauthenticated read and write across all intelligence collections', async () => {
       const unauthDb = testEnv!.unauthenticatedContext().firestore();
 
-      for (const colName of intelligenceCollections) {
+      for (const colName of allIntelligenceCollections) {
         const docRef = doc(unauthDb, colName, 'test_doc_1');
         await assertFails(getDoc(docRef));
         await assertFails(setDoc(docRef, { data: 'unauth' }));
@@ -275,20 +291,32 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     it('rejects ordinary authenticated non-admin user read and write across all intelligence collections', async () => {
       const userDb = testEnv!.authenticatedContext('user_bob', { role: 'customer' }).firestore();
 
-      for (const colName of intelligenceCollections) {
+      for (const colName of allIntelligenceCollections) {
         const docRef = doc(userDb, colName, 'test_doc_2');
         await assertFails(getDoc(docRef));
         await assertFails(setDoc(docRef, { data: 'user_attempt' }));
       }
     });
 
-    it('allows platform admin to create and read intelligence documents', async () => {
+    it('allows platform admin client to create and read client-writable intelligence documents', async () => {
       const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
-      for (const colName of intelligenceCollections) {
+      for (const colName of clientAdminWritableCollections) {
         const docRef = doc(adminDb, colName, 'valid_doc_1');
         await assertSucceeds(setDoc(docRef, { testField: 'admin_data', createdAt: new Date().toISOString() }));
         await assertSucceeds(getDoc(docRef));
+      }
+    });
+
+    it('blocks all client SDK writes on server-authoritative collections (tasks, backfill_runs, processing_runs) while allowing admin reads', async () => {
+      const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
+
+      for (const colName of serverAuthoritativeCollections) {
+        const docRef = doc(adminDb, colName, 'server_doc_1');
+        await assertSucceeds(getDoc(docRef));
+        await assertFails(setDoc(docRef, { status: 'pending' }));
+        await assertFails(updateDoc(docRef, { status: 'completed' }));
+        await assertFails(deleteDoc(docRef));
       }
     });
 
@@ -313,12 +341,10 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       }
     });
 
-    it('prevents deletion of tasks, jobs, properties, and backfill runs to protect audit trails', async () => {
+    it('prevents deletion of jobs and properties to protect audit trails', async () => {
       const auditCollections = [
-        'intelligence_tasks',
         'intelligence_jobs',
         'intelligence_properties',
-        'intelligence_backfill_runs',
       ];
 
       const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();

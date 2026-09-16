@@ -13,8 +13,22 @@ import { QualityReviewInputSchema } from './schemas';
 import { CanonicalIntelligenceEvent, QualityReview } from './types';
 import { immutableIntelligenceStore, FirestoreDbLike } from './immutableStore';
 
+/**
+ * Builds a deterministic or unique Quality Review document ID
+ */
+export function buildQualityReviewId(
+  targetId: string,
+  reviewerId: string,
+  timestampOrSeed?: string | number
+): string {
+  const norm = timestampOrSeed !== undefined ? String(timestampOrSeed) : '';
+  const payload = `${targetId}:${reviewerId}:${norm}:${INTELLIGENCE_PIPELINE_VERSION}`;
+  const hash = computeSha256(payload);
+  return `qr_${targetId}_${hash.slice(0, 16)}`;
+}
+
 export class QualityReviewService {
-  private reviews = new Map<string, QualityReview>();
+  private scratchpadReviews = new Map<string, QualityReview>();
   private db: FirestoreDbLike | null = null;
 
   public setFirestoreDb(db: FirestoreDbLike | null): void {
@@ -22,11 +36,13 @@ export class QualityReviewService {
   }
 
   /**
-   * Applies an admin quality review to a candidate intelligence record
+   * Builds an admin quality review and corresponding audit event
    */
   public applyReview(input: {
+    qualityId?: string;
     targetCollection: 'intelligence_jobs' | 'intelligence_properties' | 'intelligence_events';
     targetId: string;
+    targetVersionId?: string;
     action: 'approve' | 'reject' | 'correct';
     reviewerId: string;
     reason: string;
@@ -40,7 +56,9 @@ export class QualityReviewService {
     const validated = QualityReviewInputSchema.parse(input);
 
     const now = new Date().toISOString();
-    const qualityId = `qr_${validated.targetId}_${Date.now()}`;
+    const qualityId =
+      validated.qualityId ||
+      buildQualityReviewId(validated.targetId, validated.reviewerId, Date.now());
     const provenanceHash = computeSha256(
       `${validated.reviewerId}:${now}:${JSON.stringify(validated.correctedResult || {})}`
     );
@@ -63,7 +81,8 @@ export class QualityReviewService {
       },
     };
 
-    this.reviews.set(qualityId, review);
+    // Store in transient scratchpad (non-authoritative test support only)
+    this.scratchpadReviews.set(qualityId, review);
 
     // Audit Event
     const aggregateType = validated.targetCollection === 'intelligence_properties' ? 'property' : 'job';
@@ -117,8 +136,10 @@ export class QualityReviewService {
    */
   public async applyAndPersistReview(
     input: {
+      qualityId?: string;
       targetCollection: 'intelligence_jobs' | 'intelligence_properties' | 'intelligence_events';
       targetId: string;
+      targetVersionId?: string;
       action: 'approve' | 'reject' | 'correct';
       reviewerId: string;
       reason: string;
@@ -144,17 +165,50 @@ export class QualityReviewService {
   }
 
   /**
-   * Retrieves review record by ID
+   * Authoritative Firestore Read (Fail Closed).
    */
-  public getReview(qualityId: string): QualityReview | undefined {
-    return this.reviews.get(qualityId);
+  public async getReviewByIdAsync(
+    qualityId: string,
+    customDb?: FirestoreDbLike | null
+  ): Promise<QualityReview | null> {
+    const effectiveDb = customDb || this.db;
+    if (!effectiveDb) {
+      throw new Error(
+        '[QualityReviewService] Firestore database is not configured or ready. Operational failure (Fail Closed) — zero production memory fallback.'
+      );
+    }
+    return immutableIntelligenceStore.getQualityReviewById(effectiveDb, qualityId);
   }
 
   /**
-   * Clears reviews (for testing)
+   * Authoritative Firestore Query for Target (Fail Closed).
+   */
+  public async getReviewsForTargetAsync(
+    targetId: string,
+    customDb?: FirestoreDbLike | null
+  ): Promise<QualityReview[]> {
+    const effectiveDb = customDb || this.db;
+    if (!effectiveDb) {
+      throw new Error(
+        '[QualityReviewService] Firestore database is not configured or ready. Operational failure (Fail Closed) — zero production memory fallback.'
+      );
+    }
+    return immutableIntelligenceStore.getQualityReviewsForTarget(effectiveDb, targetId);
+  }
+
+  /**
+   * Retrieves review record from transient test scratchpad.
+   * @deprecated Use `getReviewByIdAsync` for authoritative Firestore retrieval.
+   */
+  public getReview(qualityId: string): QualityReview | undefined {
+    return this.scratchpadReviews.get(qualityId);
+  }
+
+  /**
+   * Clears transient scratchpad (for testing)
    */
   public clear(): void {
-    this.reviews.clear();
+    this.scratchpadReviews.clear();
   }
 }
 

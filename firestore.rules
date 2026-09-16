@@ -1109,8 +1109,7 @@ service cloud.firestore {
     }
     match /intelligence_tasks/{taskId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin() && isValidId(taskId);
-      allow delete: if false; // Tasks transition states; never deleted to maintain audit trail
+      allow create, update, delete: if false; // Server-authoritative task queue; only trusted server Admin SDK writes
     }
     match /intelligence_jobs/{jobId} {
       allow read: if isAdmin();
@@ -1159,8 +1158,7 @@ service cloud.firestore {
     }
     match /intelligence_backfill_runs/{runId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin() && isValidId(runId);
-      allow delete: if false; // Durable backfill run history & checkpoint tracking
+      allow create, update, delete: if false; // Operational state: only trusted server Admin SDK writes
     }
     match /intelligence_processing_runs/{runId} {
       allow read: if isAdmin();
