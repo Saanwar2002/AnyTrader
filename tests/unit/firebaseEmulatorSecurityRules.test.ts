@@ -50,7 +50,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       console.error("FATAL ERROR: Failed to initialize Firebase emulator test environment!", err);
       throw err; // Fail the process
     }
-  }, 30000);
+  });
 
   afterAll(async () => {
     if (testEnv) {
