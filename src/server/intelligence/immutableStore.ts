@@ -311,12 +311,12 @@ export class ImmutableIntelligenceStore {
       qualityId: review.qualityId,
       targetCollection: review.targetCollection,
       targetId: review.targetId,
-      targetVersionId: review.targetVersionId,
+      targetVersionId: review.targetVersionId || '',
       action: review.action,
       reviewerId: review.reviewerId,
       reason: review.reason,
       originalCandidate: review.originalCandidate,
-      correctedResult: review.correctedResult,
+      correctedResult: review.correctedResult || {},
     });
 
     const eventHash = computeStructuredDataHash({

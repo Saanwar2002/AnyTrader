@@ -100,12 +100,12 @@ export function buildProcessingRunId(taskId: string, attempt: number, leaseId: s
   return `run_${sanitizedTask}_att${attempt}_${hash}`;
 }
 
-export function validateStringField(value: unknown, name: string, maxLength: number, isRequired: boolean = false): string {
+export function validateStringField(value: unknown, name: string, maxLength: number, isRequired: boolean = false): string | undefined {
   if (value === undefined || value === null) {
     if (isRequired) {
       throw new ProcessingRunValidationError(`Field '${name}' is required`);
     }
-    return '';
+    return undefined;
   }
   if (typeof value !== 'string') {
     throw new ProcessingRunValidationError(`Field '${name}' must be a string, received ${typeof value}`);
@@ -173,8 +173,8 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
   const workerId = validateStringField(run.workerId, 'workerId', 64, true);
   const leaseId = validateStringField(run.leaseId, 'leaseId', 64, true);
 
-  const pipelineVersion = validateStringField(run.pipelineVersion || 'v8.1.0', 'pipelineVersion', 16);
-  const schemaVersion = validateStringField(run.schemaVersion || 'v8.1.0', 'schemaVersion', 16);
+  const pipelineVersion = validateStringField(run.pipelineVersion, 'pipelineVersion', 16) || 'v8.1.0';
+  const schemaVersion = validateStringField(run.schemaVersion, 'schemaVersion', 16) || 'v8.1.0';
   const pricingVersion = validateStringField(run.pricingVersion, 'pricingVersion', 16);
   const costCurrency = validateStringField(run.costCurrency, 'costCurrency', 16);
 
@@ -185,9 +185,9 @@ export function validateProcessingRunRecord(run: Partial<IntelligenceProcessingR
 
   const taskType = validateStringField(run.taskType, 'taskType', 32, true);
   const aggregateType = validateStringField(run.aggregateType, 'aggregateType', 32, true);
-  const provider = validateStringField(run.provider || 'google_genai', 'provider', 32);
-  const modelVersion = validateStringField(run.modelVersion || 'gemini-3.8-flash', 'modelVersion', 32);
-  const promptVersion = validateStringField(run.promptVersion || 'default_v8.1', 'promptVersion', 32);
+  const provider = validateStringField(run.provider, 'provider', 32);
+  const modelVersion = validateStringField(run.modelVersion, 'modelVersion', 32);
+  const promptVersion = validateStringField(run.promptVersion, 'promptVersion', 32);
   const errorCode = validateStringField(run.errorCode, 'errorCode', 32);
   const errorClass = validateStringField(run.errorClass, 'errorClass', 32);
 
@@ -445,8 +445,8 @@ export class IntelligenceProcessingRunStore {
         'pricingVersion',
       ];
       for (const key of identityKeys) {
-        if (updates && updates[key] !== undefined && updates[key] !== null) {
-          if (existing[key] !== undefined && existing[key] !== null) {
+        if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== '') {
+          if (existing[key] !== undefined && existing[key] !== null && existing[key] !== '') {
             if (updates[key] !== existing[key]) {
               throw new ProcessingRunValidationError(
                 `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`
@@ -573,8 +573,8 @@ export class IntelligenceProcessingRunStore {
           'pricingVersion',
         ];
         for (const key of identityKeys) {
-          if (updates && updates[key] !== undefined && updates[key] !== null) {
-            if (existing[key] !== undefined && existing[key] !== null) {
+          if (updates && updates[key] !== undefined && updates[key] !== null && updates[key] !== '') {
+            if (existing[key] !== undefined && existing[key] !== null && existing[key] !== '') {
               if (updates[key] !== existing[key]) {
                 throw new ProcessingRunValidationError(
                   `Malicious update rejected: caller-supplied ${key} '${updates[key]}' does not match existing server-owned value '${existing[key]}'`

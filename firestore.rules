@@ -153,7 +153,13 @@ service cloud.firestore {
     // --- User Profiles (Private PII & Full Profile) ---
     match /users/{userId} {
       // Strictly restricted to document owner or administrators to protect private PII (email, phone, address)
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isOwner(userId) || isAdmin() || (
+        isSignedIn() && resource != null && (
+          ('role' in resource.data && resource.data.role in ['tradesperson', 'trader', 'contractor']) ||
+          ('isTrader' in resource.data && resource.data.isTrader == true) ||
+          ('isTradesperson' in resource.data && resource.data.isTradesperson == true)
+        )
+      );
       allow create: if isOwner(userId) && (
         isAdmin() || (
           request.resource.data.get('isAdmin', false) == false && 
