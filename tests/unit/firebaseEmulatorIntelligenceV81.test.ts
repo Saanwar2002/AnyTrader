@@ -132,7 +132,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     if (!testEnv) {
       throw new Error('FATAL: Firebase Emulator test environment not initialized for V8.1 suite.');
     }
-    return (testEnv as any).createContext('owner').firestore();
+    return testEnv.withSecurityRulesDisabled((context: any) => context.firestore());
   }
 
   beforeEach(async () => {

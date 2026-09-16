@@ -76,7 +76,10 @@ export function classifyTaskError(err: unknown): {
 
   const message = err instanceof Error ? err.message : String(err);
   const name = err instanceof Error ? err.name : '';
-  const code = (err as any)?.code || (err as any)?.errorCode || name || 'UNKNOWN_ERROR';
+  let code = (err as any)?.code || (err as any)?.errorCode || name || 'UNKNOWN_ERROR';
+  if (message.includes('No handler registered')) {
+    code = 'MISSING_HANDLER';
+  }
 
   // Security, lineage validation, schema validation, or missing handlers are strictly NON_RETRYABLE
   if (
@@ -268,10 +271,6 @@ export class IntelligenceTaskQueue {
       }
       return Array.from(tasksMap.values());
     } catch (err: any) {
-      const errMsg = err?.message || String(err);
-      if (errMsg.includes("PERMISSION_DENIED") || errMsg.includes("UNAUTHENTICATED")) {
-        return [];
-      }
       console.error('[IntelligenceTaskQueue] getRunnableTasksFromFirestore query error:', err?.message || err);
       throw err;
     }
@@ -445,6 +444,10 @@ export class IntelligenceTaskQueue {
           leaseAcquiredAt: nowIso,
           leaseExpiresAt: leaseExpiresAt,
           updatedAt: nowIso,
+          errorCode: undefined,
+          lastError: undefined,
+          nextAttemptAt: undefined,
+          nextRetryAt: undefined,
         });
 
         return true;
@@ -472,6 +475,10 @@ export class IntelligenceTaskQueue {
         local.leaseAcquiredAt = nowIso;
         local.leaseExpiresAt = leaseExpiresAt;
         local.updatedAt = nowIso;
+        local.errorCode = undefined;
+        local.lastError = undefined;
+        local.nextAttemptAt = undefined;
+        local.nextRetryAt = undefined;
         this.tasks.set(taskId, local);
       }
 

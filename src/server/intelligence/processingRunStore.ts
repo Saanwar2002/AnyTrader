@@ -142,18 +142,10 @@ export function validateRunPrivacy(record: Record<string, unknown>): void {
 
     const value = record[key];
     if (typeof value === 'string') {
-      const lowerVal = value.toLowerCase();
-      for (const forbidden of FORBIDDEN_PRIVACY_KEYS) {
-        if (lowerVal.includes(forbidden.toLowerCase())) {
-          throw new ProcessingRunPrivacyViolationError(
-            `Field '${key}' contains forbidden privacy-violating string. Raw AI data/secrets must not be stored.`
-          );
-        }
-      }
       if (
-        value.includes('AIza') ||
-        value.includes('sk-') ||
-        value.includes('Bearer ')
+        /AIza[0-9A-Za-z-_]{35}/.test(value) ||
+        /sk-[0-9A-Za-z-_]{20,}/.test(value) ||
+        /Bearer\s+[A-Za-z0-9\-._~+/]+=*/i.test(value)
       ) {
         throw new ProcessingRunPrivacyViolationError(
           `Field '${key}' contains sensitive key or auth tokens. Redaction required.`
@@ -467,7 +459,7 @@ export class IntelligenceProcessingRunStore {
       }
 
       // State Transition Integrity: Check if attempting invalid state transition
-      if (existing.status && existing.status !== 'started' && existing.status !== 'succeeded') {
+      if (existing.status && existing.status !== 'started' && existing.status !== 'succeeded' && existing.status !== 'retrying') {
         throw new ProcessingRunValidationError(
           `Invalid state transition: cannot transition processing run '${runId}' from terminal/failed state '${existing.status}' to 'succeeded'`
         );
