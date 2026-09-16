@@ -1,5 +1,10 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — V75 Test Harness Wiring & Emulator Fixes (September 16, 2026)
+- **V75 Firebase Emulator Test Context Wiring**: Resolved permission denied errors in intelligence tests by correctly wrapping administrative database operations in `withAdminDb` callbacks, ensuring test environments obtain server-authoritative Firestore contexts rather than unprivileged client sessions.
+- **Hook Timeout Tuning**: Increased `beforeAll` initialization timeout to 30,000ms in `firebaseEmulatorSecurityRules.test.ts` to accommodate emulator boot latency under high concurrency container environments.
+- **Syntax & Fragment Cleanup**: Eliminated orphaned test blocks and ensured async/await syntax correctness across all emulator test suites.
+
 ## 🛡️ AnyTrader V8.1 — Cumulative Intelligence Security Hardening & Immutability Architecture (September 16, 2026)
 - **1. Server-Authoritative Intelligence Task State**: Client SDKs are strictly blocked from creating, updating, or deleting documents in `/intelligence_tasks/{taskId}`, `/intelligence_backfill_runs/{runId}`, and `/intelligence_processing_runs/{runId}` (`allow create, update, delete: if false;`). All task state transitions (claim, start, fail, complete, retry, dead-letter) are strictly executed via server-authoritative Admin SDK transactions.
 - **2. Immutable Historical Intelligence Collections**: Client SDK writes to `/intelligence_events`, `/intelligence_evidence`, `/intelligence_extractions`, and `/intelligence_quality` are strictly denied (`allow create, update, delete: if false;`). Documents in these collections are write-once, append-only historical audit records.
