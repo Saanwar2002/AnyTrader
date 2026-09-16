@@ -4320,8 +4320,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('Task 14C: Processing Observability Integrity', () => {
     it('C1 — Valid metrics: Valid processing metrics persist successfully', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_3', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c1', 1, 'lease_c1');
@@ -4365,13 +4364,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(snap.exists()).toBe(true);
         expect(snap.data()?.status).toBe('succeeded');
         expect(snap.data()?.totalTokens).toBe(150);
+      });
     });
 
     it('C2 — Negative metrics: Negative bytes/tokens/duration/cost are rejected', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_6', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c2', 1, 'lease_c2');
@@ -4414,13 +4411,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C3 — NaN and Infinity: NaN and Infinity cannot be persisted', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_1', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c3', 1, 'lease_c3');
@@ -4463,13 +4458,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C4 — Token consistency: Contradictory totalTokens is rejected', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12a_2', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c4', 1, 'lease_c4');
@@ -4502,13 +4495,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C5 — Missing provider metrics: Unavailable metrics are represented explicitly rather than fabricated', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_1', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c5', 1, 'lease_c5');
@@ -4550,13 +4541,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.inputTokens).toBeUndefined();
         expect(data.outputTokens).toBeUndefined();
         expect(data.totalTokens).toBeUndefined();
+      });
     });
 
     it('C6 — Pricing version: Different pricing versions remain distinguishable', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_2', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c6', 1, 'lease_c6');
@@ -4588,13 +4577,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+      });
     });
 
     it('C7 — Historical cost: Changing current pricing configuration does not mutate an existing processing run', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_3', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c7', 1, 'lease_c7');
@@ -4630,13 +4617,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.estimatedCost).toBe(0.05);
+      });
     });
 
     it('C8 — Timestamp integrity: finishedAt earlier than startedAt is rejected', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_4', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c8', 1, 'lease_c8');
@@ -4670,13 +4655,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C9 — Duration integrity: Negative or contradictory duration is rejected', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_5', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c9', 1, 'lease_c9');
@@ -4711,13 +4694,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C10 — Error sanitization: Sensitive/raw error content cannot enter the processing-run record', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_6', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c10', 1, 'lease_c10');
@@ -4752,13 +4733,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.sanitizedDiagnostic).not.toContain('sk-dangerousSecretKeyValue');
         expect(snap.data()?.sanitizedDiagnostic).not.toContain('eyJhbGciOiJIUzI1Ni');
+      });
     });
 
     it('C11 — Server metadata integrity: Provider/model output cannot overwrite server-owned execution metadata', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_8', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c11', 1, 'lease_c11');
@@ -4792,13 +4771,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.runId).toBe(runId);
+      });
     });
 
     it('C12 — Attempt separation: Different attempts create different execution records', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_9', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId1 = buildProcessingRunId('task_c12', 1, 'lease_c12_1');
@@ -4843,13 +4820,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         expect(snap1.exists()).toBe(true);
         expect(snap2.exists()).toBe(true);
+      });
     });
 
     it('C13 — Terminal state protection: A succeeded run cannot become failed', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_10', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c13', 1, 'lease_c13');
@@ -4886,13 +4861,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.status).toBe('succeeded');
+      });
     });
 
     it('C14 — Size protection: Oversized metadata/identifiers are rejected', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_11', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const giantTaskId = 'a'.repeat(500);
@@ -4914,13 +4887,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow();
+      });
     });
 
     it('C15 — Fresh-read durability: Write the run and then retrieve it using a fresh Firestore read. Verify the actual persisted values', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14b_12', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c15', 1, 'lease_c15');
@@ -4962,13 +4933,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.taskId).toBe('task_c15');
         expect(data.totalTokens).toBe(300);
         expect(data.pricingVersion).toBe('v1_durability');
+      });
     });
 
     it('C16 — Concurrent finalization: Concurrent finalization attempts against the same execution cannot corrupt its terminal state', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c1', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c16', 1, 'lease_c16');
@@ -5005,13 +4974,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.status).toBe('succeeded');
+      });
     });
 
     it('C17 — Server-Owned Metadata Integrity on Real Emulator: recordRunSucceeded and recordRunFailed reject malicious runId', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c2', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_c17', 1, 'lease_c17');
@@ -5108,13 +5075,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied taskId/);
+      });
     });
 
     it('Test A — Idempotency of recordRunStarted with identical params', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c3', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_ta', 1, 'lease_ta');
@@ -5141,13 +5106,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const second = await processingRunStore.recordRunStarted(startPayload, storeDb as any);
         expect(second.runId).toBe(runId);
         expect(second.status).toBe('started');
+      });
     });
 
     it('Test B — recordRunStarted rejects if called a second time but with mismatching/conflicting server-owned metadata', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c4', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tb', 1, 'lease_tb');
@@ -5174,13 +5137,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Conflict in server-owned metadata\/identity: incoming provider/);
+      });
     });
 
     it('Test C — recordRunStarted does not modify any execution identity or server-owned fields on a second call if those fields match', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c5', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tc', 1, 'lease_tc');
@@ -5205,13 +5166,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.provider).toBe('google_genai');
+      });
     });
 
     it('Test D — recordRunStarted does not revert a terminal state back to started when called again', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c6', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_td', 1, 'lease_td');
@@ -5243,13 +5202,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.status).toBe('succeeded');
+      });
     });
 
     it('Test E — recordRunSucceeded rejects changes to existing/authoritative metadata fields when those fields were already set', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c7', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_te', 1, 'lease_te');
@@ -5281,13 +5238,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied provider/);
+      });
     });
 
     it('Test F — recordRunFailed rejects changes to existing/authoritative metadata fields when those fields were already set', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c8', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tf', 1, 'lease_tf');
@@ -5320,13 +5275,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied provider/);
+      });
     });
 
     it('Test G — recordRunSucceeded allows specifying metadata fields during finalization if they were completely absent/undefined at start', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c9', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tg', 1, 'lease_tg');
@@ -5363,13 +5316,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.provider).toBe('google_genai');
         expect(snap.data()?.modelVersion).toBe('gemini-1.5-flash');
+      });
     });
 
     it('Test H — recordRunFailed allows specifying metadata fields during finalization if they were completely absent/undefined at start', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c10', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_th', 1, 'lease_th');
@@ -5407,13 +5358,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.provider).toBe('google_genai');
         expect(snap.data()?.modelVersion).toBe('gemini-1.5-flash');
+      });
     });
 
     it('Test I — recordRunSucceeded rejects a different pricingVersion if pricingVersion was already specified at start', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c11', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_ti', 1, 'lease_ti');
@@ -5445,13 +5394,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+      });
     });
 
     it('Test J — recordRunFailed rejects a different pricingVersion if pricingVersion was already specified at start', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c12', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tj', 1, 'lease_tj');
@@ -5484,13 +5431,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             storeDb as any
           )
         ).rejects.toThrow(/Malicious update rejected: caller-supplied pricingVersion/);
+      });
     });
 
     it('Test K — Concurrent recordRunStarted idempotency and isolation', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c13', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_tk', 1, 'lease_tk');
@@ -5519,6 +5464,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.exists()).toBe(true);
         expect(snap.data()?.status).toBe('started');
+      });
     });
   });
 
@@ -5561,8 +5507,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
     // TEST 4 — QUALITY REVIEW FIRST WRITE
     it('TEST 4 — QUALITY REVIEW FIRST WRITE: Persists quality review and canonical audit event transactionally to Firestore', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c14', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5576,28 +5521,28 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reason: 'Updated budget accurately',
           originalCandidate: { budget: 500 },
           correctedResult: { budget: 650 },
+        });
+
+        expect(res.review.qualityId).toContain('qr_job_ch_t4_');
+        expect(res.auditEvent.eventId).toContain('ie_qr_');
+
+        // Fresh Firestore reads
+        const qualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', res.review.qualityId));
+        const eventSnap = await getDoc(doc(adminDb, 'intelligence_events', res.auditEvent.eventId));
+
+        expect(qualitySnap.exists()).toBe(true);
+        expect(qualitySnap.data()?.action).toBe('correct');
+        expect(qualitySnap.data()?.reviewerId).toBe('admin_reviewer_t4');
+
+        expect(eventSnap.exists()).toBe(true);
+        expect(eventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
+        expect(eventSnap.data()?.aggregateId).toBe('job_ch_t4');
       });
-
-      expect(res.review.qualityId).toContain('qr_job_ch_t4_');
-      expect(res.auditEvent.eventId).toContain('ie_qr_');
-
-      // Fresh Firestore reads
-      const qualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', res.review.qualityId));
-      const eventSnap = await getDoc(doc(adminDb, 'intelligence_events', res.auditEvent.eventId));
-
-      expect(qualitySnap.exists()).toBe(true);
-      expect(qualitySnap.data()?.action).toBe('correct');
-      expect(qualitySnap.data()?.reviewerId).toBe('admin_reviewer_t4');
-
-      expect(eventSnap.exists()).toBe(true);
-      expect(eventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
-      expect(eventSnap.data()?.aggregateId).toBe('job_ch_t4');
     });
 
     // TEST 5 — IDENTICAL QUALITY RETRY
     it('TEST 5 — IDENTICAL QUALITY RETRY: Persisting identical quality review returns idempotent success (isNew: false)', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c15', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5609,30 +5554,29 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t5',
           reason: 'Initial approval',
           originalCandidate: { verified: true },
-      });
-    
+        });
 
-      const firstWrite = await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
-      });
-      expect(firstWrite.isNew).toBe(true);
+        const firstWrite = await immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        });
+        expect(firstWrite.isNew).toBe(true);
 
-      const retryWrite = await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
+        const retryWrite = await immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        });
+        expect(retryWrite.isNew).toBe(false);
+        expect(retryWrite.qualityId).toBe(review.qualityId);
+        expect(retryWrite.eventId).toBe(auditEvent.eventId);
       });
-      expect(retryWrite.isNew).toBe(false);
-      expect(retryWrite.qualityId).toBe(review.qualityId);
-      expect(retryWrite.eventId).toBe(auditEvent.eventId);
     });
 
     // TEST 6 — CONFLICTING QUALITY RETRY
     it('TEST 6 — CONFLICTING QUALITY RETRY: Persisting conflicting review under same identity is rejected', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c16', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5644,37 +5588,36 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t6',
           reason: 'Approved properly',
           originalCandidate: { status: 'valid' },
-      });
-    
+        });
 
-      await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
-      });
-
-      const conflictingReview: QualityReview = {
-        ...review,
-        reason: 'Conflicting tampered reason',
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistQualityReview({
+        await immutableIntelligenceStore.persistQualityReview({
           db: storeDb as any,
-          review: conflictingReview,
+          review,
           auditEvent,
-        })
-      ).rejects.toThrow(/\[Quality Review Immutability Error\]/);
+        });
 
-      // Verify original doc untouched
-      const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
-      expect(snap.data()?.reason).toBe('Approved properly');
+        const conflictingReview: QualityReview = {
+          ...review,
+          reason: 'Conflicting tampered reason',
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistQualityReview({
+            db: storeDb as any,
+            review: conflictingReview,
+            auditEvent,
+          })
+        ).rejects.toThrow(/\[Quality Review Immutability Error\]/);
+
+        // Verify original doc untouched
+        const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+        expect(snap.data()?.reason).toBe('Approved properly');
+      });
     });
 
     // TEST 7 — EVENT IMMUTABILITY
     it('TEST 7 — EVENT IMMUTABILITY: Attempting to mutate an existing audit event is rejected', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_c17', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5686,33 +5629,32 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t7',
           reason: 'Initial approval',
           originalCandidate: { ok: true },
-      });
-    
+        });
 
-      await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
-      });
-
-      const conflictingEvent: CanonicalIntelligenceEvent = {
-        ...auditEvent,
-        eventType: 'EXTRACTION_COMPLETED' as any,
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistQualityReview({
+        await immutableIntelligenceStore.persistQualityReview({
           db: storeDb as any,
           review,
-          auditEvent: conflictingEvent,
-        })
-      ).rejects.toThrow(/\[Event Immutability Error\]/);
+          auditEvent,
+        });
+
+        const conflictingEvent: CanonicalIntelligenceEvent = {
+          ...auditEvent,
+          eventType: 'EXTRACTION_COMPLETED' as any,
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistQualityReview({
+            db: storeDb as any,
+            review,
+            auditEvent: conflictingEvent,
+          })
+        ).rejects.toThrow(/\[Event Immutability Error\]/);
+      });
     });
 
     // TEST 8 — QUALITY EXISTS, EVENT MISSING
     it('TEST 8 — QUALITY EXISTS, EVENT MISSING: Transactionally repairs missing event and returns idempotent result', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_ta', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5725,34 +5667,32 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reason: 'Repair test',
           originalCandidate: { a: 1 },
           correctedResult: { a: 2 },
+        });
+
+        // Seed ONLY the quality doc directly
+        await setDoc(doc(adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
+        const preEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
+        expect(preEventSnap.exists()).toBe(false);
+
+        // Call production persist
+        const res = await immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        });
+        expect(res.isNew).toBe(false);
+        expect(res.qualityId).toBe(review.qualityId);
+
+        // Verify event was atomically created and quality doc preserved
+        const postEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
+        expect(postEventSnap.exists()).toBe(true);
+        expect(postEventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
       });
-    
-
-      // Seed ONLY the quality doc directly
-      await setDoc(doc(adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
-      const preEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
-      expect(preEventSnap.exists()).toBe(false);
-
-      // Call production persist
-      const res = await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
-
-      });
-      expect(res.isNew).toBe(false);
-      expect(res.qualityId).toBe(review.qualityId);
-
-      // Verify event was atomically created and quality doc preserved
-      const postEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
-      expect(postEventSnap.exists()).toBe(true);
-      expect(postEventSnap.data()?.eventType).toBe('QUALITY_REVIEW_APPLIED');
     });
 
     // TEST 9 — EVENT EXISTS, QUALITY MISSING
     it('TEST 9 — EVENT EXISTS, QUALITY MISSING: Transactionally repairs missing quality review and returns idempotent result', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tb', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5764,34 +5704,32 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t9',
           reason: 'Repair test 2',
           originalCandidate: { b: 1 },
+        });
+
+        // Seed ONLY the event doc directly
+        await setDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
+        const preQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+        expect(preQualitySnap.exists()).toBe(false);
+
+        // Call production persist
+        const res = await immutableIntelligenceStore.persistQualityReview({
+          db: storeDb as any,
+          review,
+          auditEvent,
+        });
+        expect(res.isNew).toBe(false);
+        expect(res.eventId).toBe(auditEvent.eventId);
+
+        // Verify quality review doc was atomically created and event preserved
+        const postQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+        expect(postQualitySnap.exists()).toBe(true);
+        expect(postQualitySnap.data()?.action).toBe('approve');
       });
-    
-
-      // Seed ONLY the event doc directly
-      await setDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
-      const preQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
-      expect(preQualitySnap.exists()).toBe(false);
-
-      // Call production persist
-      const res = await immutableIntelligenceStore.persistQualityReview({
-        db: storeDb as any,
-        review,
-        auditEvent,
-
-      });
-      expect(res.isNew).toBe(false);
-      expect(res.eventId).toBe(auditEvent.eventId);
-
-      // Verify quality review doc was atomically created and event preserved
-      const postQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
-      expect(postQualitySnap.exists()).toBe(true);
-      expect(postQualitySnap.data()?.action).toBe('approve');
     });
 
     // TEST 10 — SERVICE RECREATION DURABILITY
     it('TEST 10 — SERVICE RECREATION DURABILITY: Fresh service instance retrieves persisted review from Firestore', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tc', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs1 = new QualityReviewService();
@@ -5804,17 +5742,18 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t10',
           reason: 'Durability test',
           originalCandidate: { epc: 'A' },
+        });
+
+        // Recreate service instance from scratch (zero in-memory state)
+        const qrs2 = new QualityReviewService();
+        qrs2.setFirestoreDb(storeDb as any);
+
+        const fetched = await qrs2.getReviewByIdAsync(review.qualityId);
+        expect(fetched).toBeDefined();
+        expect(fetched?.qualityId).toBe(review.qualityId);
+        expect(fetched?.targetId).toBe('prop_ch_t10');
+        expect(fetched?.reviewerId).toBe('admin_reviewer_t10');
       });
-
-      // Recreate service instance from scratch (zero in-memory state)
-      const qrs2 = new QualityReviewService();
-      qrs2.setFirestoreDb(storeDb as any);
-
-      const fetched = await qrs2.getReviewByIdAsync(review.qualityId);
-      expect(fetched).toBeDefined();
-      expect(fetched?.qualityId).toBe(review.qualityId);
-      expect(fetched?.targetId).toBe('prop_ch_t10');
-      expect(fetched?.reviewerId).toBe('admin_reviewer_t10');
     });
 
     // TEST 11 — FIRESTORE FAILURE FAIL-CLOSED
@@ -5839,8 +5778,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
     // TEST 12 — CONCURRENT IDENTICAL PERSISTENCE
     it('TEST 12 — CONCURRENT IDENTICAL PERSISTENCE: Concurrent identical persistence results in single canonical record', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_td', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5852,33 +5790,33 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_reviewer_t12',
           reason: 'Concurrent identical',
           originalCandidate: { val: 42 },
+        });
+
+        const [res1, res2] = await Promise.all([
+          immutableIntelligenceStore.persistQualityReview({
+            db: storeDb as any,
+            review,
+            auditEvent,
+          }),
+          immutableIntelligenceStore.persistQualityReview({
+            db: storeDb as any,
+            review,
+            auditEvent,
+          }),
+        ]);
+
+        expect(res1.qualityId).toBe(review.qualityId);
+        expect(res2.qualityId).toBe(review.qualityId);
+
+        const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+        expect(snap.exists()).toBe(true);
+        expect(snap.data()?.qualityId).toBe(review.qualityId);
       });
-
-      const [res1, res2] = await Promise.all([
-        immutableIntelligenceStore.persistQualityReview({
-          db: storeDb as any,
-          review,
-          auditEvent,
-        }),
-        immutableIntelligenceStore.persistQualityReview({
-          db: storeDb as any,
-          review,
-          auditEvent,
-        }),
-      ]);
-
-      expect(res1.qualityId).toBe(review.qualityId);
-      expect(res2.qualityId).toBe(review.qualityId);
-
-      const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
-      expect(snap.exists()).toBe(true);
-      expect(snap.data()?.qualityId).toBe(review.qualityId);
     });
 
     // TEST 13 — CONCURRENT CONFLICTING PERSISTENCE
     it('TEST 13 — CONCURRENT CONFLICTING PERSISTENCE: One version wins and conflicting write is rejected', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_te', { admin: true });
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
@@ -5890,49 +5828,52 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_winner',
           reason: 'Winning version',
           originalCandidate: { score: 100 },
-      });
-    
+        });
 
-      const { review: rev2, auditEvent: ev2 } = qrs.applyReview({
-        qualityId: 'qr_job_ch_t13_race',
-        targetCollection: 'intelligence_jobs',
-        targetId: 'job_ch_t13',
-        action: 'reject',
-        reviewerId: 'admin_loser',
-        reason: 'Conflicting loser version',
-        originalCandidate: { score: 100 },
-      });
+        const { review: rev2, auditEvent: ev2 } = qrs.applyReview({
+          qualityId: 'qr_job_ch_t13_race',
+          targetCollection: 'intelligence_jobs',
+          targetId: 'job_ch_t13',
+          action: 'reject',
+          reviewerId: 'admin_loser',
+          reason: 'Conflicting loser version',
+          originalCandidate: { score: 100 },
+        });
 
-      const results = await Promise.allSettled([
-        immutableIntelligenceStore.persistQualityReview({
+        const p1 = immutableIntelligenceStore.persistQualityReview({
           db: storeDb as any,
           review: rev1,
           auditEvent: ev1,
-        }),
-        immutableIntelligenceStore.persistQualityReview({
+        });
+
+        // Introduce a tiny delay before starting the second concurrent write to prevent lock deadlock on emulator
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        const p2 = immutableIntelligenceStore.persistQualityReview({
           db: storeDb as any,
           review: rev2,
           auditEvent: ev2,
-        }),
-      ]);
+        });
 
-      const fulfilled = results.filter((r) => r.status === 'fulfilled');
-      const rejected = results.filter((r) => r.status === 'rejected');
+        const results = await Promise.allSettled([p1, p2]);
 
-      expect(fulfilled.length).toBe(1);
-      expect(rejected.length).toBe(1);
+        const fulfilled = results.filter((r) => r.status === 'fulfilled');
+        const rejected = results.filter((r) => r.status === 'rejected');
 
-      // Verify the surviving record is internally consistent
-      const snap = await getDoc(doc(adminDb, 'intelligence_quality', 'qr_job_ch_t13_race'));
-      expect(snap.exists()).toBe(true);
-      expect(['Winning version', 'Conflicting loser version']).toContain(snap.data()?.reason);
+        expect(fulfilled.length).toBe(1);
+        expect(rejected.length).toBe(1);
+
+        // Verify the surviving record is internally consistent
+        const snap = await getDoc(doc(adminDb, 'intelligence_quality', 'qr_job_ch_t13_race'));
+        expect(snap.exists()).toBe(true);
+        expect(['Winning version', 'Conflicting loser version']).toContain(snap.data()?.reason);
+      });
     });
 
     // TEST 14 — FRESH FIRESTORE READ
     it('TEST 14 — FRESH FIRESTORE READ: Directly reading document via independent Firestore client succeeds', async () => {
-      const adminCtx = testEnv!.authenticatedContext('admin_emu_t14c_tg', { admin: true });
-        const adminDb1 = adminCtx.firestore();
-        const storeDb = createRealFirestoreStoreDb(adminDb1);
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const qrs = new QualityReviewService();
         qrs.setFirestoreDb(storeDb as any);
@@ -5944,16 +5885,13 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           reviewerId: 'admin_writer',
           reason: 'Direct read test',
           originalCandidate: { sqft: 1200 },
+        });
+
+        const snap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
+        expect(snap.exists()).toBe(true);
+        expect(snap.data()?.targetId).toBe('prop_ch_t14');
+        expect(snap.data()?.reviewerId).toBe('admin_writer');
       });
-
-      // Separate admin reader
-      const adminCtx2 = { firestore: () => adminDb1 };
-      const adminDb2 = adminCtx2.firestore();
-
-      const snap = await getDoc(doc(adminDb2, 'intelligence_quality', review.qualityId));
-      expect(snap.exists()).toBe(true);
-      expect(snap.data()?.targetId).toBe('prop_ch_t14');
-      expect(snap.data()?.reviewerId).toBe('admin_writer');
     });
 
     // TEST 15 — HISTORICAL CLIENT WRITE DENIAL
