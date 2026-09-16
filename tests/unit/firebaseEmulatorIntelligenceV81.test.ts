@@ -94,6 +94,7 @@ import { QualityReview, CanonicalIntelligenceEvent } from '../../src/server/inte
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
+  let adminDbInstance: any = null;
   const PROJECT_ID = 'demo-anytrader';
 
   beforeAll(async () => {
@@ -114,6 +115,10 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           port: 9199,
         },
       });
+
+      await testEnv.withSecurityRulesDisabled(async (context: any) => {
+        adminDbInstance = context.firestore();
+      });
     } catch (err) {
       console.error('FATAL ERROR: Failed to initialize Firebase Emulator test environment for V8.1 suite!', err);
       throw new Error(
@@ -129,10 +134,10 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   });
 
   function getAdminDb(): any {
-    if (!testEnv) {
-      throw new Error('FATAL: Firebase Emulator test environment not initialized for V8.1 suite.');
+    if (!adminDbInstance) {
+      throw new Error('FATAL: Firebase Emulator admin Firestore not initialized for V8.1 suite.');
     }
-    return testEnv.withSecurityRulesDisabled((context: any) => context.firestore());
+    return adminDbInstance;
   }
 
   beforeEach(async () => {
@@ -144,8 +149,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     evidenceRegistry.clear();
   });
 
-  function createRealFirestoreTaskDb(_modularDb?: any) {
-    const getDbInstance = () => getAdminDb();
+  function createRealFirestoreTaskDb(modularDb?: any) {
+    const getDbInstance = () => modularDb ?? getAdminDb();
     return {
       collection(name: string) {
         return {
@@ -882,8 +887,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('5. Evidence Hashing & Cryptographic Invariants', () => {
     it('hashes actual evidence bytes with genuine SHA-256', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_evidence_sha', { role: 'admin', admin: true }).firestore();
-      evidenceRegistry.setDb(adminDb as any);
+      evidenceRegistry.setDb(getAdminDb());
 
       const content = 'Genuine inspection evidence bytes content';
       const expectedSha256 = createHash('sha256').update(content).digest('hex');
@@ -904,8 +908,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('does not fabricate a content hash for reference-only evidence pointers', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_evidence_ref', { role: 'admin', admin: true }).firestore();
-      evidenceRegistry.setDb(adminDb as any);
+      evidenceRegistry.setDb(getAdminDb());
 
       const refEv = await evidenceRegistry.registerReferenceOnly(
         'job',
