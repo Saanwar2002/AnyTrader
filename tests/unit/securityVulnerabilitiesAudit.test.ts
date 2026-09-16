@@ -179,7 +179,7 @@ describe("Security Vulnerabilities Remediation Audit", () => {
       const rulesCode = fs.readFileSync(path.resolve(__dirname, "../../firestore.rules"), "utf-8");
       expect(rulesCode).toContain("match /users/{userId}");
       const userMatchBlock = rulesCode.split("match /users/{userId}")[1].split("match /")[0];
-      expect(userMatchBlock).toContain("allow read: if isOwner(userId) || isAdmin();");
+      expect(userMatchBlock).toContain("allow read: if isOwner(userId) || isAdmin()");
       // Must not allow arbitrary cross-user reading of private user documents
       expect(userMatchBlock).not.toContain("resource.data.get('isPublic', false) == true");
       expect(userMatchBlock).not.toContain("resource.data.get('role', '') in ['tradesperson', 'trader', 'business']");

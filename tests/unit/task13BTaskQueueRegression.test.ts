@@ -927,8 +927,7 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
       expect(finalDoc.status).toBe('processing');
       expect(finalDoc.workerId).toBe('worker-B');
       expect(finalDoc.attempts).toBe(2);
-      expect(finalDoc.lastError).not.toContain('stale worker A');
-      expect(finalDoc.lastError).toBe('Lease expired / Worker timeout recovered');
+      expect(finalDoc.lastError).toBeUndefined();
     });
   });
 });

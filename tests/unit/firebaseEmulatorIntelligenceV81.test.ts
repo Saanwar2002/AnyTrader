@@ -94,7 +94,6 @@ import { QualityReview, CanonicalIntelligenceEvent } from '../../src/server/inte
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
-  let adminDbInstance: any = null;
   const PROJECT_ID = 'demo-anytrader';
 
   beforeAll(async () => {
@@ -115,10 +114,6 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           port: 9199,
         },
       });
-
-      await testEnv.withSecurityRulesDisabled(async (context: any) => {
-        adminDbInstance = context.firestore();
-      });
     } catch (err) {
       console.error('FATAL ERROR: Failed to initialize Firebase Emulator test environment for V8.1 suite!', err);
       throw new Error(
@@ -133,11 +128,17 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     }
   });
 
-  function getAdminDb(): any {
-    if (!adminDbInstance) {
-      throw new Error('FATAL: Firebase Emulator admin Firestore not initialized for V8.1 suite.');
+  async function withAdminDb<T>(
+    callback: (db: any) => Promise<T>
+  ): Promise<T> {
+    if (!testEnv) {
+      throw new Error('Firebase test environment not initialized');
     }
-    return adminDbInstance;
+    let result: T | undefined;
+    await testEnv.withSecurityRulesDisabled(async (context: any) => {
+      result = await callback(context.firestore());
+    });
+    return result as T;
   }
 
   beforeEach(async () => {
@@ -149,8 +150,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     evidenceRegistry.clear();
   });
 
-  function createRealFirestoreTaskDb(modularDb?: any) {
-    const getDbInstance = () => modularDb ?? getAdminDb();
+  function createRealFirestoreTaskDb(modularDb: any) {
+    if (!modularDb) {
+      throw new Error('createRealFirestoreTaskDb requires a valid Firestore instance');
+    }
+    const getDbInstance = () => modularDb;
     return {
       collection(name: string) {
         return {
@@ -887,39 +891,43 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('5. Evidence Hashing & Cryptographic Invariants', () => {
     it('hashes actual evidence bytes with genuine SHA-256', async () => {
-      evidenceRegistry.setDb(getAdminDb());
+      await withAdminDb(async (db) => {
+        evidenceRegistry.setDb(db);
 
-      const content = 'Genuine inspection evidence bytes content';
-      const expectedSha256 = createHash('sha256').update(content).digest('hex');
+        const content = 'Genuine inspection evidence bytes content';
+        const expectedSha256 = createHash('sha256').update(content).digest('hex');
 
-      const ev = await evidenceRegistry.register(
-        'job',
-        'job_sha_1',
-        'user_description',
-        'jobs/job_sha_1/desc',
-        content,
-        {},
-        true
-      );
+        const ev = await evidenceRegistry.register(
+          'job',
+          'job_sha_1',
+          'user_description',
+          'jobs/job_sha_1/desc',
+          content,
+          {},
+          true
+        );
 
-      expect(ev.contentHash).toBe(expectedSha256);
-      expect(ev.verified).toBe(true);
-      expect(ev.integrityStatus).toBe('verified');
+        expect(ev.contentHash).toBe(expectedSha256);
+        expect(ev.verified).toBe(true);
+        expect(ev.integrityStatus).toBe('verified');
+      });
     });
 
     it('does not fabricate a content hash for reference-only evidence pointers', async () => {
-      evidenceRegistry.setDb(getAdminDb());
+      await withAdminDb(async (db) => {
+        evidenceRegistry.setDb(db);
 
-      const refEv = await evidenceRegistry.registerReferenceOnly(
-        'job',
-        'job_ref_1',
-        'image',
-        'https://storage.googleapis.com/test-bucket/image.png'
-      );
+        const refEv = await evidenceRegistry.registerReferenceOnly(
+          'job',
+          'job_ref_1',
+          'image',
+          'https://storage.googleapis.com/test-bucket/image.png'
+        );
 
-      expect(refEv.contentHash).toBe('');
-      expect(refEv.verified).toBe(false);
-      expect(refEv.integrityStatus).toBe('reference_only');
+        expect(refEv.contentHash).toBe('');
+        expect(refEv.verified).toBe(false);
+        expect(refEv.integrityStatus).toBe('reference_only');
+      });
     });
   });
 
@@ -1432,102 +1440,104 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('8. Real Firestore Emulator Concurrency & Task 13E Ownership Invariants (CI Wired)', () => {
     it('proves real Firestore emulator atomic claiming under high concurrency (3 concurrent workers, 1 winner)', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_emu_race_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskId = `task_emu_race_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      // Seed initial pending task in real Firestore emulator
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskId), {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        // Seed initial pending task in real Firestore emulator
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
+        const queueC = new IntelligenceTaskQueue(3, 300000, 'emu-worker-C');
+
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+        queueC.setFirestoreDb(firestoreTaskDb as any);
+
+        // Concurrently race 3 workers via real Firestore transactions on the emulator
+        const results = await Promise.all([
+          queueA.claimTaskTransactional(taskId, 'emu-worker-A', 60000),
+          queueB.claimTaskTransactional(taskId, 'emu-worker-B', 60000),
+          queueC.claimTaskTransactional(taskId, 'emu-worker-C', 60000),
+        ]);
+
+        // Exactly ONE worker must have claimed the task
+        const successCount = results.filter(Boolean).length;
+        expect(successCount).toBe(1);
+
+        // Read state back from real Firestore emulator
+        const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+        expect(taskSnap.exists()).toBe(true);
+        const data = taskSnap.data()!;
+        expect(data.status).toBe('processing');
+        expect(data.attempts).toBe(1);
+        expect(['emu-worker-A', 'emu-worker-B', 'emu-worker-C']).toContain(data.workerId);
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
-      const queueC = new IntelligenceTaskQueue(3, 300000, 'emu-worker-C');
-
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-      queueC.setFirestoreDb(firestoreTaskDb as any);
-
-      // Concurrently race 3 workers via real Firestore transactions on the emulator
-      const results = await Promise.all([
-        queueA.claimTaskTransactional(taskId, 'emu-worker-A', 60000),
-        queueB.claimTaskTransactional(taskId, 'emu-worker-B', 60000),
-        queueC.claimTaskTransactional(taskId, 'emu-worker-C', 60000),
-      ]);
-
-      // Exactly ONE worker must have claimed the task
-      const successCount = results.filter(Boolean).length;
-      expect(successCount).toBe(1);
-
-      // Read state back from real Firestore emulator
-      const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
-      expect(taskSnap.exists()).toBe(true);
-      const data = taskSnap.data()!;
-      expect(data.status).toBe('processing');
-      expect(data.attempts).toBe(1);
-      expect(['emu-worker-A', 'emu-worker-B', 'emu-worker-C']).toContain(data.workerId);
     });
 
     it('proves real Firestore emulator atomic executeTask() prevents duplicate handler execution under race', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_exec', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_emu_exec_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskId = `task_emu_exec_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskId), {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
+
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+
+        let handlerCalls = 0;
+        let winningWorker = '';
+
+        queueA.registerHandler('job_extraction', async (task) => {
+          handlerCalls++;
+          winningWorker = task.workerId || 'emu-worker-A';
+          return { extracted: true, worker: 'A' };
+        });
+
+        queueB.registerHandler('job_extraction', async (task) => {
+          handlerCalls++;
+          winningWorker = task.workerId || 'emu-worker-B';
+          return { extracted: true, worker: 'B' };
+        });
+
+        const [resA, resB] = await Promise.all([
+          queueA.executeTask(taskId),
+          queueB.executeTask(taskId),
+        ]);
+
+        expect(handlerCalls).toBe(1);
+        expect(['emu-worker-A', 'emu-worker-B']).toContain(winningWorker);
+
+        const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+        expect(taskSnap.exists()).toBe(true);
+        const data = taskSnap.data()!;
+        expect(data.status).toBe('succeeded');
+        expect(data.attempts).toBe(1);
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'emu-worker-A');
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'emu-worker-B');
-
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-
-      let handlerCalls = 0;
-      let winningWorker = '';
-
-      queueA.registerHandler('job_extraction', async (task) => {
-        handlerCalls++;
-        winningWorker = task.workerId || 'emu-worker-A';
-        return { extracted: true, worker: 'A' };
-      });
-
-      queueB.registerHandler('job_extraction', async (task) => {
-        handlerCalls++;
-        winningWorker = task.workerId || 'emu-worker-B';
-        return { extracted: true, worker: 'B' };
-      });
-
-      const [resA, resB] = await Promise.all([
-        queueA.executeTask(taskId),
-        queueB.executeTask(taskId),
-      ]);
-
-      expect(handlerCalls).toBe(1);
-      expect(['emu-worker-A', 'emu-worker-B']).toContain(winningWorker);
-
-      const taskSnap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
-      expect(taskSnap.exists()).toBe(true);
-      const data = taskSnap.data()!;
-      expect(data.status).toBe('succeeded');
-      expect(data.attempts).toBe(1);
     });
 
     // ==========================================
@@ -1535,563 +1545,572 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     // ==========================================
 
     it('Task 13E Invariant 1: Concurrent claim gives exactly one winner on real Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv1', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_t13e_claim_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskId = `task_t13e_claim_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskId), {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+
+        const [claimA, claimB] = await Promise.all([
+          queueA.claimTaskTransactional(taskId, 'worker-A', 60000),
+          queueB.claimTaskTransactional(taskId, 'worker-B', 60000),
+        ]);
+
+        // Exactly ONE returns true, exactly one returns false
+        expect((claimA && !claimB) || (!claimA && claimB)).toBe(true);
+        const winner = claimA ? 'worker-A' : 'worker-B';
+
+        // Verify authoritative state in real Firestore emulator
+        const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+        expect(snap.exists()).toBe(true);
+        const data = snap.data()!;
+        expect(data.status).toBe('processing');
+        expect(data.attempts).toBe(1);
+        expect(data.workerId).toBe(winner);
+        expect(typeof data.leaseId).toBe('string');
+        expect(data.leaseId!.length).toBeGreaterThan(0);
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-
-      const [claimA, claimB] = await Promise.all([
-        queueA.claimTaskTransactional(taskId, 'worker-A', 60000),
-        queueB.claimTaskTransactional(taskId, 'worker-B', 60000),
-      ]);
-
-      // Exactly ONE returns true, exactly one returns false
-      expect((claimA && !claimB) || (!claimA && claimB)).toBe(true);
-      const winner = claimA ? 'worker-A' : 'worker-B';
-
-      // Verify authoritative state in real Firestore emulator
-      const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
-      expect(snap.exists()).toBe(true);
-      const data = snap.data()!;
-      expect(data.status).toBe('processing');
-      expect(data.attempts).toBe(1);
-      expect(data.workerId).toBe(winner);
-      expect(typeof data.leaseId).toBe('string');
-      expect(data.leaseId!.length).toBeGreaterThan(0);
     });
 
     it('Task 13E Invariant 2: Active foreign lease with max attempts prevents claim and prevents premature dead-lettering', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv2', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_t13e_foreign_${Date.now()}`;
-      const nowIso = new Date().toISOString();
-      const futureLease = new Date(Date.now() + 60000).toISOString();
+        const taskId = `task_t13e_foreign_${Date.now()}`;
+        const nowIso = new Date().toISOString();
+        const futureLease = new Date(Date.now() + 60000).toISOString();
 
-      // Seed task processing by worker-A with attempts == maxAttempts
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskId), {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 3,
-        maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: futureLease,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        // Seed task processing by worker-A with attempts == maxAttempts
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 3,
+          maxAttempts: 3,
+          workerId: 'worker-A',
+          leaseId: 'lease-A',
+          leaseExpiresAt: futureLease,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+
+        // Worker B attempts to claim
+        const claimed = await queueB.claimTaskTransactional(taskId, 'worker-B');
+        expect(claimed).toBe(false);
+
+        // Authoritative state in real Firestore emulator must remain untouched:
+        // Worker A still owns task, status remains processing, attempts remains 3, not dead-lettered
+        const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
+        const data = snap.data()!;
+        expect(data.status).toBe('processing');
+        expect(data.workerId).toBe('worker-A');
+        expect(data.leaseId).toBe('lease-A');
+        expect(data.attempts).toBe(3);
+        expect(data.errorCode).toBeUndefined();
       });
-
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-
-      // Worker B attempts to claim
-      const claimed = await queueB.claimTaskTransactional(taskId, 'worker-B');
-      expect(claimed).toBe(false);
-
-      // Authoritative state in real Firestore emulator must remain untouched:
-      // Worker A still owns task, status remains processing, attempts remains 3, not dead-lettered
-      const snap = await getDoc(doc(adminDb, 'intelligence_tasks', taskId));
-      const data = snap.data()!;
-      expect(data.status).toBe('processing');
-      expect(data.workerId).toBe('worker-A');
-      expect(data.leaseId).toBe('lease-A');
-      expect(data.attempts).toBe(3);
-      expect(data.errorCode).toBeUndefined();
     });
 
     it('Task 13E Invariant 3: Stale reclaim clears old workerId and leaseId upon recovery in real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv3', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskRetryId = `task_t13e_stale_retry_${Date.now()}`;
-      const taskDeadId = `task_t13e_stale_dead_${Date.now()}`;
-      const nowIso = new Date().toISOString();
-      const expiredLease = new Date(Date.now() - 10000).toISOString();
+        const taskRetryId = `task_t13e_stale_retry_${Date.now()}`;
+        const taskDeadId = `task_t13e_stale_dead_${Date.now()}`;
+        const nowIso = new Date().toISOString();
+        const expiredLease = new Date(Date.now() - 10000).toISOString();
 
-      // Task 1: attempts = 1 < maxAttempts 3 -> recovers to retrying
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskRetryId), {
-        taskId: taskRetryId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: expiredLease,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        // Task 1: attempts = 1 < maxAttempts 3 -> recovers to retrying
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskRetryId), {
+          taskId: taskRetryId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-A',
+          leaseId: 'lease-A',
+          leaseExpiresAt: expiredLease,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        // Task 2: attempts = 3 == maxAttempts 3 -> recovers to dead_letter
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+          taskId: taskDeadId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 3,
+          maxAttempts: 3,
+          workerId: 'worker-A',
+          leaseId: 'lease-A',
+          leaseExpiresAt: expiredLease,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+        queue.setFirestoreDb(firestoreTaskDb as any);
+
+        const recovered = await queue.recoverStaleTasksAsync();
+        expect(recovered.length).toBeGreaterThanOrEqual(2);
+
+        // Verify Task 1 in real Firestore
+        const snapRetry = await getDoc(doc(adminDb, 'intelligence_tasks', taskRetryId));
+        const dataRetry = snapRetry.data()!;
+        expect(dataRetry.status).toBe('retrying');
+        expect(dataRetry.workerId).toBeFalsy();
+        expect(dataRetry.leaseId).toBeFalsy();
+        expect(dataRetry.leaseExpiresAt).toBeFalsy();
+
+        // Verify Task 2 in real Firestore
+        const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
+        const dataDead = snapDead.data()!;
+        expect(dataDead.status).toBe('dead_letter');
+        expect(dataDead.errorCode).toBe('STALE_LEASE_EXHAUSTED');
+        expect(dataDead.workerId).toBeFalsy();
+        expect(dataDead.leaseId).toBeFalsy();
+        expect(dataDead.leaseExpiresAt).toBeFalsy();
       });
-
-      // Task 2: attempts = 3 == maxAttempts 3 -> recovers to dead_letter
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskDeadId), {
-        taskId: taskDeadId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 3,
-        maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: expiredLease,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
-
-      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
-      queue.setFirestoreDb(firestoreTaskDb as any);
-
-      const recovered = await queue.recoverStaleTasksAsync();
-      expect(recovered.length).toBeGreaterThanOrEqual(2);
-
-      // Verify Task 1 in real Firestore
-      const snapRetry = await getDoc(doc(adminDb, 'intelligence_tasks', taskRetryId));
-      const dataRetry = snapRetry.data()!;
-      expect(dataRetry.status).toBe('retrying');
-      expect(dataRetry.workerId).toBeFalsy();
-      expect(dataRetry.leaseId).toBeFalsy();
-      expect(dataRetry.leaseExpiresAt).toBeFalsy();
-
-      // Verify Task 2 in real Firestore
-      const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
-      const dataDead = snapDead.data()!;
-      expect(dataDead.status).toBe('dead_letter');
-      expect(dataDead.errorCode).toBe('STALE_LEASE_EXHAUSTED');
-      expect(dataDead.workerId).toBeFalsy();
-      expect(dataDead.leaseId).toBeFalsy();
-      expect(dataDead.leaseExpiresAt).toBeFalsy();
     });
 
     it('Task 13E Invariant 4: Old worker cannot finalize failure after lease reclaim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv4', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_t13e_fail_reclaim_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskId = `task_t13e_fail_reclaim_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      // Seed task ready for worker-A
-      const docRef = doc(getAdminDb(), 'intelligence_tasks', taskId);
-      await setDoc(docRef, {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        // Seed task ready for worker-A
+        const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+        await setDoc(docRef, {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+
+        let releaseHandler: any;
+        let handlerStarted: any;
+        const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
+        const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
+
+        queueA.registerHandler('job_extraction', async () => {
+          handlerStarted();
+          await handlerGate;
+          throw new Error('Late failure from stale execution');
+        });
+
+        // Start execution with short lease-A (50ms configured on queue)
+        const execPromise = queueA.executeTask(taskId, 'worker-A');
+        await startedGate;
+
+        // Allow lease-A to expire naturally on real Firestore
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+
+        // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
+        const recovered = await queueB.recoverStaleTasksAsync();
+        expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+        // Verify the task transitioned to retrying and stripped stale workerId/leaseId
+        const snapRecovered = await getDoc(docRef);
+        expect(snapRecovered.data()!.status).toBe('retrying');
+        expect(snapRecovered.data()!.workerId).toBeUndefined();
+
+        // 2. Worker B transactionally claims the retrying task under a new valid lease
+        const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
+        expect(reclaimed).toBe(true);
+
+        // Release Worker A's failing handler from its stale attempt
+        releaseHandler();
+        const resA = await execPromise;
+        // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
+        expect(resA.workerId).toBe('worker-B');
+        expect(resA.status).toBe('processing');
+
+        // Authoritative state in real Firestore must remain processing under Worker B's lease
+        const snap = await getDoc(docRef);
+        const data = snap.data()!;
+        expect(data.status).toBe('processing');
+        expect(data.workerId).toBe('worker-B');
+        expect(data.leaseId).toBeDefined();
+        expect(data.attempts).toBe(2);
+        expect(data.errorCode).toBeUndefined();
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-
-      let releaseHandler: any;
-      let handlerStarted: any;
-      const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
-      const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
-
-      queueA.registerHandler('job_extraction', async () => {
-        handlerStarted();
-        await handlerGate;
-        throw new Error('Late failure from stale execution');
-      });
-
-      // Start execution with short lease-A (50ms configured on queue)
-      const execPromise = queueA.executeTask(taskId, 'worker-A');
-      await startedGate;
-
-      // Allow lease-A to expire naturally on real Firestore
-      await new Promise((resolve) => setTimeout(resolve, 60));
-
-      // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-
-      // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
-      const recovered = await queueB.recoverStaleTasksAsync();
-      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
-
-      // Verify the task transitioned to retrying and stripped stale workerId/leaseId
-      const snapRecovered = await getDoc(docRef);
-      expect(snapRecovered.data()!.status).toBe('retrying');
-      expect(snapRecovered.data()!.workerId).toBeUndefined();
-
-      // 2. Worker B transactionally claims the retrying task under a new valid lease
-      const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
-      expect(reclaimed).toBe(true);
-
-      // Release Worker A's failing handler from its stale attempt
-      releaseHandler();
-      const resA = await execPromise;
-      // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
-      expect(resA.workerId).toBe('worker-B');
-      expect(resA.status).toBe('processing');
-
-      // Authoritative state in real Firestore must remain processing under Worker B's lease
-      const snap = await getDoc(docRef);
-      const data = snap.data()!;
-      expect(data.status).toBe('processing');
-      expect(data.workerId).toBe('worker-B');
-      expect(data.leaseId).toBeDefined();
-      expect(data.attempts).toBe(2);
-      expect(data.errorCode).toBeUndefined();
     });
 
     it('Task 13E Invariant 5: Old worker cannot finalize success after lease reclaim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv5', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskId = `task_t13e_succ_reclaim_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskId = `task_t13e_succ_reclaim_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      const docRef = doc(getAdminDb(), 'intelligence_tasks', taskId);
-      await setDoc(docRef, {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+        await setDoc(docRef, {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+
+        let releaseHandler: any;
+        let handlerStarted: any;
+        const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
+        const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
+
+        queueA.registerHandler('job_extraction', async () => {
+          handlerStarted();
+          await handlerGate;
+          return { done: true };
+        });
+
+        // Start execution with short lease (50ms configured on queue)
+        const execPromise = queueA.executeTask(taskId, 'worker-A');
+        await startedGate;
+
+        // Allow lease to expire naturally on real Firestore
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
+        const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
+        queueB.setFirestoreDb(firestoreTaskDb as any);
+
+        // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
+        const recovered = await queueB.recoverStaleTasksAsync();
+        expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
+
+        // Verify the task transitioned to retrying and stripped stale workerId/leaseId
+        const snapRecovered = await getDoc(docRef);
+        expect(snapRecovered.data()!.status).toBe('retrying');
+        expect(snapRecovered.data()!.workerId).toBeUndefined();
+
+        // 2. Worker B transactionally claims the retrying task under a new valid lease
+        const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
+        expect(reclaimed).toBe(true);
+
+        // Let Worker A's handler finish successfully from its stale attempt
+        releaseHandler();
+        const resA = await execPromise;
+        // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
+        expect(resA.workerId).toBe('worker-B');
+        expect(resA.status).toBe('processing');
+
+        // Authoritative state in real Firestore remains processing under Worker B's lease (not succeeded by Worker A)
+        const snap = await getDoc(docRef);
+        const data = snap.data()!;
+        expect(data.status).toBe('processing');
+        expect(data.workerId).toBe('worker-B');
+        expect(data.leaseId).toBeDefined();
+        expect(data.attempts).toBe(2);
+        expect(data.completedAt).toBeUndefined();
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 50, 'worker-A');
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-
-      let releaseHandler: any;
-      let handlerStarted: any;
-      const handlerGate = new Promise((resolve) => { releaseHandler = resolve; });
-      const startedGate = new Promise((resolve) => { handlerStarted = resolve; });
-
-      queueA.registerHandler('job_extraction', async () => {
-        handlerStarted();
-        await handlerGate;
-        return { done: true };
-      });
-
-      // Start execution with short lease (50ms configured on queue)
-      const execPromise = queueA.executeTask(taskId, 'worker-A');
-      await startedGate;
-
-      // Allow lease to expire naturally on real Firestore
-      await new Promise((resolve) => setTimeout(resolve, 60));
-
-      // Worker B / Recovery Worker executes the actual stale-recovery path against the real Firestore emulator
-      const queueB = new IntelligenceTaskQueue(3, 300000, 'worker-B');
-      queueB.setFirestoreDb(firestoreTaskDb as any);
-
-      // 1. recoverStaleTasksAsync discovers the stale task and resets it to 'retrying' with workerId/leaseId cleared
-      const recovered = await queueB.recoverStaleTasksAsync();
-      expect(recovered.some((t) => t.taskId === taskId)).toBe(true);
-
-      // Verify the task transitioned to retrying and stripped stale workerId/leaseId
-      const snapRecovered = await getDoc(docRef);
-      expect(snapRecovered.data()!.status).toBe('retrying');
-      expect(snapRecovered.data()!.workerId).toBeUndefined();
-
-      // 2. Worker B transactionally claims the retrying task under a new valid lease
-      const reclaimed = await queueB.claimTaskTransactional(taskId, 'worker-B', 120000);
-      expect(reclaimed).toBe(true);
-
-      // Let Worker A's handler finish successfully from its stale attempt
-      releaseHandler();
-      const resA = await execPromise;
-      // Worker A aborted finalization due to ownership loss, returning latest state from Firestore
-      expect(resA.workerId).toBe('worker-B');
-      expect(resA.status).toBe('processing');
-
-      // Authoritative state in real Firestore remains processing under Worker B's lease (not succeeded by Worker A)
-      const snap = await getDoc(docRef);
-      const data = snap.data()!;
-      expect(data.status).toBe('processing');
-      expect(data.workerId).toBe('worker-B');
-      expect(data.leaseId).toBeDefined();
-      expect(data.attempts).toBe(2);
-      expect(data.completedAt).toBeUndefined();
     });
 
     it('Task 13E Invariant 6: Different worker cannot finalize success or failure on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv6', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskSuccId = `task_t13e_diff_succ_${Date.now()}`;
-      const taskFailId = `task_t13e_diff_fail_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskSuccId = `task_t13e_diff_succ_${Date.now()}`;
+        const taskFailId = `task_t13e_diff_fail_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskSuccId), {
-        taskId: taskSuccId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-B',
-        leaseId: 'lease-B',
-        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+          taskId: taskSuccId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-B',
+          leaseId: 'lease-B',
+          leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskFailId), {
+          taskId: taskFailId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-B',
+          leaseId: 'lease-B',
+          leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+
+        queueA.registerHandler('job_extraction', async (t) => {
+          if (t.taskId === taskSuccId) return { ok: true };
+          throw new Error('Worker-A failure attempt');
+        });
+
+        await Promise.all([
+          queueA.executeTask(taskSuccId),
+          queueA.executeTask(taskFailId),
+        ]);
+
+        const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
+        const snapFail = await getDoc(doc(adminDb, 'intelligence_tasks', taskFailId));
+
+        expect(snapSucc.data()!.status).toBe('processing');
+        expect(snapSucc.data()!.workerId).toBe('worker-B');
+        expect(snapSucc.data()!.leaseId).toBe('lease-B');
+
+        expect(snapFail.data()!.status).toBe('processing');
+        expect(snapFail.data()!.workerId).toBe('worker-B');
+        expect(snapFail.data()!.leaseId).toBe('lease-B');
       });
-
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskFailId), {
-        taskId: taskFailId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-B',
-        leaseId: 'lease-B',
-        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
-
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-
-      queueA.registerHandler('job_extraction', async (t) => {
-        if (t.taskId === taskSuccId) return { ok: true };
-        throw new Error('Worker-A failure attempt');
-      });
-
-      await Promise.all([
-        queueA.executeTask(taskSuccId),
-        queueA.executeTask(taskFailId),
-      ]);
-
-      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
-      const snapFail = await getDoc(doc(adminDb, 'intelligence_tasks', taskFailId));
-
-      expect(snapSucc.data()!.status).toBe('processing');
-      expect(snapSucc.data()!.workerId).toBe('worker-B');
-      expect(snapSucc.data()!.leaseId).toBe('lease-B');
-
-      expect(snapFail.data()!.status).toBe('processing');
-      expect(snapFail.data()!.workerId).toBe('worker-B');
-      expect(snapFail.data()!.leaseId).toBe('lease-B');
     });
 
     it('Task 13E Invariant 7: Missing handler dead-letters own task verifying leaseId; foreign worker cannot overwrite', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv7', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskOwnId = `task_t13e_missing_own_${Date.now()}`;
-      const taskForeignId = `task_t13e_missing_foreign_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskOwnId = `task_t13e_missing_own_${Date.now()}`;
+        const taskForeignId = `task_t13e_missing_foreign_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      // Task 1: pending with unregistered task type
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskOwnId), {
-        taskId: taskOwnId,
-        taskType: 'unknown_service_unregistered',
-        status: 'pending',
-        attempts: 0,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        // Task 1: pending with unregistered task type
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskOwnId), {
+          taskId: taskOwnId,
+          taskType: 'unknown_service_unregistered',
+          status: 'pending',
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
+        queueA.setFirestoreDb(firestoreTaskDb as any);
+
+        // Worker A executes task with no handler registered -> claims task and dead-letters it
+        const resOwn = await queueA.executeTask(taskOwnId);
+        expect(resOwn.status).toBe('dead_letter');
+        expect(resOwn.errorCode).toBe('MISSING_HANDLER');
+
+        // Authoritative Firestore check
+        const snapOwn = await getDoc(doc(adminDb, 'intelligence_tasks', taskOwnId));
+        expect(snapOwn.data()!.status).toBe('dead_letter');
+        expect(snapOwn.data()!.errorCode).toBe('MISSING_HANDLER');
+
+        // Task 2: owned by worker-B + lease-B with active lease
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskForeignId), {
+          taskId: taskForeignId,
+          taskType: 'unknown_service_unregistered',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-B',
+          leaseId: 'lease-B',
+          leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        // Worker A attempts to execute task owned by worker-B
+        await queueA.executeTask(taskForeignId);
+
+        // Authoritative Firestore check: Task 2 is NOT overwritten by worker-A
+        const snapForeign = await getDoc(doc(adminDb, 'intelligence_tasks', taskForeignId));
+        expect(snapForeign.data()!.status).toBe('processing');
+        expect(snapForeign.data()!.workerId).toBe('worker-B');
+        expect(snapForeign.data()!.leaseId).toBe('lease-B');
       });
-
-      const queueA = new IntelligenceTaskQueue(3, 300000, 'worker-A');
-      queueA.setFirestoreDb(firestoreTaskDb as any);
-
-      // Worker A executes task with no handler registered -> claims task and dead-letters it
-      const resOwn = await queueA.executeTask(taskOwnId);
-      expect(resOwn.status).toBe('dead_letter');
-      expect(resOwn.errorCode).toBe('MISSING_HANDLER');
-
-      // Authoritative Firestore check
-      const snapOwn = await getDoc(doc(adminDb, 'intelligence_tasks', taskOwnId));
-      expect(snapOwn.data()!.status).toBe('dead_letter');
-      expect(snapOwn.data()!.errorCode).toBe('MISSING_HANDLER');
-
-      // Task 2: owned by worker-B + lease-B with active lease
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskForeignId), {
-        taskId: taskForeignId,
-        taskType: 'unknown_service_unregistered',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-B',
-        leaseId: 'lease-B',
-        leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
-
-      // Worker A attempts to execute task owned by worker-B
-      await queueA.executeTask(taskForeignId);
-
-      // Authoritative Firestore check: Task 2 is NOT overwritten by worker-A
-      const snapForeign = await getDoc(doc(adminDb, 'intelligence_tasks', taskForeignId));
-      expect(snapForeign.data()!.status).toBe('processing');
-      expect(snapForeign.data()!.workerId).toBe('worker-B');
-      expect(snapForeign.data()!.leaseId).toBe('lease-B');
     });
 
     it('Task 13E Invariant 8: Terminal states (succeeded, dead_letter) are protected against claim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv8', { role: 'admin', admin: true }).firestore();
-      const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
-      const taskSuccId = `task_t13e_term_succ_${Date.now()}`;
-      const taskDeadId = `task_t13e_term_dead_${Date.now()}`;
-      const nowIso = new Date().toISOString();
+        const taskSuccId = `task_t13e_term_succ_${Date.now()}`;
+        const taskDeadId = `task_t13e_term_dead_${Date.now()}`;
+        const nowIso = new Date().toISOString();
 
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskSuccId), {
-        taskId: taskSuccId,
-        taskType: 'job_extraction',
-        status: 'succeeded',
-        attempts: 1,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+          taskId: taskSuccId,
+          taskType: 'job_extraction',
+          status: 'succeeded',
+          attempts: 1,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+          taskId: taskDeadId,
+          taskType: 'job_extraction',
+          status: 'dead_letter',
+          attempts: 3,
+          maxAttempts: 3,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        const queue = new IntelligenceTaskQueue(3, 300000, 'worker-invader');
+        queue.setFirestoreDb(firestoreTaskDb as any);
+
+        const claimSucc = await queue.claimTaskTransactional(taskSuccId, 'worker-invader');
+        const claimDead = await queue.claimTaskTransactional(taskDeadId, 'worker-invader');
+
+        expect(claimSucc).toBe(false);
+        expect(claimDead).toBe(false);
+
+        const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
+        const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
+
+        expect(snapSucc.data()!.status).toBe('succeeded');
+        expect(snapDead.data()!.status).toBe('dead_letter');
       });
-
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskDeadId), {
-        taskId: taskDeadId,
-        taskType: 'job_extraction',
-        status: 'dead_letter',
-        attempts: 3,
-        maxAttempts: 3,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
-
-      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-invader');
-      queue.setFirestoreDb(firestoreTaskDb as any);
-
-      const claimSucc = await queue.claimTaskTransactional(taskSuccId, 'worker-invader');
-      const claimDead = await queue.claimTaskTransactional(taskDeadId, 'worker-invader');
-
-      expect(claimSucc).toBe(false);
-      expect(claimDead).toBe(false);
-
-      const snapSucc = await getDoc(doc(adminDb, 'intelligence_tasks', taskSuccId));
-      const snapDead = await getDoc(doc(adminDb, 'intelligence_tasks', taskDeadId));
-
-      expect(snapSucc.data()!.status).toBe('succeeded');
-      expect(snapDead.data()!.status).toBe('dead_letter');
     });
 
     it('Task 13E Invariant 9: Transaction failures in stale recovery propagate without silent swallowing on real Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_t13e_inv9', { role: 'admin', admin: true }).firestore();
-      const unauthorizedDb = testEnv!.authenticatedContext('unauthorized_worker_inv9', { role: 'customer' }).firestore();
+      await withAdminDb(async (adminDb) => {
+        const unauthorizedDb = testEnv!.authenticatedContext('unauthorized_worker_inv9', { role: 'customer' }).firestore();
 
-      const taskId = `task_t13e_tx_fail_${Date.now()}`;
-      const nowIso = new Date().toISOString();
-      const expiredLease = new Date(Date.now() - 10000).toISOString();
+        const taskId = `task_t13e_tx_fail_${Date.now()}`;
+        const nowIso = new Date().toISOString();
+        const expiredLease = new Date(Date.now() - 10000).toISOString();
 
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskId), {
-        taskId,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: expiredLease,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+          taskId,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-A',
+          leaseId: 'lease-A',
+          leaseExpiresAt: expiredLease,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
 
-      const realAdminDb = createRealFirestoreTaskDb(adminDb);
-      const realUnauthDb = createRealFirestoreTaskDb(unauthorizedDb);
+        const realAdminDb = createRealFirestoreTaskDb(adminDb);
+        const realUnauthDb = createRealFirestoreTaskDb(unauthorizedDb);
 
-      // Query runs with admin context to locate stale tasks on the real Firestore emulator,
-      // while the transactional update executes with an unauthorized context on the real emulator.
-      // The real Firestore emulator's transaction runner evaluates security rules,
-      // rejects the update, and throws an authentic FirebaseError.
-      const emulatorFailingDb = {
-        collection: (name: string) => realAdminDb.collection(name),
-        runTransaction: realUnauthDb.runTransaction,
-      };
+        // Query runs with admin context to locate stale tasks on the real Firestore emulator,
+        // while the transactional update executes with an unauthorized context on the real emulator.
+        // The real Firestore emulator's transaction runner evaluates security rules,
+        // rejects the update, and throws an authentic FirebaseError.
+        const emulatorFailingDb = {
+          collection: (name: string) => realAdminDb.collection(name),
+          runTransaction: realUnauthDb.runTransaction,
+        };
 
-      const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
-      queue.setFirestoreDb(emulatorFailingDb as any);
+        const queue = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+        queue.setFirestoreDb(emulatorFailingDb as any);
 
-      // The real Firestore emulator's runTransaction must reject and propagate the authentic FirebaseError without swallowing
-      let caughtError: any = null;
-      try {
-        await queue.recoverStaleTasksAsync();
-      } catch (err) {
-        caughtError = err;
-      }
+        // The real Firestore emulator's runTransaction must reject and propagate the authentic FirebaseError without swallowing
+        let caughtError: any = null;
+        try {
+          await queue.recoverStaleTasksAsync();
+        } catch (err) {
+          caughtError = err;
+        }
 
-      expect(caughtError).toBeDefined();
-      expect(caughtError.name).toBe('FirebaseError');
-      expect(caughtError.message).toMatch(/permission|denied|PERMISSION_DENIED/i);
+        expect(caughtError).toBeDefined();
+        expect(caughtError.name).toBe('FirebaseError');
+        expect(caughtError.message).toMatch(/permission|denied|PERMISSION_DENIED/i);
 
-      // Additionally verify real Firestore emulator transaction retry exhaustion & abort under high contention
-      const taskIdContention = `task_t13e_tx_contention_${Date.now()}`;
-      await setDoc(doc(getAdminDb(), 'intelligence_tasks', taskIdContention), {
-        taskId: taskIdContention,
-        taskType: 'job_extraction',
-        status: 'processing',
-        attempts: 1,
-        maxAttempts: 3,
-        workerId: 'worker-A',
-        leaseId: 'lease-A',
-        leaseExpiresAt: expiredLease,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      });
+        // Additionally verify real Firestore emulator transaction retry exhaustion & abort under high contention
+        const taskIdContention = `task_t13e_tx_contention_${Date.now()}`;
+        await setDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+          taskId: taskIdContention,
+          taskType: 'job_extraction',
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 3,
+          workerId: 'worker-A',
+          leaseId: 'lease-A',
+          leaseExpiresAt: expiredLease,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
 
-      let contentionAttempts = 0;
-      const contentionDb = {
-        collection: (name: string) => ({
-          where: () => ({
-            get: async () => ({
-              empty: false,
-              docs: [{ id: taskIdContention }],
+        let contentionAttempts = 0;
+        const contentionDb = {
+          collection: (name: string) => ({
+            where: () => ({
+              get: async () => ({
+                empty: false,
+                docs: [{ id: taskIdContention }],
+              }),
             }),
+            doc: realAdminDb.collection(name).doc,
           }),
-          doc: realAdminDb.collection(name).doc,
-        }),
-        runTransaction: async <T>(updateFunction: (tx: any) => Promise<T>): Promise<T> => {
-          return runTransaction(getAdminDb(), async (rawTx) => {
-            contentionAttempts++;
-            // Concurrently mutate the task in Firestore outside rawTx to trigger real emulator transaction conflict
-            await updateDoc(doc(getAdminDb(), 'intelligence_tasks', taskIdContention), {
-              updatedAt: new Date().toISOString(),
-              contentionCount: contentionAttempts,
+          runTransaction: async <T>(updateFunction: (tx: any) => Promise<T>): Promise<T> => {
+            return runTransaction(adminDb, async (rawTx) => {
+              contentionAttempts++;
+              // Concurrently mutate the task in Firestore outside rawTx to trigger real emulator transaction conflict
+              await updateDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+                updatedAt: new Date().toISOString(),
+                contentionCount: contentionAttempts,
+              });
+              const col = 'intelligence_tasks';
+              const docRef = doc(adminDb, col, taskIdContention);
+              const snap = await rawTx.get(docRef);
+              const txWrapper = {
+                get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
+                update: (ref: any, data: any) => rawTx.update(docRef, data),
+                set: (ref: any, data: any) => rawTx.set(docRef, data),
+                delete: (ref: any) => rawTx.delete(docRef),
+              };
+              return await updateFunction(txWrapper);
             });
-            const col = 'intelligence_tasks';
-            const docRef = doc(getAdminDb(), col, taskIdContention);
-            const snap = await rawTx.get(docRef);
-            const txWrapper = {
-              get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
-              update: (ref: any, data: any) => rawTx.update(docRef, data),
-              set: (ref: any, data: any) => rawTx.set(docRef, data),
-              delete: (ref: any) => rawTx.delete(docRef),
-            };
-            return await updateFunction(txWrapper);
-          });
-        },
-      };
+          },
+        };
 
-      const queueContention = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
-      queueContention.setFirestoreDb(contentionDb as any);
+        const queueContention = new IntelligenceTaskQueue(3, 300000, 'worker-recovery');
+        queueContention.setFirestoreDb(contentionDb as any);
 
-      let contentionError: any = null;
-      try {
-        await queueContention.recoverStaleTasksAsync();
-      } catch (err) {
-        contentionError = err;
-      }
+        let contentionError: any = null;
+        try {
+          await queueContention.recoverStaleTasksAsync();
+        } catch (err) {
+          contentionError = err;
+        }
 
-      expect(contentionError).toBeDefined();
-      expect(contentionError.name).toBe('FirebaseError');
-      expect(contentionAttempts).toBeGreaterThanOrEqual(1);
+        expect(contentionError).toBeDefined();
+        expect(contentionError.name).toBe('FirebaseError');
+        expect(contentionAttempts).toBeGreaterThanOrEqual(1);
+      });
     });
   });
 
@@ -2100,7 +2119,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('9. Task 7A Immutable Intelligence Persistence & Concurrency Invariants (Emulator)', () => {
     async function seedEvidence(db: any, evidenceId: string, aggregateType: string, aggregateId: string, sourceVersion: number = 1) {
-      const targetDb = db || getAdminDb();
+      const targetDb = db;
       await setDoc(doc(targetDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType,
@@ -2534,7 +2553,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     };
 
     async function seedEvidenceDoc(db: any, evidence: Partial<any> & { evidenceId: string }) {
-      const targetDb = db || getAdminDb();
+      const targetDb = db;
       const docData: any = {
         evidenceId: evidence.evidenceId,
         aggregateType: evidence.aggregateType || 'job',
@@ -3274,7 +3293,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const jobId = 'job_emu_t11_101';
 
       // Seed real evidence in Firestore emulator
-      await setDoc(doc(adminDb || getAdminDb(), 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3413,7 +3432,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const contentHash = 'b'.repeat(64);
 
       // Seed valid evidence into real Firestore emulator
-      await setDoc(doc(adminDb || getAdminDb(), 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3514,7 +3533,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const foreignEvidenceId = 'ev_t12_foreign_1';
 
       // Seed evidence tied to foreign job
-      await setDoc(doc(adminDb || getAdminDb(), 'intelligence_evidence', foreignEvidenceId), {
+      await setDoc(doc(adminDb, 'intelligence_evidence', foreignEvidenceId), {
         evidenceId: foreignEvidenceId,
         aggregateType: 'job',
         aggregateId: foreignJobId, // Different job!
@@ -3614,7 +3633,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const evidenceId = 'ev_t12_valid_emu_6';
       const contentHash = 'd'.repeat(64);
 
-      await setDoc(doc(adminDb || getAdminDb(), 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3714,7 +3733,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const evId = `ev_${aggType}_emu_1`;
         const contentHash = 'c'.repeat(64);
 
-        await setDoc(doc(adminDb || getAdminDb(), 'intelligence_evidence', evId), {
+        await setDoc(doc(adminDb, 'intelligence_evidence', evId), {
           evidenceId: evId,
           aggregateType: aggType,
           aggregateId: aggId,
@@ -4016,7 +4035,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       );
 
       let contentionAttempts = 0;
-      const targetAdminDb = adminDb || getAdminDb();
+      const targetAdminDb = adminDb;
       const contentionDb = {
         collection: (name: string) => storeDb.collection(name),
         runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
@@ -5651,7 +5670,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       });
 
       // Seed ONLY the quality doc directly
-      await setDoc(doc(getAdminDb(), 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
+      await setDoc(doc(adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
       const preEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
       expect(preEventSnap.exists()).toBe(false);
 
@@ -5689,7 +5708,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       });
 
       // Seed ONLY the event doc directly
-      await setDoc(doc(getAdminDb(), 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
+      await setDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
       const preQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
       expect(preQualitySnap.exists()).toBe(false);
 
