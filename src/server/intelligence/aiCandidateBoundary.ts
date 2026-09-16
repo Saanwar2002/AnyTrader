@@ -176,7 +176,11 @@ export function validateAndSanitizeAICandidate(
       urgency: inv.urgency as any,
       component: inv.component,
       evidenceIds: inv.evidenceIds,
-      estimatedBenchmarkCost: inv.estimatedBenchmarkCost,
+      estimatedBenchmarkCost: inv.estimatedBenchmarkCost ? {
+        min: inv.estimatedBenchmarkCost.min ?? 0,
+        max: inv.estimatedBenchmarkCost.max ?? 0,
+        currency: inv.estimatedBenchmarkCost.currency,
+      } : undefined,
     })),
     outcomes: candidate.outcomes?.map((o) => ({
       description: o.description,

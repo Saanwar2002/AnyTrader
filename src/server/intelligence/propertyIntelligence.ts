@@ -263,7 +263,10 @@ export class PropertyIntelligenceService {
       recommendedInterventions: candidate.recommendedInterventions.map((ri) => ({
         intervention: ri.intervention,
         urgency: ri.urgency,
-        estimatedBenchmarkCost: ri.estimatedBenchmarkCost,
+        estimatedBenchmarkCost: ri.estimatedBenchmarkCost ? {
+          min: ri.estimatedBenchmarkCost.min ?? 0,
+          max: ri.estimatedBenchmarkCost.max ?? 0,
+        } : undefined,
         component: ri.component,
       })),
       derivedFromJobIds: derivedJobIds,

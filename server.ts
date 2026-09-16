@@ -959,12 +959,130 @@ async function verifyTokenSafely(token: string) {
   try {
     return await admin.auth().verifyIdToken(token, true);
   } catch (err: any) {
-    if (err?.message?.includes("identitytoolkit.googleapis.com") || err?.code === "auth/internal-error" || err?.message?.includes("SERVICE_DISABLED")) {
-      console.warn("[Auth Warning] Identity Toolkit API disabled; falling back to local signature verification without revocation check.");
-      return await admin.auth().verifyIdToken(token, false);
+    if (
+      err?.message?.includes("identitytoolkit.googleapis.com") ||
+      err?.code === "auth/internal-error" ||
+      err?.message?.includes("SERVICE_DISABLED") ||
+      err?.message?.includes("accessNotConfigured") ||
+      err?.message?.includes("has not been used in project")
+    ) {
+      console.warn("[Auth Warning] Identity Toolkit API service unavailable; validating signature and cross-checking user revocation in database.");
+      const decodedToken = await admin.auth().verifyIdToken(token, false);
+
+      // 1. Attempt checking user record via Admin SDK if accessible
+      try {
+        const userRecord = await admin.auth().getUser(decodedToken.uid);
+        if (userRecord.disabled) {
+          throw new UnauthorizedError("Account has been disabled or banned.");
+        }
+        if (userRecord.tokensValidAfterTime) {
+          const validSinceSec = Math.floor(new Date(userRecord.tokensValidAfterTime).getTime() / 1000);
+          if (decodedToken.auth_time < validSinceSec) {
+            throw new UnauthorizedError("Authentication token has been revoked.");
+          }
+        }
+      } catch (authErr: any) {
+        if (authErr instanceof UnauthorizedError) {
+          throw authErr;
+        }
+        if (authErr?.code === "auth/user-disabled") {
+          throw new UnauthorizedError("Account has been disabled or banned.");
+        }
+        // If Identity Toolkit lookup errors (e.g. Identity Toolkit API is disabled in GCP project),
+        // fall through to Firestore user security status below without re-throwing the API error.
+      }
+
+      // 2. Database verification: ensure account is not suspended, banned, disabled, or revoked in Firestore
+      if (db) {
+        try {
+          const userDoc = await db.collection("users").doc(decodedToken.uid).get();
+          if (userDoc.exists) {
+            const userData = userDoc.data() || {};
+            if (
+              userData.disabled === true ||
+              userData.isSuspended === true ||
+              userData.isBanned === true ||
+              userData.banned === true ||
+              userData.status === "banned" ||
+              userData.status === "suspended"
+            ) {
+              throw new UnauthorizedError("Account has been suspended, banned, or disabled.");
+            }
+            if (userData.tokensRevokedAt && decodedToken.auth_time) {
+              const revokedTimestamp = typeof userData.tokensRevokedAt.toMillis === "function"
+                ? Math.floor(userData.tokensRevokedAt.toMillis() / 1000)
+                : Math.floor(new Date(userData.tokensRevokedAt).getTime() / 1000);
+              if (decodedToken.auth_time < revokedTimestamp) {
+                throw new UnauthorizedError("Authentication token has been revoked.");
+              }
+            }
+          }
+        } catch (dbErr: any) {
+          if (dbErr instanceof UnauthorizedError) {
+            throw dbErr;
+          }
+          const msg = dbErr?.message || String(dbErr);
+          if (
+            !msg.includes("PERMISSION_DENIED") &&
+            !msg.includes("UNAUTHENTICATED") &&
+            !msg.includes("Could not load the default credentials") &&
+            dbErr?.code !== 7
+          ) {
+            console.warn("[Auth Fallback Warning] Database user status check failed:", msg);
+          }
+        }
+      }
+
+      return decodedToken;
     }
     throw err;
   }
+}
+
+/**
+ * Server-authoritative check verifying if a caller holds administrator privileges.
+ * Honours custom claims (admin: true, isAdmin: true), roles ('admin', 'ecosystem_manager'),
+ * and the Firestore 'admins' and 'users' collections to ensure real admins are never refused.
+ */
+export async function checkIsAdmin(user: any): Promise<boolean> {
+  if (!user || !user.uid) return false;
+
+  // 1. Primary check: Firebase Custom User Claims & token attributes
+  if (
+    user.admin === true ||
+    user.isAdmin === true ||
+    user.role === "admin" ||
+    user.role === "ecosystem_manager"
+  ) {
+    return true;
+  }
+
+  // 2. Secondary check / migration fallback: Firestore admins & users collections
+  if (db) {
+    try {
+      const adminDoc = await db.collection("admins").doc(user.uid).get();
+      if (adminDoc.exists) {
+        return true;
+      }
+      const userDoc = await db.collection("users").doc(user.uid).get();
+      const role = userDoc.data()?.role;
+      if (role === "admin" || role === "ecosystem_manager") {
+        return true;
+      }
+    } catch (dbErr: any) {
+      const msg = dbErr?.message || String(dbErr);
+      if (
+        !msg.includes("PERMISSION_DENIED") &&
+        !msg.includes("UNAUTHENTICATED") &&
+        !msg.includes("Could not load the default credentials") &&
+        dbErr?.code !== 7
+      ) {
+        console.warn("[Admin Check Warning] Firestore fallback lookup failed due to permissions/network:", dbErr);
+      }
+    }
+  }
+
+  return false;
 }
 
 const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -1000,49 +1118,23 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
   }
 
   try {
-    // 1. Primary check: Firebase Custom User Claims
-    const hasAdminClaim = decodedToken.admin === true || decodedToken.role === "admin" || decodedToken.role === "ecosystem_manager";
-    
-    if (!hasAdminClaim) {
-      // 2. Secondary check / migration fallback: Firestore admins & users collections
-      if (db) {
-        let isAdminFound = false;
-        let role = null;
-        try {
-          const adminDoc = await db.collection("admins").doc(decodedToken.uid).get();
-          if (adminDoc.exists) {
-            isAdminFound = true;
-          } else {
-            const userDoc = await db.collection("users").doc(decodedToken.uid).get();
-            role = userDoc.data()?.role;
-            if (role === "admin" || role === "ecosystem_manager") {
-              isAdminFound = true;
-            }
-          }
-        } catch (dbErr: any) {
-          if (!dbErr?.message?.includes("PERMISSION_DENIED")) {
-            console.warn("[Admin Check Warning] Firestore fallback lookup failed due to permissions/network:", dbErr);
-          }
-        }
+    const isAdmin = await checkIsAdmin(decodedToken);
+    if (!isAdmin) {
+      return res.status(403).json({ error: "Forbidden: requires admin privileges" });
+    }
 
-        if (!isAdminFound) {
-          return res.status(403).json({ error: "Forbidden: requires admin privileges" });
-        }
-
-        // Auto-migrate verified admin by applying custom claim for future requests
-        try {
-          const userRecord = await admin.auth().getUser(decodedToken.uid);
-          const currentClaims = userRecord.customClaims || {};
-          await admin.auth().setCustomUserClaims(decodedToken.uid, {
-            ...currentClaims,
-            admin: true,
-            role: role || "admin",
-          });
-        } catch (claimErr) {
-          console.error("[Admin Claim Auto-Sync FAILED]", decodedToken.uid, claimErr);
-        }
-      } else {
-        return res.status(403).json({ error: "Forbidden: database offline and no admin claim found" });
+    // Auto-migrate verified admin by applying custom claim for future requests if missing
+    if (decodedToken.admin !== true && decodedToken.role !== "admin") {
+      try {
+        const userRecord = await admin.auth().getUser(decodedToken.uid);
+        const currentClaims = userRecord.customClaims || {};
+        await admin.auth().setCustomUserClaims(decodedToken.uid, {
+          ...currentClaims,
+          admin: true,
+          role: decodedToken.role || "admin",
+        });
+      } catch (claimErr) {
+        // Non-blocking if identity toolkit is disabled
       }
     }
 
@@ -1098,12 +1190,41 @@ async function startServer() {
     : [];
   const allowedOriginsSet = new Set([...defaultAllowedOrigins, ...envAllowedOrigins]);
 
+  // Helper to validate origin strictly without substring hijacking vulnerabilities (e.g. evil-localhost.com)
+  const isOriginAllowed = (origin: string, allowedSet: Set<string>): boolean => {
+    if (allowedSet.has(origin)) {
+      return true;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      try {
+        const parsed = new URL(origin);
+        // Strict localhost check: hostname must be exactly localhost, 127.0.0.1, or ::1
+        const isStrictLocalhost =
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1" ||
+          parsed.hostname === "[::1]";
+        if (isStrictLocalhost) {
+          return true;
+        }
+        // Strict Cloud Run and Google development previews
+        if (
+          parsed.protocol === "https:" &&
+          (parsed.hostname.endsWith(".run.app") || parsed.hostname.endsWith(".google.com"))
+        ) {
+          return true;
+        }
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  };
+
   // CORS middleware for Native Capacitor Mobile Apps (Android/iOS) and Web
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
-      const isAllowed = allowedOriginsSet.has(origin) ||
-        (process.env.NODE_ENV !== "production" && (origin.endsWith(".run.app") || origin.includes("localhost")));
+      const isAllowed = isOriginAllowed(origin, allowedOriginsSet);
 
       if (isAllowed) {
         res.setHeader("Access-Control-Allow-Origin", origin);
@@ -1123,6 +1244,38 @@ async function startServer() {
     if (req.method === "OPTIONS") {
       return res.status(204).end();
     }
+    next();
+  });
+
+  // Production Security Headers: HSTS, Clickjacking Protection, MIME-sniffing defense, Referrer & Permissions Policies
+  // Applied globally to all requests (pages, assets, and API endpoints)
+  app.use((req, res, next) => {
+    // 1. Strict-Transport-Security (HSTS): Enforce HTTPS connections for 1 year with subdomains and preload
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload"
+    );
+
+    // 2. Clickjacking Protection across ALL pages and routes
+    // SAMEORIGIN for legacy clients + CSP frame-ancestors allowing self, Google Cloud Run previews, and AI Studio
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader(
+      "Content-Security-Policy",
+      "frame-ancestors 'self' https://*.run.app https://*.google.com https://ai.studio https://studio.google.com;"
+    );
+
+    // 3. MIME-type sniffing defense
+    res.setHeader("X-Content-Type-Options", "nosniff");
+
+    // 4. Referrer Policy
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+    // 5. Permissions Policy
+    res.setHeader(
+      "Permissions-Policy",
+      "geolocation=(self), microphone=(self), camera=(self)"
+    );
+
     next();
   });
 
@@ -1155,16 +1308,13 @@ async function startServer() {
   // Apply general limiter to all API routes
   app.use('/api/', generalLimiter);
 
-  // Set anti-caching & standard security defense headers on all dynamic API endpoints
+  // Set anti-caching headers on all dynamic API endpoints
   app.use('/api/', (req, res, next) => {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
-      'Surrogate-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
-      'Referrer-Policy': 'strict-origin-when-cross-origin'
+      'Surrogate-Control': 'no-store'
     });
     next();
   });
@@ -2427,13 +2577,14 @@ async function startServer() {
 
       if (rideData) {
         // Authorize caller
+        const isCallerAdmin = await checkIsAdmin((req as any).user);
         const isParticipant =
           callerUid === rideData?.driverId ||
           callerUid === rideData?.assignedDriverId ||
           callerUid === rideData?.passengerId ||
           callerUid === rideData?.riderId ||
           callerUid === driverId ||
-          (req as any).user?.role === "admin";
+          isCallerAdmin;
         
         if (!isParticipant) {
           return res.status(403).json({ error: "Forbidden: You are not authorized to process payment for this trip." });
@@ -2686,13 +2837,8 @@ async function startServer() {
   // =========================================================================
   // PUBLIC JOB CARD PROJECTION SYNCHRONIZATION
   // =========================================================================
-  app.post("/api/admin/sync-public-job-cards", requireAuth, async (req, res) => {
+  app.post("/api/admin/sync-public-job-cards", requireAdmin, async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (user.role !== 'admin' && !user.isAdmin) {
-        throw new ForbiddenError("Only platform administrators can trigger full public job card synchronization.");
-      }
-
       if (!db) {
         return res.json({ success: true, message: "In-memory mock sync completed", total: 0, synced: 0 });
       }
@@ -2720,7 +2866,9 @@ async function startServer() {
       }
 
       const data = jobDoc.data()!;
-      if (data.homeownerId !== user.uid && data.userId !== user.uid && user.role !== 'admin' && !user.isAdmin) {
+      const isOwner = data.homeownerId === user.uid || data.userId === user.uid;
+      const isAdmin = await checkIsAdmin(user);
+      if (!isOwner && !isAdmin) {
         throw new ForbiddenError("Unauthorized to sync this job projection.");
       }
 
@@ -2742,13 +2890,8 @@ async function startServer() {
   // =========================================================================
   // PUBLIC PROPERTY PROJECTION SYNCHRONIZATION
   // =========================================================================
-  app.post("/api/admin/sync-public-properties", requireAuth, async (req, res) => {
+  app.post("/api/admin/sync-public-properties", requireAdmin, async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (user.role !== 'admin' && !user.isAdmin) {
-        throw new ForbiddenError("Only platform administrators can trigger full public property synchronization.");
-      }
-
       if (!db) {
         return res.json({ success: true, message: "In-memory mock sync completed", total: 0, synced: 0 });
       }
@@ -2776,7 +2919,9 @@ async function startServer() {
       }
 
       const data = propDoc.data()!;
-      if (data.ownerId !== user.uid && data.userId !== user.uid && data.landlordId !== user.uid && user.role !== 'admin' && !user.isAdmin) {
+      const isOwner = data.ownerId === user.uid || data.userId === user.uid || data.landlordId === user.uid;
+      const isAdmin = await checkIsAdmin(user);
+      if (!isOwner && !isAdmin) {
         throw new ForbiddenError("Unauthorized to sync this property passport projection.");
       }
 
@@ -3221,7 +3366,7 @@ async function startServer() {
 
           const jobData = jobDoc.data();
           const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
-          const isAdmin = authUser?.role === "admin" || authUser?.admin === true;
+          const isAdmin = await checkIsAdmin(authUser);
           const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
 
           if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
@@ -4049,7 +4194,7 @@ async function startServer() {
   });
 
   // Smart Job Procurement Material Detection Route
-  app.post("/api/job/procure-materials", requireAuth, async (req, res) => {
+  app.post("/api/job/procure-materials", requireAuth, aiLimiter, async (req, res) => {
     try {
       const { description } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -4085,7 +4230,7 @@ Description: ${description}`;
   });
 
   // Direct Merchant AI "BOM" (Bill of Materials) One-Click Extraction Route
-  app.post("/api/job/extract-bom", requireAuth, async (req, res) => {
+  app.post("/api/job/extract-bom", requireAuth, aiLimiter, async (req, res) => {
     try {
       const { jobTitle, category, description, quoteMessage, quoteMaterialList, propertyPassportSpecs } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -4151,7 +4296,7 @@ Return a JSON object with an 'items' array:
     }
   });
 
-  app.post("/api/driver/analytics-pulse", requireAuth, async (req, res) => {
+  app.post("/api/driver/analytics-pulse", requireAuth, aiLimiter, async (req, res) => {
     try {
       const { driverStats } = req.body;
       let apiKey = process.env.GEMINI_API_KEY;
@@ -4223,7 +4368,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   };
 
   // Secure Gemini API Service Call Proxy
-  app.post("/api/gemini/call", express.json({ limit: "10mb" }), requireAuth, async (req, res) => {
+  app.post("/api/gemini/call", express.json({ limit: "10mb" }), requireAuth, aiLimiter, async (req, res) => {
     try {
       const { functionName, args } = req.body;
       if (!functionName) {
@@ -4246,7 +4391,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   });
 
   // High-Performance SSE Token Streaming Endpoint (<100-200ms TTFB)
-  app.post("/api/gemini/stream", requireAuth, async (req, res) => {
+  app.post("/api/gemini/stream", requireAuth, aiLimiter, async (req, res) => {
     // Configure SSE Headers
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -4640,7 +4785,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       // Assert authorization: owner, assigned trader, or admin
       const isOwner = jobData.homeownerId === user.uid || jobData.userId === user.uid;
       const isAssignedTrader = jobData.assignedTraderId === user.uid;
-      const isAdminUser = user.admin === true || user.role === "admin";
+      const isAdminUser = await checkIsAdmin(user);
       if (!isOwner && !isAssignedTrader && !isAdminUser) {
         return res.status(403).json({ error: "Forbidden: insufficient permissions to analyze this job" });
       }
@@ -4678,7 +4823,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
           const jd = jobDoc.data() || {};
           const isOwner = jd.homeownerId === user.uid || jd.userId === user.uid;
           const isAssigned = jd.assignedTraderId === user.uid;
-          const isAdminUser = user.admin === true || user.role === "admin";
+          const isAdminUser = await checkIsAdmin(user);
           if (!isOwner && !isAssigned && !isAdminUser) {
             return res.status(403).json({ error: "Forbidden: unauthorized to read job intelligence" });
           }

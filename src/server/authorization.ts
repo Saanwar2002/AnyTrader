@@ -9,7 +9,16 @@ export interface AuthenticatedUser {
   email?: string;
   role?: string;
   isAdmin?: boolean;
+  admin?: boolean;
   isEcosystemManager?: boolean;
+}
+
+/**
+ * Checks whether an authenticated user holds administrative privileges via token claims
+ */
+export function isUserAdminClaim(user?: AuthenticatedUser | null): boolean {
+  if (!user) return false;
+  return user.isAdmin === true || user.admin === true || user.role === "admin" || user.role === "ecosystem_manager";
 }
 
 /**
@@ -26,9 +35,7 @@ export function assertIsAuthenticated(user?: AuthenticatedUser | null): asserts 
  */
 export function assertIsAdmin(user?: AuthenticatedUser | null): asserts user is AuthenticatedUser {
   assertIsAuthenticated(user);
-  const isSuperAdmin = user.isAdmin === true;
-  const isRoleAdmin = user.role === "admin" || user.role === "ecosystem_manager";
-  if (!isSuperAdmin && !isRoleAdmin) {
+  if (!isUserAdminClaim(user)) {
     throw new ForbiddenError("Administrative privileges required for this action.");
   }
 }
@@ -41,7 +48,7 @@ export function assertUserRole(
   allowedRoles: string[]
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") {
+  if (isUserAdminClaim(user)) {
     return;
   }
   if (!user.role || !allowedRoles.includes(user.role)) {
@@ -59,7 +66,7 @@ export function assertResourceOwner(
   resourceType: string = "Resource"
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") {
+  if (isUserAdminClaim(user)) {
     return; // Admins can bypass ownership checks for support operations
   }
   if (!resourceOwnerId || user.uid !== resourceOwnerId) {
@@ -73,7 +80,7 @@ export function assertResourceOwner(
  */
 export function assertCanAccessJob(user: AuthenticatedUser, jobData: Record<string, any>): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") {
+  if (isUserAdminClaim(user)) {
     return;
   }
   
@@ -94,7 +101,7 @@ export function assertCanAccessJob(user: AuthenticatedUser, jobData: Record<stri
  */
 export function assertCanModifyJob(user: AuthenticatedUser, jobData: Record<string, any>): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
   const ownerId = jobData.homeownerId || jobData.userId || jobData.ownerId;
   if (user.uid !== ownerId) {
     throw new ForbiddenError("Only the job creator can modify this job or its status.");
@@ -131,7 +138,7 @@ export function assertCanManageMilestone(
   isQrHandshake: boolean = false
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const customerId = milestoneData.customerId || milestoneData.homeownerId || milestoneData.userId;
   const traderId = milestoneData.tradespersonId || milestoneData.proId || milestoneData.traderId || milestoneData.acceptedTradespersonId || milestoneData.acceptedTraderId;
@@ -174,7 +181,7 @@ export function assertCanAccessConversation(
   participants: string[]
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
   if (!participants || !participants.includes(user.uid)) {
     throw new ForbiddenError("You are not an authorized participant in this conversation.");
   }
@@ -190,7 +197,7 @@ export function assertCanAccessProperty(
   propertyData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") return;
+  if (isUserAdminClaim(user)) return;
 
   const ownerId = propertyData.ownerId || propertyData.userId;
   const isPendingRecipient = propertyData.transferStatus === "pending" && propertyData.pendingTransferToUid === user.uid;
@@ -208,7 +215,7 @@ export function assertCanModifyProperty(
   propertyData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") return;
+  if (isUserAdminClaim(user)) return;
 
   const ownerId = propertyData.ownerId || propertyData.userId;
   const isPendingRecipient = propertyData.transferStatus === "pending" && propertyData.pendingTransferToUid === user.uid;
@@ -229,7 +236,7 @@ export function assertCanModifyQuote(
   quoteData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const quotingTraderId = quoteData.tradespersonId || quoteData.traderId || quoteData.proId;
   if (user.uid !== quotingTraderId) {
@@ -243,7 +250,7 @@ export function assertCanDeleteQuote(
   jobData?: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const quotingTraderId = quoteData.tradespersonId || quoteData.traderId || quoteData.proId;
   const homeownerId = quoteData.homeownerId || quoteData.userId || jobData?.homeownerId || jobData?.userId;
@@ -264,7 +271,7 @@ export function assertCanAccessDispute(
   disputeData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const landlordId = disputeData.landlordOwnerId || disputeData.landlordId || disputeData.ownerId;
   const tenantEmail = disputeData.tenantEmail;
@@ -285,7 +292,7 @@ export function assertCanModifyDispute(
   disputeData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const landlordId = disputeData.landlordOwnerId || disputeData.landlordId || disputeData.ownerId;
   const claimantId = disputeData.claimantId || disputeData.initiatorId || disputeData.userId;
@@ -307,7 +314,7 @@ export function assertCanSubmitReview(
   jobData?: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const reviewerId = reviewData.reviewerId || reviewData.userId || reviewData.homeownerId || reviewData.customerId;
   if (!reviewerId || user.uid !== reviewerId) {
@@ -336,7 +343,7 @@ export function assertCanAccessUserStorage(
   isPublicFolder: boolean = false
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   if (isPublicFolder && accessType === "read") {
     return;
@@ -462,7 +469,7 @@ export function assertCanManageTraderAvailability(
   targetTraderId: string
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   if (!targetTraderId || user.uid !== targetTraderId) {
     throw new ForbiddenError("You cannot modify another tradesperson's availability or calendar.");
@@ -478,7 +485,7 @@ export function assertCanAcceptJob(
   jobData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const homeownerId = jobData.homeownerId || jobData.userId || jobData.ownerId;
   if (user.uid !== homeownerId) {
@@ -496,7 +503,7 @@ export function assertCanManageEstate(
   estateData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") return;
+  if (isUserAdminClaim(user)) return;
 
   const managerId = estateData.managerId || estateData.landlordId || estateData.ownerId || estateData.userId;
   if (!managerId || user.uid !== managerId) {
@@ -515,7 +522,7 @@ export function assertCanManageRide(
   action: "view" | "cancel" | "accept" | "update_status"
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const passengerId = rideData.passengerId || rideData.userId || rideData.customerId;
   const driverId = rideData.driverId || rideData.assignedDriverId;
@@ -560,7 +567,7 @@ export function assertCanSubmitDirectQuote(
   jobData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin") return;
+  if (isUserAdminClaim(user)) return;
 
   const directTargetId = jobData.targetTraderId || jobData.directTraderId || jobData.requestedTraderId;
   if (directTargetId && directTargetId !== user.uid) {
@@ -578,7 +585,7 @@ export function assertCanAccessTenantReport(
   reportData: Record<string, any>
 ): void {
   assertIsAuthenticated(user);
-  if (user.isAdmin || user.role === "admin" || user.role === "ecosystem_manager") return;
+  if (isUserAdminClaim(user)) return;
 
   const tenantId = reportData.tenantId || reportData.userId;
   const tenantEmail = reportData.tenantEmail;

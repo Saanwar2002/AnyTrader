@@ -85,23 +85,41 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /dynamic_search_synonyms/{synonymId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || (isSignedIn() && (request.resource.data.get('addedBy', '') == request.auth.uid || resource.data.get('addedBy', '') == request.auth.uid));
+      allow read: if isSignedIn() || isAdmin();
+      allow write: if isAdmin();
     }
     match /unmatched_search_telemetry/{telemetryId} {
       allow read: if isSignedIn() || isAdmin();
-      allow create, update: if request.resource.data.query is string && request.resource.data.query.size() <= 200;
+      allow create: if isSignedIn() && request.resource.data.query is string && request.resource.data.query.size() <= 200;
+      allow update: if isAdmin() || (isSignedIn() && request.resource.data.query is string && request.resource.data.query.size() <= 200 && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'suggestedCategory', 'suggestedTrade']));
       allow delete: if isAdmin();
     }
 
     // --- Advertisements ---
     match /advertisements/{adId} {
       allow read: if true;
-      allow write: if isSignedIn() && (
-        resource == null || 
-        resource.data.advertiserUid == request.auth.uid || 
-        request.resource.data.advertiserUid == request.auth.uid || 
-        isAdmin()
+      allow create: if isSignedIn() && (
+        isAdmin() || (
+          request.resource.data.advertiserUid == request.auth.uid &&
+          request.resource.data.get('advertiserId', request.auth.uid) == request.auth.uid
+        )
+      );
+      allow update: if isAdmin() || (
+        isSignedIn() && (
+          // Ad owner can update their own ad, but cannot reassign advertiserUid or advertiserId
+          (
+            (resource.data.advertiserUid == request.auth.uid || resource.data.get('advertiserId', '') == request.auth.uid) &&
+            request.resource.data.advertiserUid == resource.data.advertiserUid &&
+            request.resource.data.get('advertiserId', resource.data.advertiserUid) == resource.data.get('advertiserId', resource.data.advertiserUid)
+          ) ||
+          // Public click tracking updates (budget deduction, clicks count increment)
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'clicks', 'bannerClicks', 'searchFeedClicks', 'impressions', 'prepaidBalance', 'isActive', 'lastAutoTopUpAt'
+          ])
+        )
+      );
+      allow delete: if isAdmin() || (
+        isSignedIn() && (resource.data.advertiserUid == request.auth.uid || resource.data.get('advertiserId', '') == request.auth.uid)
       );
     }
 

@@ -11,7 +11,7 @@ import {
   serverTimestamp, 
   onSnapshot 
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import { registerDynamicSynonyms, SynonymMeta } from "../lib/fuzzyMatch";
 import { classifyUnmatchedSearchTerm, SynonymClassificationResult, syncCategoryRegistryWithServer } from "./gemini";
 import { categoryRegistry } from "./categoryRegistrySync";
@@ -214,6 +214,11 @@ export function recordUnmatchedSearch(
 
   const executeWrite = async () => {
     try {
+      if (!auth?.currentUser) {
+        // Telemetry write requires authenticated session to prevent unauthenticated junk data and cost abuse
+        return;
+      }
+
       // Mark in session storage immediately before network call
       sessionLoggedTerms.add(slug);
       try {
@@ -236,6 +241,7 @@ export function recordUnmatchedSearch(
           source: options?.source || "search_bar",
           gapType: options?.gapType || "unmatched_category",
           suggestedCategory: options?.category || "",
+          userId: auth.currentUser.uid,
         },
         { merge: true }
       );

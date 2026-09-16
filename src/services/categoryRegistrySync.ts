@@ -108,26 +108,52 @@ class CategoryRegistryManager {
   public syncSynonyms(synonyms: any[] | Record<string, any>) {
     if (!synonyms) return;
 
+    const sanitizeField = (str: string, maxLen = 80): string => {
+      if (typeof str !== "string") return "";
+      // Strip control characters, backticks, brackets, and line breaks to prevent AI prompt injection
+      return str.replace(/[\x00-\x1F\x7F`$<>{}[\\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, maxLen);
+    };
+
     if (Array.isArray(synonyms)) {
       synonyms.forEach((syn) => {
         if (!syn || !syn.term || !syn.categoryName) return;
-        const key = syn.term.toLowerCase().trim();
+        const cleanTerm = sanitizeField(syn.term, 80);
+        const cleanCategory = sanitizeField(syn.categoryName, 100);
+        if (!cleanTerm || !cleanCategory) return;
+
+        const key = cleanTerm.toLowerCase();
         this.synonymsMap.set(key, {
-          term: syn.term,
-          categoryName: syn.categoryName,
-          tradeTitle: syn.tradeTitle,
-          keywords: syn.keywords || [],
+          term: cleanTerm,
+          categoryName: cleanCategory,
+          tradeTitle: syn.tradeTitle ? sanitizeField(syn.tradeTitle, 100) : undefined,
+          keywords: Array.isArray(syn.keywords)
+            ? syn.keywords
+                .filter((k: any) => typeof k === "string")
+                .map((k: string) => sanitizeField(k, 50))
+                .filter((k: string) => k.length > 0)
+                .slice(0, 20)
+            : [],
         });
       });
     } else if (typeof synonyms === "object") {
       Object.entries(synonyms).forEach(([term, meta]) => {
         if (!term || !meta || !meta.categoryName) return;
-        const key = term.toLowerCase().trim();
+        const cleanTerm = sanitizeField(term, 80);
+        const cleanCategory = sanitizeField(meta.categoryName, 100);
+        if (!cleanTerm || !cleanCategory) return;
+
+        const key = cleanTerm.toLowerCase();
         this.synonymsMap.set(key, {
-          term,
-          categoryName: meta.categoryName,
-          tradeTitle: meta.tradeTitle,
-          keywords: meta.keywords || [],
+          term: cleanTerm,
+          categoryName: cleanCategory,
+          tradeTitle: meta.tradeTitle ? sanitizeField(meta.tradeTitle, 100) : undefined,
+          keywords: Array.isArray(meta.keywords)
+            ? meta.keywords
+                .filter((k: any) => typeof k === "string")
+                .map((k: string) => sanitizeField(k, 50))
+                .filter((k: string) => k.length > 0)
+                .slice(0, 20)
+            : [],
         });
       });
     }

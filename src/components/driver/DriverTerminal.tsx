@@ -1015,7 +1015,13 @@ export default function DriverTerminal() {
 
 
   const formatInstructionForDisplay = (htmlInstruction: string) => {
-    let formatted = htmlInstruction;
+    if (!htmlInstruction) return "";
+    // Pre-sanitize incoming Google directions raw HTML with DOMPurify whitelist
+    const cleanInput = DOMPurify.sanitize(htmlInstruction, {
+      ALLOWED_TAGS: ['b', 'strong', 'span', 'br', 'div', 'wbr'],
+      ALLOWED_ATTR: ['style', 'class']
+    });
+    let formatted = cleanInput;
 
     const isGoingStraight = /^\s*(?:<[^>]*>)?\s*(?:Head|Proceed)\b/i.test(formatted);
 
@@ -1088,7 +1094,10 @@ export default function DriverTerminal() {
       });
     });
 
-    return formatted;
+    return DOMPurify.sanitize(formatted, {
+      ALLOWED_TAGS: ['b', 'strong', 'span', 'br', 'div', 'wbr'],
+      ALLOWED_ATTR: ['style', 'class']
+    });
   };
 
   const formatInstructionForTTS = (htmlInstruction: string) => {
@@ -4197,7 +4206,10 @@ export default function DriverTerminal() {
                               const step1 = steps[currentStepIndex + 1];
                               html += ' <span style="opacity: 0.8; font-size: 0.85em;">then</span> <br/> ' + formatInstructionForDisplay(step1.instructions);
                             }
-                            return DOMPurify.sanitize(html);
+                            return DOMPurify.sanitize(html, {
+                              ALLOWED_TAGS: ['b', 'strong', 'span', 'br', 'div', 'wbr'],
+                              ALLOWED_ATTR: ['style', 'class']
+                            });
                           })()
                         }}
                       />
