@@ -49,12 +49,13 @@ function lazyWithRetry<T extends React.ComponentType<any>>(componentImport: () =
   });
 }
 
-// Lazy loaded primary & auth components
-const Login = lazyWithRetry(() => import("./components/Login"));
-const Onboarding = lazyWithRetry(() => import("./components/Onboarding"));
-const Dashboard = lazyWithRetry(() => import("./components/Dashboard"));
-const TradesDashboard = lazyWithRetry(() => import("./components/TradesDashboard"));
-const BusinessDashboard = lazyWithRetry(() => import("./components/BusinessDashboard"));
+import Login from "./components/Login";
+import Onboarding from "./components/Onboarding";
+import Dashboard from "./components/Dashboard";
+import TradesDashboard from "./components/TradesDashboard";
+import BusinessDashboard from "./components/BusinessDashboard";
+
+// Lazy loaded secondary & route components
 const Profile = lazyWithRetry(() => import("./components/Profile"));
 const FindTrades = lazyWithRetry(() => import("./components/FindTrades"));
 const PostJobWizard = lazyWithRetry(() => import("./components/PostJobWizard"));

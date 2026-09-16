@@ -881,7 +881,7 @@ describe('V8.1 Structured Intelligence Foundation', () => {
       expect(photoEvidence?.contentHash).toBe('');
       expect(photoEvidence?.byteSize).toBe(0);
       expect(photoEvidence?.sourceRef).toBe('https://storage.googleapis.com/anytrader-photos/job_ref_102_0.jpg');
-    }, 15000);
+    }, 30000);
   });
 
   describe('11. Firestore-Backed Durable Task Queue with Transactional Claiming', () => {

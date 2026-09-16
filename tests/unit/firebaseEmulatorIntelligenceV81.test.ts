@@ -128,6 +128,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     }
   });
 
+  let serverAdminDb: any;
+
   beforeEach(async () => {
     if (!testEnv) {
       throw new Error('FATAL: Firebase Emulator test environment not initialized for V8.1 suite.');
@@ -135,17 +137,22 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     await testEnv.clearFirestore();
     await testEnv.clearStorage();
     evidenceRegistry.clear();
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      serverAdminDb = context.firestore();
+    });
   });
 
-  function createRealFirestoreTaskDb(modularDb: any) {
+  function createRealFirestoreTaskDb(modularDb?: any) {
+    const dbInstance = serverAdminDb || modularDb;
     return {
       collection(name: string) {
-        const colRef = collection(modularDb, name);
+        const colRef = collection(dbInstance, name);
         return {
           colName: name,
           collectionName: name,
           doc(id: string) {
-            const docRef = doc(modularDb, name, id);
+            const docRef = doc(dbInstance, name, id);
             return {
               colName: name,
               collectionName: name,
@@ -209,11 +216,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         };
       },
       runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
-        return runTransaction(modularDb, async (tx) => {
+        return runTransaction(dbInstance, async (tx) => {
           const txWrapper = {
             get: async (refObj: any) => {
               const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
-              const docRef = doc(modularDb, col, refObj.id);
+              const docRef = doc(dbInstance, col, refObj.id);
               const snap = await tx.get(docRef);
               return {
                 id: snap.id,
@@ -223,7 +230,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             },
             set: (refObj: any, data: any, options?: { merge?: boolean }) => {
               const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
-              const docRef = doc(modularDb, col, refObj.id);
+              const docRef = doc(dbInstance, col, refObj.id);
               const cleaned = cleanUndefinedFields(data);
               if (options?.merge) {
                 tx.set(docRef, cleaned, { merge: true });
@@ -233,7 +240,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             },
             update: (refObj: any, data: any) => {
               const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
-              const docRef = doc(modularDb, col, refObj.id);
+              const docRef = doc(dbInstance, col, refObj.id);
               const sanitized: any = {};
               for (const [k, v] of Object.entries(data)) {
                 sanitized[k] = v === undefined ? deleteField() : v;
@@ -242,7 +249,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             },
             delete: (refObj: any) => {
               const col = refObj.colName || refObj.collectionName || (refObj.parent && refObj.parent.id) || 'intelligence_tasks';
-              const docRef = doc(modularDb, col, refObj.id);
+              const docRef = doc(dbInstance, col, refObj.id);
               tx.delete(docRef);
             },
           };
@@ -270,16 +277,16 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     ];
 
     const clientAdminWritableCollections = [
-      'intelligence_events',
-      'intelligence_evidence',
-      'intelligence_extractions',
       'intelligence_jobs',
       'intelligence_properties',
-      'intelligence_quality',
     ];
 
     const serverAuthoritativeCollections = [
       'intelligence_tasks',
+      'intelligence_events',
+      'intelligence_evidence',
+      'intelligence_extractions',
+      'intelligence_quality',
       'intelligence_backfill_runs',
       'intelligence_processing_runs',
     ];
@@ -314,7 +321,15 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       }
     });
 
-    it('blocks all client SDK writes on server-authoritative collections (tasks, backfill_runs, processing_runs) while allowing admin reads', async () => {
+    it('blocks all client SDK writes on server-authoritative collections (tasks, events, evidence, extractions, quality, backfill_runs, processing_runs) while allowing admin reads', async () => {
+      // Pre-seed server authoritative documents using server privileged context
+      await testEnv!.withSecurityRulesDisabled(async (context) => {
+        for (const colName of serverAuthoritativeCollections) {
+          const docRef = doc(context.firestore(), colName, 'server_doc_1');
+          await setDoc(docRef, { status: 'seeded_by_server' });
+        }
+      });
+
       const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
       for (const colName of serverAuthoritativeCollections) {
@@ -326,7 +341,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       }
     });
 
-    it('enforces historical immutability: admin cannot update or delete events, evidence, extractions, quality', async () => {
+    it('enforces historical immutability: admin cannot create, update or delete events, evidence, extractions, quality', async () => {
       const immutableCollections = [
         'intelligence_events',
         'intelligence_evidence',
@@ -334,16 +349,26 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         'intelligence_quality',
       ];
 
+      // Pre-seed immutable documents using server privileged context
+      await testEnv!.withSecurityRulesDisabled(async (context) => {
+        for (const colName of immutableCollections) {
+          const docRef = doc(context.firestore(), colName, 'immutable_doc_1');
+          await setDoc(docRef, { initial: 'original_record' });
+        }
+      });
+
       const adminDb = testEnv!.authenticatedContext('admin_alice', { role: 'admin', admin: true }).firestore();
 
       for (const colName of immutableCollections) {
         const docRef = doc(adminDb, colName, 'immutable_doc_1');
-        // Initial create is allowed
-        await assertSucceeds(setDoc(docRef, { initial: 'original_record' }));
-        // Updates must be REJECTED (append-only)
+        // Initial client create is REJECTED (server authoritative)
+        await assertFails(setDoc(doc(adminDb, colName, 'immutable_doc_2'), { initial: 'client_record' }));
+        // Updates must be REJECTED (append-only / server authoritative)
         await assertFails(updateDoc(docRef, { initial: 'mutated_record' }));
         // Deletions must be REJECTED
         await assertFails(deleteDoc(docRef));
+        // Admin read must SUCCEED
+        await assertSucceeds(getDoc(docRef));
       }
     });
 
@@ -1397,7 +1422,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const nowIso = new Date().toISOString();
 
       // Seed initial pending task in real Firestore emulator
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
         status: 'pending',
@@ -1442,7 +1467,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskId = `task_emu_exec_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
         status: 'pending',
@@ -1499,7 +1524,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskId = `task_t13e_claim_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
         status: 'pending',
@@ -1543,7 +1568,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const futureLease = new Date(Date.now() + 60000).toISOString();
 
       // Seed task processing by worker-A with attempts == maxAttempts
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1584,7 +1609,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const expiredLease = new Date(Date.now() - 10000).toISOString();
 
       // Task 1: attempts = 1 < maxAttempts 3 -> recovers to retrying
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskRetryId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskRetryId), {
         taskId: taskRetryId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1598,7 +1623,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       });
 
       // Task 2: attempts = 3 == maxAttempts 3 -> recovers to dead_letter
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskDeadId), {
         taskId: taskDeadId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1643,7 +1668,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const nowIso = new Date().toISOString();
 
       // Seed task ready for worker-A
-      const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+      const docRef = doc(serverAdminDb, 'intelligence_tasks', taskId);
       await setDoc(docRef, {
         taskId,
         taskType: 'job_extraction',
@@ -1716,7 +1741,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskId = `task_t13e_succ_reclaim_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      const docRef = doc(adminDb, 'intelligence_tasks', taskId);
+      const docRef = doc(serverAdminDb, 'intelligence_tasks', taskId);
       await setDoc(docRef, {
         taskId,
         taskType: 'job_extraction',
@@ -1790,7 +1815,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskFailId = `task_t13e_diff_fail_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskSuccId), {
         taskId: taskSuccId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1803,7 +1828,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         updatedAt: nowIso,
       });
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskFailId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskFailId), {
         taskId: taskFailId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1850,7 +1875,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const nowIso = new Date().toISOString();
 
       // Task 1: pending with unregistered task type
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskOwnId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskOwnId), {
         taskId: taskOwnId,
         taskType: 'unknown_service_unregistered',
         status: 'pending',
@@ -1874,7 +1899,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       expect(snapOwn.data()!.errorCode).toBe('MISSING_HANDLER');
 
       // Task 2: owned by worker-B + lease-B with active lease
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskForeignId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskForeignId), {
         taskId: taskForeignId,
         taskType: 'unknown_service_unregistered',
         status: 'processing',
@@ -1905,7 +1930,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const taskDeadId = `task_t13e_term_dead_${Date.now()}`;
       const nowIso = new Date().toISOString();
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskSuccId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskSuccId), {
         taskId: taskSuccId,
         taskType: 'job_extraction',
         status: 'succeeded',
@@ -1915,7 +1940,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         updatedAt: nowIso,
       });
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskDeadId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskDeadId), {
         taskId: taskDeadId,
         taskType: 'job_extraction',
         status: 'dead_letter',
@@ -1949,7 +1974,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const nowIso = new Date().toISOString();
       const expiredLease = new Date(Date.now() - 10000).toISOString();
 
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskId), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskId), {
         taskId,
         taskType: 'job_extraction',
         status: 'processing',
@@ -1991,7 +2016,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
       // Additionally verify real Firestore emulator transaction retry exhaustion & abort under high contention
       const taskIdContention = `task_t13e_tx_contention_${Date.now()}`;
-      await setDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+      await setDoc(doc(serverAdminDb, 'intelligence_tasks', taskIdContention), {
         taskId: taskIdContention,
         taskType: 'job_extraction',
         status: 'processing',
@@ -2016,15 +2041,15 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           doc: realAdminDb.collection(name).doc,
         }),
         runTransaction: async <T>(updateFunction: (tx: any) => Promise<T>): Promise<T> => {
-          return runTransaction(adminDb, async (rawTx) => {
+          return runTransaction(serverAdminDb, async (rawTx) => {
             contentionAttempts++;
             // Concurrently mutate the task in Firestore outside rawTx to trigger real emulator transaction conflict
-            await updateDoc(doc(adminDb, 'intelligence_tasks', taskIdContention), {
+            await updateDoc(doc(serverAdminDb, 'intelligence_tasks', taskIdContention), {
               updatedAt: new Date().toISOString(),
               contentionCount: contentionAttempts,
             });
             const col = 'intelligence_tasks';
-            const docRef = doc(adminDb, col, taskIdContention);
+            const docRef = doc(serverAdminDb, col, taskIdContention);
             const snap = await rawTx.get(docRef);
             const txWrapper = {
               get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
@@ -2058,7 +2083,8 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('9. Task 7A Immutable Intelligence Persistence & Concurrency Invariants (Emulator)', () => {
     async function seedEvidence(db: any, evidenceId: string, aggregateType: string, aggregateId: string, sourceVersion: number = 1) {
-      await setDoc(doc(db, 'intelligence_evidence', evidenceId), {
+      const targetDb = serverAdminDb || db;
+      await setDoc(doc(targetDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType,
         aggregateId,
@@ -2470,82 +2496,6 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // 10. TASK 10A EVIDENCE LINEAGE ENFORCEMENT (REAL EMULATOR)
   // ==========================================================
   describe('10. Task 10A Evidence Lineage Enforcement & Provenance Invariants (Real Emulator)', () => {
-    function createRealFirestoreStoreDb(modularDb: any) {
-      return {
-        collection(name: string) {
-          const colRef = collection(modularDb, name);
-          return {
-            doc(id: string) {
-              const docRef = doc(modularDb, name, id);
-              return {
-                colName: name,
-                id,
-                get: async () => {
-                  const snap = await getDoc(docRef);
-                  return {
-                    id: snap.id,
-                    exists: snap.exists(),
-                    data: () => snap.data(),
-                  };
-                },
-                set: async (data: any, options?: { merge?: boolean }) => {
-                  if (options?.merge) {
-                    await setDoc(docRef, data, { merge: true });
-                  } else {
-                    await setDoc(docRef, data);
-                  }
-                },
-                update: async (data: any) => updateDoc(docRef, data),
-              };
-            },
-            where(field: string, op: any, val: any) {
-              return {
-                get: async () => {
-                  const q = query(colRef, where(field, op, val));
-                  const snap = await getDocs(q);
-                  return {
-                    empty: snap.empty,
-                    docs: snap.docs.map((d) => ({
-                      id: d.id,
-                      data: () => d.data(),
-                    })),
-                  };
-                },
-              };
-            },
-          };
-        },
-        runTransaction: async <T>(updateFunction: (transaction: any) => Promise<T>): Promise<T> => {
-          return runTransaction(modularDb, async (tx) => {
-            const txWrapper = {
-              get: async (refObj: any) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                const snap = await tx.get(docRef);
-                return {
-                  id: snap.id,
-                  exists: snap.exists(),
-                  data: () => snap.data(),
-                };
-              },
-              set: (refObj: any, data: any, options?: { merge?: boolean }) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                if (options?.merge) {
-                  tx.set(docRef, data, { merge: true });
-                } else {
-                  tx.set(docRef, data);
-                }
-              },
-              update: (refObj: any, data: any) => {
-                const docRef = doc(modularDb, refObj.colName, refObj.id);
-                tx.update(docRef, data);
-              },
-            };
-            return await updateFunction(txWrapper);
-          });
-        },
-      };
-    }
-
     const validHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
     const confidence = {
       overall: 0.95,
@@ -2567,6 +2517,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     };
 
     async function seedEvidenceDoc(db: any, evidence: Partial<any> & { evidenceId: string }) {
+      const targetDb = serverAdminDb || db;
       const docData: any = {
         evidenceId: evidence.evidenceId,
         aggregateType: evidence.aggregateType || 'job',
@@ -2595,7 +2546,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       if (evidence.storagePath !== undefined) {
         docData.storagePath = evidence.storagePath;
       }
-      await setDoc(doc(db, 'intelligence_evidence', evidence.evidenceId), docData);
+      await setDoc(doc(targetDb, 'intelligence_evidence', evidence.evidenceId), docData);
     }
 
     // 1. Valid same-aggregate evidence -> historical intelligence created successfully in Firestore emulator
@@ -3306,7 +3257,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const jobId = 'job_emu_t11_101';
 
       // Seed real evidence in Firestore emulator
-      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3445,7 +3396,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const contentHash = 'b'.repeat(64);
 
       // Seed valid evidence into real Firestore emulator
-      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3546,7 +3497,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const foreignEvidenceId = 'ev_t12_foreign_1';
 
       // Seed evidence tied to foreign job
-      await setDoc(doc(adminDb, 'intelligence_evidence', foreignEvidenceId), {
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_evidence', foreignEvidenceId), {
         evidenceId: foreignEvidenceId,
         aggregateType: 'job',
         aggregateId: foreignJobId, // Different job!
@@ -3646,7 +3597,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const evidenceId = 'ev_t12_valid_emu_6';
       const contentHash = 'd'.repeat(64);
 
-      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_evidence', evidenceId), {
         evidenceId,
         aggregateType: 'job',
         aggregateId: jobId,
@@ -3746,7 +3697,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const evId = `ev_${aggType}_emu_1`;
         const contentHash = 'c'.repeat(64);
 
-        await setDoc(doc(adminDb, 'intelligence_evidence', evId), {
+        await setDoc(doc(serverAdminDb || adminDb, 'intelligence_evidence', evId), {
           evidenceId: evId,
           aggregateType: aggType,
           aggregateId: aggId,
@@ -4048,17 +3999,18 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       );
 
       let contentionAttempts = 0;
+      const targetAdminDb = serverAdminDb || adminDb;
       const contentionDb = {
         collection: (name: string) => storeDb.collection(name),
         runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
-          return runTransaction(adminDb, async (rawTx) => {
+          return runTransaction(targetAdminDb, async (rawTx) => {
             contentionAttempts++;
             if (contentionAttempts === 1) {
-              await updateDoc(doc(adminDb, 'intelligence_processing_runs', runId), {
+              await updateDoc(doc(targetAdminDb, 'intelligence_processing_runs', runId), {
                 contentionTouch: contentionAttempts,
               });
             }
-            const docRef = doc(adminDb, 'intelligence_processing_runs', runId);
+            const docRef = doc(targetAdminDb, 'intelligence_processing_runs', runId);
             const snap = await rawTx.get(docRef);
             const txWrapper = {
               get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
@@ -5682,7 +5634,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       });
 
       // Seed ONLY the quality doc directly
-      await setDoc(doc(adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_quality', review.qualityId), cleanUndefinedFields(review));
       const preEventSnap = await getDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId));
       expect(preEventSnap.exists()).toBe(false);
 
@@ -5720,7 +5672,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       });
 
       // Seed ONLY the event doc directly
-      await setDoc(doc(adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
+      await setDoc(doc(serverAdminDb || adminDb, 'intelligence_events', auditEvent.eventId), cleanUndefinedFields(auditEvent));
       const preQualitySnap = await getDoc(doc(adminDb, 'intelligence_quality', review.qualityId));
       expect(preQualitySnap.exists()).toBe(false);
 
