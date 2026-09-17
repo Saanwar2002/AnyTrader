@@ -1439,7 +1439,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('8. Real Firestore Emulator Concurrency & Task 13E Ownership Invariants (CI Wired)', () => {
     it('proves real Firestore emulator atomic claiming under high concurrency (3 concurrent workers, 1 winner)', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_emu_race_${Date.now()}`;
@@ -1482,10 +1482,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.status).toBe('processing');
         expect(data.attempts).toBe(1);
         expect(['emu-worker-A', 'emu-worker-B', 'emu-worker-C']).toContain(data.workerId);
+      });
     });
 
     it('proves real Firestore emulator atomic executeTask() prevents duplicate handler execution under race', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store2', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_emu_exec_${Date.now()}`;
@@ -1535,6 +1536,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const data = taskSnap.data()!;
         expect(data.status).toBe('succeeded');
         expect(data.attempts).toBe(1);
+      });
     });
 
     // ==========================================
@@ -1542,7 +1544,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     // ==========================================
 
     it('Task 13E Invariant 1: Concurrent claim gives exactly one winner on real Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store3', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_t13e_claim_${Date.now()}`;
@@ -1581,10 +1583,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.workerId).toBe(winner);
         expect(typeof data.leaseId).toBe('string');
         expect(data.leaseId!.length).toBeGreaterThan(0);
+      });
     });
 
     it('Task 13E Invariant 2: Active foreign lease with max attempts prevents claim and prevents premature dead-lettering', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_1', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_t13e_foreign_${Date.now()}`;
@@ -1621,10 +1624,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.leaseId).toBe('lease-A');
         expect(data.attempts).toBe(3);
         expect(data.errorCode).toBeUndefined();
+      });
     });
 
     it('Task 13E Invariant 3: Stale reclaim clears old workerId and leaseId upon recovery in real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_2', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskRetryId = `task_t13e_stale_retry_${Date.now()}`;
@@ -1682,10 +1686,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(dataDead.workerId).toBeFalsy();
         expect(dataDead.leaseId).toBeFalsy();
         expect(dataDead.leaseExpiresAt).toBeFalsy();
+      });
     });
 
     it('Task 13E Invariant 4: Old worker cannot finalize failure after lease reclaim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_3', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_t13e_fail_reclaim_${Date.now()}`;
@@ -1756,10 +1761,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.leaseId).toBeDefined();
         expect(data.attempts).toBe(2);
         expect(data.errorCode).toBeUndefined();
+      });
     });
 
     it('Task 13E Invariant 5: Old worker cannot finalize success after lease reclaim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_4', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskId = `task_t13e_succ_reclaim_${Date.now()}`;
@@ -1829,10 +1835,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.leaseId).toBeDefined();
         expect(data.attempts).toBe(2);
         expect(data.completedAt).toBeUndefined();
+      });
     });
 
     it('Task 13E Invariant 6: Different worker cannot finalize success or failure on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_5', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskSuccId = `task_t13e_diff_succ_${Date.now()}`;
@@ -1888,10 +1895,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(snapFail.data()!.status).toBe('processing');
         expect(snapFail.data()!.workerId).toBe('worker-B');
         expect(snapFail.data()!.leaseId).toBe('lease-B');
+      });
     });
 
     it('Task 13E Invariant 7: Missing handler dead-letters own task verifying leaseId; foreign worker cannot overwrite', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_6', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskOwnId = `task_t13e_missing_own_${Date.now()}`;
@@ -1944,10 +1952,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(snapForeign.data()!.status).toBe('processing');
         expect(snapForeign.data()!.workerId).toBe('worker-B');
         expect(snapForeign.data()!.leaseId).toBe('lease-B');
+      });
     });
 
     it('Task 13E Invariant 8: Terminal states (succeeded, dead_letter) are protected against claim on real Firestore', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_7', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const firestoreTaskDb = createRealFirestoreTaskDb(adminDb);
 
         const taskSuccId = `task_t13e_term_succ_${Date.now()}`;
@@ -1988,10 +1997,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         expect(snapSucc.data()!.status).toBe('succeeded');
         expect(snapDead.data()!.status).toBe('dead_letter');
+      });
     });
 
     it('Task 13E Invariant 9: Transaction failures in stale recovery propagate without silent swallowing on real Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_8', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const unauthorizedDb = testEnv!.authenticatedContext('unauthorized_worker_inv9', { role: 'customer' }).firestore();
 
         const taskId = `task_t13e_tx_fail_${Date.now()}`;
@@ -2099,6 +2109,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(contentionError).toBeDefined();
         expect(contentionError.name).toBe('FirebaseError');
         expect(contentionAttempts).toBeGreaterThanOrEqual(1);
+      });
     });
   });
 
@@ -2129,281 +2140,284 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     }
 
     it('proves atomic creation of identical historical extractions under high concurrency (3 concurrent workers, 1 created, 2 idempotent successes)', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store', { role: 'admin', admin: true }).firestore();
-      await seedEvidence(adminDb, 'ev_con_1', 'job', 'job_concurrent_100', 1);
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_concurrent_100', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        await seedEvidence(adminDb, 'ev_con_1', 'job', 'job_concurrent_100', 1);
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_concurrent_100', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
 
-      const confidence = { overall: 0.95, extraction: 0.95, evidenceQuality: 0.95, classification: 0.95, temporalFreshness: 0.95, method: 'deterministic_heuristic' as const };
-      const provenance = { source: 'user', evidenceIds: ['ev_con_1'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_con_1' };
+        const confidence = { overall: 0.95, extraction: 0.95, evidenceQuality: 0.95, classification: 0.95, temporalFreshness: 0.95, method: 'deterministic_heuristic' as const };
+        const provenance = { source: 'user', evidenceIds: ['ev_con_1'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_con_1' };
 
-      const extractionPayload = {
-        extractionId: `ext_job_concurrent_100_1`,
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_concurrent_100',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_extraction_v8.1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: 'hcon', encoding: 'gzip' as const, originalBytes: 15, compressedBytes: 15, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_con', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe Concurrent' },
-        evidenceIds: ['ev_con_1'],
-        confidence,
-        provenance,
-      };
-
-      const eventPayload = {
-        eventId: `ie_ev_con_1`,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_concurrent_100',
-        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_extraction_v8.1',
-        createdAt: new Date().toISOString(),
-        source: 'jobs/job_concurrent_100',
-        evidenceIds: ['ev_con_1'],
-        confidence,
-        provenance,
-        status: 'valid' as const,
-        payload: { category: 'Plumbing' },
-      };
-
-      const summaryPayload = {
-        jobId: 'job_concurrent_100',
-        currentVersionId: versionId,
-        category: 'Plumbing',
-        buildingComponent: 'Pipe',
-        observedProblem: 'Burst Pipe Concurrent',
-        extractedScope: ['Fix pipe'],
-        recommendedIntervention: 'Replace pipe',
-        evidenceIds: ['ev_con_1'],
-        confidence,
-        provenance,
-        pipelineVersion: 'v8.1',
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Launch 3 concurrent persistence calls against real Firestore emulator
-      const results = await Promise.all([
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
-          aggregateId: 'job_concurrent_100',
+        const extractionPayload = {
+          extractionId: `ext_job_concurrent_100_1`,
           versionId,
-          extraction: extractionPayload,
-          event: { ...eventPayload, eventId: 'ie_ev_con_100_w1' },
-          summaryProjection: summaryPayload,
-        }),
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
+          aggregateType: 'job' as const,
           aggregateId: 'job_concurrent_100',
-          versionId,
-          extraction: extractionPayload,
-          event: { ...eventPayload, eventId: 'ie_ev_con_100_w2' },
-          summaryProjection: summaryPayload,
-        }),
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_extraction_v8.1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: 'hcon', encoding: 'gzip' as const, originalBytes: 15, compressedBytes: 15, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_con', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe Concurrent' },
+          evidenceIds: ['ev_con_1'],
+          confidence,
+          provenance,
+        };
+
+        const eventPayload = {
+          eventId: `ie_ev_con_1`,
+          aggregateType: 'job' as const,
           aggregateId: 'job_concurrent_100',
-          versionId,
-          extraction: extractionPayload,
-          event: { ...eventPayload, eventId: 'ie_ev_con_100_w3' },
-          summaryProjection: summaryPayload,
-        }),
-      ]);
+          eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_extraction_v8.1',
+          createdAt: new Date().toISOString(),
+          source: 'jobs/job_concurrent_100',
+          evidenceIds: ['ev_con_1'],
+          confidence,
+          provenance,
+          status: 'valid' as const,
+          payload: { category: 'Plumbing' },
+        };
 
-      expect(results.length).toBe(3);
-      const newCount = results.filter((r) => r.isNew).length;
-      const idempotentCount = results.filter((r) => !r.isNew).length;
+        const summaryPayload = {
+          jobId: 'job_concurrent_100',
+          currentVersionId: versionId,
+          category: 'Plumbing',
+          buildingComponent: 'Pipe',
+          observedProblem: 'Burst Pipe Concurrent',
+          extractedScope: ['Fix pipe'],
+          recommendedIntervention: 'Replace pipe',
+          evidenceIds: ['ev_con_1'],
+          confidence,
+          provenance,
+          pipelineVersion: 'v8.1',
+          updatedAt: new Date().toISOString(),
+        };
 
-      expect(newCount).toBe(1);
-      expect(idempotentCount).toBe(2);
+        // Launch 3 concurrent persistence calls against real Firestore emulator
+        const results = await Promise.all([
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_concurrent_100',
+            versionId,
+            extraction: extractionPayload,
+            event: { ...eventPayload, eventId: 'ie_ev_con_100_w1' },
+            summaryProjection: summaryPayload,
+          }),
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_concurrent_100',
+            versionId,
+            extraction: extractionPayload,
+            event: { ...eventPayload, eventId: 'ie_ev_con_100_w2' },
+            summaryProjection: summaryPayload,
+          }),
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_concurrent_100',
+            versionId,
+            extraction: extractionPayload,
+            event: { ...eventPayload, eventId: 'ie_ev_con_100_w3' },
+            summaryProjection: summaryPayload,
+          }),
+        ]);
 
-      // Verify Firestore emulator document exists
-      const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(docSnap.exists()).toBe(true);
-      expect(docSnap.data()?.versionId).toBe(versionId);
+        expect(results.length).toBe(3);
+        const newCount = results.filter((r) => r.isNew).length;
+        const idempotentCount = results.filter((r) => !r.isNew).length;
+
+        expect(newCount).toBe(1);
+        expect(idempotentCount).toBe(2);
+
+        // Verify Firestore emulator document exists
+        const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(docSnap.exists()).toBe(true);
+        expect(docSnap.data()?.versionId).toBe(versionId);
+      });
     });
 
     it('proves atomic transaction rejects race condition attempt to overwrite historical extraction with different content with [Intelligence Immutability Error]', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store2', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_immutability_200', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_immutability_200', 1, 'v8.1', 'gemini-3.7-flash', 'job_extraction_v8.1', '1.0.0');
 
-      const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
-      const provenance = { source: 'user', evidenceIds: ['ev_200'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_200' };
+        const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+        const provenance = { source: 'user', evidenceIds: ['ev_200'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_200' };
 
-      const originalExtraction = {
-        extractionId: `ext_job_immutability_200_1`,
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_immutability_200',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_extraction_v8.1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: 'h200', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_200', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Roofing', problem: 'Original Roof Leak' },
-        evidenceIds: ['ev_200'],
-        confidence,
-        provenance,
-      };
+        const originalExtraction = {
+          extractionId: `ext_job_immutability_200_1`,
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_immutability_200',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_extraction_v8.1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: 'h200', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_200', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Roofing', problem: 'Original Roof Leak' },
+          evidenceIds: ['ev_200'],
+          confidence,
+          provenance,
+        };
 
-      const eventPayload = {
-        eventId: `ie_ev_200`,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_immutability_200',
-        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_extraction_v8.1',
-        createdAt: new Date().toISOString(),
-        source: 'jobs/job_immutability_200',
-        evidenceIds: ['ev_200'],
-        confidence,
-        provenance,
-        status: 'valid' as const,
-        payload: { category: 'Roofing' },
-      };
+        const eventPayload = {
+          eventId: `ie_ev_200`,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_immutability_200',
+          eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_extraction_v8.1',
+          createdAt: new Date().toISOString(),
+          source: 'jobs/job_immutability_200',
+          evidenceIds: ['ev_200'],
+          confidence,
+          provenance,
+          status: 'valid' as const,
+          payload: { category: 'Roofing' },
+        };
 
-      const summaryPayload = {
-        jobId: 'job_immutability_200',
-        currentVersionId: versionId,
-        category: 'Roofing',
-        buildingComponent: 'Roof',
-        observedProblem: 'Original Roof Leak',
-        extractedScope: ['Fix roof'],
-        recommendedIntervention: 'Tile replacement',
-        evidenceIds: ['ev_200'],
-        confidence,
-        provenance,
-        pipelineVersion: 'v8.1',
-        updatedAt: new Date().toISOString(),
-      };
+        const summaryPayload = {
+          jobId: 'job_immutability_200',
+          currentVersionId: versionId,
+          category: 'Roofing',
+          buildingComponent: 'Roof',
+          observedProblem: 'Original Roof Leak',
+          extractedScope: ['Fix roof'],
+          recommendedIntervention: 'Tile replacement',
+          evidenceIds: ['ev_200'],
+          confidence,
+          provenance,
+          pipelineVersion: 'v8.1',
+          updatedAt: new Date().toISOString(),
+        };
 
-      // 1. Initial write creates historical extraction
-      await seedEvidence(adminDb, 'ev_200', 'job', 'job_immutability_200', 1);
-      const res1 = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'job',
-        aggregateId: 'job_immutability_200',
-        versionId,
-        extraction: originalExtraction,
-        event: eventPayload,
-        summaryProjection: summaryPayload,
-      });
-      expect(res1.isNew).toBe(true);
-
-      // 2. Race attempt to write different content under same versionId must be rejected
-      const tamperedExtraction = {
-        ...originalExtraction,
-        structuredCandidate: { category: 'Roofing', problem: 'TAMPERED ROOF LEAK' },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
+        // 1. Initial write creates historical extraction
+        await seedEvidence(adminDb, 'ev_200', 'job', 'job_immutability_200', 1);
+        const res1 = await immutableIntelligenceStore.persistOutput({
           db: storeDb,
           aggregateType: 'job',
           aggregateId: 'job_immutability_200',
           versionId,
-          extraction: tamperedExtraction,
+          extraction: originalExtraction,
           event: eventPayload,
           summaryProjection: summaryPayload,
-        })
-      ).rejects.toThrow(/\[Intelligence Immutability Error\] Cannot mutate historical intelligence version/);
+        });
+        expect(res1.isNew).toBe(true);
 
-      // Verify original content in Firestore was NOT mutated
-      const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(docSnap.data()?.structuredCandidate?.problem).toBe('Original Roof Leak');
+        // 2. Race attempt to write different content under same versionId must be rejected
+        const tamperedExtraction = {
+          ...originalExtraction,
+          structuredCandidate: { category: 'Roofing', problem: 'TAMPERED ROOF LEAK' },
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_immutability_200',
+            versionId,
+            extraction: tamperedExtraction,
+            event: eventPayload,
+            summaryProjection: summaryPayload,
+          })
+        ).rejects.toThrow(/\[Intelligence Immutability Error\] Cannot mutate historical intelligence version/);
+
+        // Verify original content in Firestore was NOT mutated
+        const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(docSnap.data()?.structuredCandidate?.problem).toBe('Original Roof Leak');
+      });
     });
 
     it('proves atomic creation updates active pointer for generalized aggregates (e.g. contractor)', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store3', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('contractor' as any, 'contractor_300', 1, 'v8.1', 'gemini-3.7-flash', 'contractor_extraction_v8.1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('contractor' as any, 'contractor_300', 1, 'v8.1', 'gemini-3.7-flash', 'contractor_extraction_v8.1', '1.0.0');
 
-      expect(getSummaryCollectionName('contractor' as any)).toBe('intelligence_contractors');
+        expect(getSummaryCollectionName('contractor' as any)).toBe('intelligence_contractors');
 
-      const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
-      const provenance = { source: 'user', evidenceIds: ['ev_300'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_300' };
+        const confidence = { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' as const };
+        const provenance = { source: 'user', evidenceIds: ['ev_300'], pipelineVersion: 'v8.1', modelVersion: 'gemini-3.7-flash', promptVersion: 'v1', generatedAt: new Date().toISOString(), sourceContentHash: 'hash_300' };
 
-      const extractionPayload = {
-        extractionId: `ext_contractor_300_1`,
-        versionId,
-        aggregateType: 'contractor' as any,
-        aggregateId: 'contractor_300',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'contractor_extraction_v8.1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: 'h300', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_300', createdAt: new Date().toISOString() },
-        structuredCandidate: { trade: 'Electrical', rating: 4.9 },
-        evidenceIds: ['ev_300'],
-        confidence,
-        provenance,
-      };
+        const extractionPayload = {
+          extractionId: `ext_contractor_300_1`,
+          versionId,
+          aggregateType: 'contractor' as any,
+          aggregateId: 'contractor_300',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'contractor_extraction_v8.1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: 'h300', encoding: 'gzip' as const, originalBytes: 10, compressedBytes: 10, compressionRatio: 1.0, schemaVersion: '1.0.0', storagePath: 'path_300', createdAt: new Date().toISOString() },
+          structuredCandidate: { trade: 'Electrical', rating: 4.9 },
+          evidenceIds: ['ev_300'],
+          confidence,
+          provenance,
+        };
 
-      const eventPayload = {
-        eventId: `ie_ev_300`,
-        aggregateType: 'contractor' as any,
-        aggregateId: 'contractor_300',
-        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'contractor_extraction_v8.1',
-        createdAt: new Date().toISOString(),
-        source: 'contractors/contractor_300',
-        evidenceIds: ['ev_300'],
-        confidence,
-        provenance,
-        status: 'valid' as const,
-        payload: { trade: 'Electrical' },
-      };
+        const eventPayload = {
+          eventId: `ie_ev_300`,
+          aggregateType: 'contractor' as any,
+          aggregateId: 'contractor_300',
+          eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'contractor_extraction_v8.1',
+          createdAt: new Date().toISOString(),
+          source: 'contractors/contractor_300',
+          evidenceIds: ['ev_300'],
+          confidence,
+          provenance,
+          status: 'valid' as const,
+          payload: { trade: 'Electrical' },
+        };
 
-      const summaryPayload = {
-        contractorId: 'contractor_300',
-        currentVersionId: versionId,
-        trade: 'Electrical',
-        rating: 4.9,
-      };
+        const summaryPayload = {
+          contractorId: 'contractor_300',
+          currentVersionId: versionId,
+          trade: 'Electrical',
+          rating: 4.9,
+        };
 
-      await seedEvidence(adminDb, 'ev_300', 'contractor', 'contractor_300', 1);
-      const result = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'contractor' as any,
-        aggregateId: 'contractor_300',
-        versionId,
-        extraction: extractionPayload,
-        event: eventPayload,
-        summaryProjection: summaryPayload,
+        await seedEvidence(adminDb, 'ev_300', 'contractor', 'contractor_300', 1);
+        const result = await immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'contractor' as any,
+          aggregateId: 'contractor_300',
+          versionId,
+          extraction: extractionPayload,
+          event: eventPayload,
+          summaryProjection: summaryPayload,
+        });
+
+        expect(result.isNew).toBe(true);
+
+        // Read intelligence_contractors/contractor_300 from Firestore emulator
+        const summarySnap = await getDoc(doc(adminDb, 'intelligence_contractors', 'contractor_300'));
+        expect(summarySnap.exists()).toBe(true);
+        expect(summarySnap.data()?.currentVersionId).toBe(versionId);
+        expect(summarySnap.data()?.trade).toBe('Electrical');
       });
-
-      expect(result.isNew).toBe(true);
-
-      // Read intelligence_contractors/contractor_300 from Firestore emulator
-      const summarySnap = await getDoc(doc(adminDb, 'intelligence_contractors', 'contractor_300'));
-      expect(summarySnap.exists()).toBe(true);
-      expect(summarySnap.data()?.currentVersionId).toBe(versionId);
-      expect(summarySnap.data()?.trade).toBe('Electrical');
     });
 
     it('proves production store fails closed when Firestore database is unavailable / null without falling back to in-memory Map', async () => {
@@ -2575,707 +2589,716 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
     // 1. Valid same-aggregate evidence -> historical intelligence created successfully in Firestore emulator
     it('1. Valid same-aggregate evidence -> historical intelligence created successfully in Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_1', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_val_1', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_val_1', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_val_1',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_val_1',
-        sourceVersion: 1,
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: validHash,
-        byteSize: 200,
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_val_1',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_val_1',
+          sourceVersion: 1,
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: validHash,
+          byteSize: 200,
+        });
+
+        const extraction = {
+          extractionId: 'ext_emu_val_1',
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_val_1',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_1', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe' },
+          evidenceIds: ['ev_emu_val_1'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
+        };
+
+        const event = {
+          eventId: 'ie_emu_val_1',
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_val_1',
+          eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          createdAt: new Date().toISOString(),
+          source: 'jobs/job_emu_val_1',
+          evidenceIds: ['ev_emu_val_1'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
+          status: 'valid' as const,
+          payload: { category: 'Plumbing' },
+        };
+
+        const summary = {
+          jobId: 'job_emu_val_1',
+          currentVersionId: versionId,
+          category: 'Plumbing',
+          buildingComponent: 'Pipe',
+          observedProblem: 'Burst Pipe',
+          extractedScope: ['Fix pipe'],
+          recommendedIntervention: 'Pipe repair',
+          evidenceIds: ['ev_emu_val_1'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
+          pipelineVersion: 'v8.1',
+          updatedAt: new Date().toISOString(),
+        };
+
+        const res = await immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_emu_val_1',
+          versionId,
+          extraction,
+          event,
+          summaryProjection: summary,
+        });
+
+        expect(res.isNew).toBe(true);
+        expect(res.versionId).toBe(versionId);
+
+        // Verify records written in real Firestore emulator
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(true);
+        expect(extSnap.data()?.aggregateId).toBe('job_emu_val_1');
+
+        const evSnap = await getDoc(doc(adminDb, 'intelligence_events', 'ie_emu_val_1'));
+        expect(evSnap.exists()).toBe(true);
+
+        const sumSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_val_1'));
+        expect(sumSnap.exists()).toBe(true);
+        expect(sumSnap.data()?.currentVersionId).toBe(versionId);
       });
-
-      const extraction = {
-        extractionId: 'ext_emu_val_1',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_val_1',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_1', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Plumbing', problem: 'Burst Pipe' },
-        evidenceIds: ['ev_emu_val_1'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
-      };
-
-      const event = {
-        eventId: 'ie_emu_val_1',
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_val_1',
-        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        createdAt: new Date().toISOString(),
-        source: 'jobs/job_emu_val_1',
-        evidenceIds: ['ev_emu_val_1'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
-        status: 'valid' as const,
-        payload: { category: 'Plumbing' },
-      };
-
-      const summary = {
-        jobId: 'job_emu_val_1',
-        currentVersionId: versionId,
-        category: 'Plumbing',
-        buildingComponent: 'Pipe',
-        observedProblem: 'Burst Pipe',
-        extractedScope: ['Fix pipe'],
-        recommendedIntervention: 'Pipe repair',
-        evidenceIds: ['ev_emu_val_1'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_val_1'] },
-        pipelineVersion: 'v8.1',
-        updatedAt: new Date().toISOString(),
-      };
-
-      const res = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'job',
-        aggregateId: 'job_emu_val_1',
-        versionId,
-        extraction,
-        event,
-        summaryProjection: summary,
-      });
-
-      expect(res.isNew).toBe(true);
-      expect(res.versionId).toBe(versionId);
-
-      // Verify records written in real Firestore emulator
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(true);
-      expect(extSnap.data()?.aggregateId).toBe('job_emu_val_1');
-
-      const evSnap = await getDoc(doc(adminDb, 'intelligence_events', 'ie_emu_val_1'));
-      expect(evSnap.exists()).toBe(true);
-
-      const sumSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_val_1'));
-      expect(sumSnap.exists()).toBe(true);
-      expect(sumSnap.data()?.currentVersionId).toBe(versionId);
     });
 
     // 2. Same-type cross-ID evidence -> strictly rejected, zero documents written
     it('2. Same-type cross-ID evidence -> strictly rejected, zero documents written', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_2', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_target_2', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_target_2', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      // Evidence belongs to job_emu_other_2, but sets sourceId = job_emu_target_2 to attempt spoofing
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_cross_same',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_other_2',
-        sourceId: 'job_emu_target_2',
-        sourceVersion: 1,
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: validHash,
-        byteSize: 200,
-      });
-
-      const extraction = {
-        extractionId: 'ext_emu_target_2',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_target_2',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_2', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Electrical', problem: 'Fault' },
-        evidenceIds: ['ev_emu_cross_same'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_cross_same'] },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
+        // Evidence belongs to job_emu_other_2, but sets sourceId = job_emu_target_2 to attempt spoofing
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_cross_same',
           aggregateType: 'job',
-          aggregateId: 'job_emu_target_2',
+          aggregateId: 'job_emu_other_2',
+          sourceId: 'job_emu_target_2',
+          sourceVersion: 1,
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: validHash,
+          byteSize: 200,
+        });
+
+        const extraction = {
+          extractionId: 'ext_emu_target_2',
           versionId,
-          extraction,
-          event: { eventId: 'ie_emu_target_2', aggregateType: 'job', aggregateId: 'job_emu_target_2' } as any,
-          summaryProjection: { jobId: 'job_emu_target_2' },
-        })
-      ).rejects.toThrow(/Same-type aggregate mismatch rejected: Evidence 'ev_emu_cross_same' belongs to 'job:job_emu_other_2', not 'job:job_emu_target_2'/);
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_target_2',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_2', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Electrical', problem: 'Fault' },
+          evidenceIds: ['ev_emu_cross_same'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_cross_same'] },
+        };
 
-      // Verify ZERO documents were written to Firestore emulator
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(false);
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_target_2',
+            versionId,
+            extraction,
+            event: { eventId: 'ie_emu_target_2', aggregateType: 'job', aggregateId: 'job_emu_target_2' } as any,
+            summaryProjection: { jobId: 'job_emu_target_2' },
+          })
+        ).rejects.toThrow(/Same-type aggregate mismatch rejected: Evidence 'ev_emu_cross_same' belongs to 'job:job_emu_other_2', not 'job:job_emu_target_2'/);
 
-      const evSnap = await getDoc(doc(adminDb, 'intelligence_events', 'ie_emu_target_2'));
-      expect(evSnap.exists()).toBe(false);
+        // Verify ZERO documents were written to Firestore emulator
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(false);
 
-      const sumSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_target_2'));
-      expect(sumSnap.exists()).toBe(false);
+        const evSnap = await getDoc(doc(adminDb, 'intelligence_events', 'ie_emu_target_2'));
+        expect(evSnap.exists()).toBe(false);
+
+        const sumSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_target_2'));
+        expect(sumSnap.exists()).toBe(false);
+      });
     });
 
     // 3. Missing evidence -> strictly rejected, zero documents written
     it('3. Missing evidence -> strictly rejected, zero documents written', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_3', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_missing_3', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_missing_3', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      const extraction = {
-        extractionId: 'ext_emu_missing_3',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_missing_3',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_3', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Plumbing', problem: 'Leak' },
-        evidenceIds: ['ev_emu_missing_999'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_missing_999'] },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
-          aggregateId: 'job_emu_missing_3',
+        const extraction = {
+          extractionId: 'ext_emu_missing_3',
           versionId,
-          extraction,
-          event: { eventId: 'ie_emu_missing_3', aggregateType: 'job', aggregateId: 'job_emu_missing_3' } as any,
-          summaryProjection: { jobId: 'job_emu_missing_3' },
-        })
-      ).rejects.toThrow(/Referenced evidence 'ev_emu_missing_999' does not exist in authoritative Firestore store/);
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_missing_3',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_3', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Plumbing', problem: 'Leak' },
+          evidenceIds: ['ev_emu_missing_999'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_missing_999'] },
+        };
 
-      // Verify ZERO documents written
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(false);
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_missing_3',
+            versionId,
+            extraction,
+            event: { eventId: 'ie_emu_missing_3', aggregateType: 'job', aggregateId: 'job_emu_missing_3' } as any,
+            summaryProjection: { jobId: 'job_emu_missing_3' },
+          })
+        ).rejects.toThrow(/Referenced evidence 'ev_emu_missing_999' does not exist in authoritative Firestore store/);
+
+        // Verify ZERO documents written
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(false);
+      });
     });
 
     // 4. Cross-aggregate without relationship -> strictly rejected, zero documents written
     it('4. Cross-aggregate without relationship -> strictly rejected, zero documents written', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_4', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('property', 'prop_emu_4', 1, 'v8.1', 'gemini-3.7-flash', 'prop_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('property', 'prop_emu_4', 1, 'v8.1', 'gemini-3.7-flash', 'prop_v1', '1.0.0');
 
-      // Seed job evidence unlinked to property
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_unlinked_4',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_unlinked_4',
-        sourceVersion: 1,
-        sourceReference: { propertyId: 'other_property_999' },
-      });
+        // Seed job evidence unlinked to property
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_unlinked_4',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_unlinked_4',
+          sourceVersion: 1,
+          sourceReference: { propertyId: 'other_property_999' },
+        });
 
-      const extraction = {
-        extractionId: 'ext_emu_prop_4',
-        versionId,
-        aggregateType: 'property' as const,
-        aggregateId: 'prop_emu_4',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'prop_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_p4', createdAt: new Date().toISOString() },
-        structuredCandidate: { overallHealthScore: 80 },
-        evidenceIds: ['ev_emu_unlinked_4'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_unlinked_4'] },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'property',
-          aggregateId: 'prop_emu_4',
+        const extraction = {
+          extractionId: 'ext_emu_prop_4',
           versionId,
-          extraction,
-          event: { eventId: 'ie_emu_prop_4', aggregateType: 'property', aggregateId: 'prop_emu_4' } as any,
-          summaryProjection: { propertyId: 'prop_emu_4' },
-        })
-      ).rejects.toThrow(/Incompatible cross-aggregate relationship/);
+          aggregateType: 'property' as const,
+          aggregateId: 'prop_emu_4',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'prop_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_p4', createdAt: new Date().toISOString() },
+          structuredCandidate: { overallHealthScore: 80 },
+          evidenceIds: ['ev_emu_unlinked_4'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_unlinked_4'] },
+        };
 
-      // Verify ZERO documents written
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(false);
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'property',
+            aggregateId: 'prop_emu_4',
+            versionId,
+            extraction,
+            event: { eventId: 'ie_emu_prop_4', aggregateType: 'property', aggregateId: 'prop_emu_4' } as any,
+            summaryProjection: { propertyId: 'prop_emu_4' },
+          })
+        ).rejects.toThrow(/Incompatible cross-aggregate relationship/);
+
+        // Verify ZERO documents written
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(false);
+      });
     });
 
     // 5. Valid cross-aggregate (e.g. property intelligence referencing job evidence with sourceReference.propertyId) -> created successfully
     it('5. Valid cross-aggregate (property referencing job evidence with sourceReference.propertyId) -> created successfully', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_5', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('property', 'prop_emu_5', 1, 'v8.1', 'gemini-3.7-flash', 'prop_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('property', 'prop_emu_5', 1, 'v8.1', 'gemini-3.7-flash', 'prop_v1', '1.0.0');
 
-      // Seed job evidence explicitly linked to prop_emu_5
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_linked_5',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_linked_5',
-        sourceReference: { propertyId: 'prop_emu_5' },
-        sourceVersion: 1,
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: validHash,
-        byteSize: 200,
-      });
+        // Seed job evidence explicitly linked to prop_emu_5
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_linked_5',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_linked_5',
+          sourceReference: { propertyId: 'prop_emu_5' },
+          sourceVersion: 1,
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: validHash,
+          byteSize: 200,
+        });
 
-      const extraction = {
-        extractionId: 'ext_emu_prop_5',
-        versionId,
-        aggregateType: 'property' as const,
-        aggregateId: 'prop_emu_5',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'prop_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_p5', createdAt: new Date().toISOString() },
-        structuredCandidate: { overallHealthScore: 92 },
-        evidenceIds: ['ev_emu_linked_5'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_linked_5'] },
-      };
-
-      const res = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'property',
-        aggregateId: 'prop_emu_5',
-        versionId,
-        extraction,
-        event: { eventId: 'ie_emu_prop_5', aggregateType: 'property', aggregateId: 'prop_emu_5' } as any,
-        summaryProjection: {
-          propertyId: 'prop_emu_5',
-          currentVersionId: versionId,
-          overallHealthScore: 92,
-          buildingComponents: [],
-          observedConditions: [],
-          recommendedInterventions: [],
-          derivedFromJobIds: ['job_emu_linked_5'],
+        const extraction = {
+          extractionId: 'ext_emu_prop_5',
+          versionId,
+          aggregateType: 'property' as const,
+          aggregateId: 'prop_emu_5',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'prop_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_p5', createdAt: new Date().toISOString() },
+          structuredCandidate: { overallHealthScore: 92 },
           evidenceIds: ['ev_emu_linked_5'],
           confidence,
           provenance: { ...provenance, evidenceIds: ['ev_emu_linked_5'] },
-          pipelineVersion: 'v8.1',
-          updatedAt: new Date().toISOString(),
-        },
+        };
+
+        const res = await immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'property',
+          aggregateId: 'prop_emu_5',
+          versionId,
+          extraction,
+          event: { eventId: 'ie_emu_prop_5', aggregateType: 'property', aggregateId: 'prop_emu_5' } as any,
+          summaryProjection: {
+            propertyId: 'prop_emu_5',
+            currentVersionId: versionId,
+            overallHealthScore: 92,
+            buildingComponents: [],
+            observedConditions: [],
+            recommendedInterventions: [],
+            derivedFromJobIds: ['job_emu_linked_5'],
+            evidenceIds: ['ev_emu_linked_5'],
+            confidence,
+            provenance: { ...provenance, evidenceIds: ['ev_emu_linked_5'] },
+            pipelineVersion: 'v8.1',
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
+        expect(res.isNew).toBe(true);
+
+        const propSnap = await getDoc(doc(adminDb, 'intelligence_properties', 'prop_emu_5'));
+        expect(propSnap.exists()).toBe(true);
+        expect(propSnap.data()?.currentVersionId).toBe(versionId);
       });
-
-      expect(res.isNew).toBe(true);
-
-      const propSnap = await getDoc(doc(adminDb, 'intelligence_properties', 'prop_emu_5'));
-      expect(propSnap.exists()).toBe(true);
-      expect(propSnap.data()?.currentVersionId).toBe(versionId);
     });
 
     // 6. Source version mismatch -> strictly rejected
     it('6. Source version mismatch -> strictly rejected', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_6', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_ver_6', 3, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_ver_6', 3, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_ver_6',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_ver_6',
-        sourceVersion: 1,
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: validHash,
-        byteSize: 200,
-      });
-
-      const extraction = {
-        extractionId: 'ext_emu_ver_6',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_ver_6',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 3, // Extraction claims v3, but evidence is v1
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_6', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Roofing', problem: 'Leak' },
-        evidenceIds: ['ev_emu_ver_6'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_ver_6'] },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_ver_6',
           aggregateType: 'job',
           aggregateId: 'job_emu_ver_6',
-          versionId,
-          extraction,
-          event: { eventId: 'ie_emu_ver_6', aggregateType: 'job', aggregateId: 'job_emu_ver_6' } as any,
-          summaryProjection: { jobId: 'job_emu_ver_6' },
-        })
-      ).rejects.toThrow(/Incompatible source version for evidence 'ev_emu_ver_6'/);
+          sourceVersion: 1,
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: validHash,
+          byteSize: 200,
+        });
 
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(false);
+        const extraction = {
+          extractionId: 'ext_emu_ver_6',
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_ver_6',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 3, // Extraction claims v3, but evidence is v1
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_6', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Roofing', problem: 'Leak' },
+          evidenceIds: ['ev_emu_ver_6'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_ver_6'] },
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_ver_6',
+            versionId,
+            extraction,
+            event: { eventId: 'ie_emu_ver_6', aggregateType: 'job', aggregateId: 'job_emu_ver_6' } as any,
+            summaryProjection: { jobId: 'job_emu_ver_6' },
+          })
+        ).rejects.toThrow(/Incompatible source version for evidence 'ev_emu_ver_6'/);
+
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(false);
+      });
     });
 
     // 7. AI circularity (evidence produced by AI model claiming to be evidence for itself) -> strictly rejected
     it('7. AI circularity (evidence produced by AI model claiming to be evidence for itself) -> strictly rejected', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_7', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_ai_7', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_ai_7', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_ai_7',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_ai_7',
-        sourceType: 'ai_model',
-        sourceVersion: 1,
-        metadata: { modelVersion: 'gemini-3.7-flash', generatedOutput: true },
-      });
-
-      const extraction = {
-        extractionId: 'ext_emu_ai_7',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_ai_7',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_7', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Roofing', problem: 'AI Hallucinated Leak' },
-        evidenceIds: ['ev_emu_ai_7'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_ai_7'] },
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_ai_7',
           aggregateType: 'job',
           aggregateId: 'job_emu_ai_7',
-          versionId,
-          extraction,
-          event: { eventId: 'ie_emu_ai_7', aggregateType: 'job', aggregateId: 'job_emu_ai_7' } as any,
-          summaryProjection: { jobId: 'job_emu_ai_7' },
-        })
-      ).rejects.toThrow(/Anti-AI Circularity Violation/);
+          sourceType: 'ai_model',
+          sourceVersion: 1,
+          metadata: { modelVersion: 'gemini-3.7-flash', generatedOutput: true },
+        });
 
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(extSnap.exists()).toBe(false);
+        const extraction = {
+          extractionId: 'ext_emu_ai_7',
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_ai_7',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_7', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Roofing', problem: 'AI Hallucinated Leak' },
+          evidenceIds: ['ev_emu_ai_7'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_ai_7'] },
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_ai_7',
+            versionId,
+            extraction,
+            event: { eventId: 'ie_emu_ai_7', aggregateType: 'job', aggregateId: 'job_emu_ai_7' } as any,
+            summaryProjection: { jobId: 'job_emu_ai_7' },
+          })
+        ).rejects.toThrow(/Anti-AI Circularity Violation/);
+
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(extSnap.exists()).toBe(false);
+      });
     });
 
     // 8. Reference-only evidence without content hash -> accepted only when verified = false and not claiming byte integrity
     it('8. Reference-only evidence without content hash -> accepted only when verified = false and not claiming byte integrity', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_8', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
 
-      // A: Valid reference-only evidence (verified = false, no byte hash claim)
-      const versionIdValid = buildVersionId('job', 'job_emu_ref_8', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_ref_valid_8',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_ref_8',
-        evidenceType: 'reference',
-        integrityStatus: 'unverified',
-        verified: false,
-        contentHash: '',
-        byteSize: 0,
-        sourceRef: 'https://council.gov.uk/planning/1234',
-        sourceVersion: 1,
-      });
+        // A: Valid reference-only evidence (verified = false, no byte hash claim)
+        const versionIdValid = buildVersionId('job', 'job_emu_ref_8', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_ref_valid_8',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_ref_8',
+          evidenceType: 'reference',
+          integrityStatus: 'unverified',
+          verified: false,
+          contentHash: '',
+          byteSize: 0,
+          sourceRef: 'https://council.gov.uk/planning/1234',
+          sourceVersion: 1,
+        });
 
-      const extractionValid = {
-        extractionId: 'ext_emu_ref_8',
-        versionId: versionIdValid,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_ref_8',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_8', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Roofing', problem: 'Council report' },
-        evidenceIds: ['ev_emu_ref_valid_8'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_ref_valid_8'] },
-      };
+        const extractionValid = {
+          extractionId: 'ext_emu_ref_8',
+          versionId: versionIdValid,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_ref_8',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_8', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Roofing', problem: 'Council report' },
+          evidenceIds: ['ev_emu_ref_valid_8'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_ref_valid_8'] },
+        };
 
-      const res = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'job',
-        aggregateId: 'job_emu_ref_8',
-        versionId: versionIdValid,
-        extraction: extractionValid,
-        event: { eventId: 'ie_emu_ref_8', aggregateType: 'job', aggregateId: 'job_emu_ref_8' } as any,
-        summaryProjection: { jobId: 'job_emu_ref_8' },
-      });
-
-      expect(res.isNew).toBe(true);
-
-      // B: Invalid reference-only evidence claiming verified = true without a valid hash
-      const versionIdInvalid = buildVersionId('job', 'job_emu_ref_8_bad', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_ref_bad_8',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_ref_8_bad',
-        evidenceType: 'reference',
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: '', // missing hash on verified claim
-        byteSize: 100,
-        sourceVersion: 1,
-      });
-
-      const extractionInvalid = {
-        ...extractionValid,
-        extractionId: 'ext_emu_ref_8_bad',
-        aggregateId: 'job_emu_ref_8_bad',
-        versionId: versionIdInvalid,
-        evidenceIds: ['ev_emu_ref_bad_8'],
-      };
-
-      await expect(
-        immutableIntelligenceStore.persistOutput({
+        const res = await immutableIntelligenceStore.persistOutput({
           db: storeDb,
           aggregateType: 'job',
+          aggregateId: 'job_emu_ref_8',
+          versionId: versionIdValid,
+          extraction: extractionValid,
+          event: { eventId: 'ie_emu_ref_8', aggregateType: 'job', aggregateId: 'job_emu_ref_8' } as any,
+          summaryProjection: { jobId: 'job_emu_ref_8' },
+        });
+
+        expect(res.isNew).toBe(true);
+
+        // B: Invalid reference-only evidence claiming verified = true without a valid hash
+        const versionIdInvalid = buildVersionId('job', 'job_emu_ref_8_bad', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_ref_bad_8',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_ref_8_bad',
+          evidenceType: 'reference',
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: '', // missing hash on verified claim
+          byteSize: 100,
+          sourceVersion: 1,
+        });
+
+        const extractionInvalid = {
+          ...extractionValid,
+          extractionId: 'ext_emu_ref_8_bad',
           aggregateId: 'job_emu_ref_8_bad',
           versionId: versionIdInvalid,
-          extraction: extractionInvalid,
-          event: { eventId: 'ie_emu_ref_8_bad', aggregateType: 'job', aggregateId: 'job_emu_ref_8_bad' } as any,
-          summaryProjection: { jobId: 'job_emu_ref_8_bad' },
-        })
-      ).rejects.toThrow(/missing or malformed 64-character SHA-256 contentHash/);
+          evidenceIds: ['ev_emu_ref_bad_8'],
+        };
+
+        await expect(
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_ref_8_bad',
+            versionId: versionIdInvalid,
+            extraction: extractionInvalid,
+            event: { eventId: 'ie_emu_ref_8_bad', aggregateType: 'job', aggregateId: 'job_emu_ref_8_bad' } as any,
+            summaryProjection: { jobId: 'job_emu_ref_8_bad' },
+          })
+        ).rejects.toThrow(/missing or malformed 64-character SHA-256 contentHash/);
+      });
     });
 
     // 9. Structured evidence without raw bytes -> accepted when schema valid
     it('9. Structured evidence without raw bytes -> accepted when schema valid', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_9', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_struct_9', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_struct_9', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_struct_9',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_struct_9',
-        evidenceType: 'structured_data',
-        integrityStatus: 'verified',
-        verified: true,
-        byteSize: 0,
-        contentSize: 350,
-        contentHash: '',
-        schemaVersion: '1.0.0',
-        metadata: { schema: 'quote_item', count: 5 },
-        sourceVersion: 1,
-      });
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_struct_9',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_struct_9',
+          evidenceType: 'structured_data',
+          integrityStatus: 'verified',
+          verified: true,
+          byteSize: 0,
+          contentSize: 350,
+          contentHash: '',
+          schemaVersion: '1.0.0',
+          metadata: { schema: 'quote_item', count: 5 },
+          sourceVersion: 1,
+        });
 
-      const extraction = {
-        extractionId: 'ext_emu_struct_9',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_struct_9',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_9', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Electrical', problem: 'Structured quote item analysis' },
-        evidenceIds: ['ev_emu_struct_9'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_struct_9'] },
-      };
-
-      const res = await immutableIntelligenceStore.persistOutput({
-        db: storeDb,
-        aggregateType: 'job',
-        aggregateId: 'job_emu_struct_9',
-        versionId,
-        extraction,
-        event: { eventId: 'ie_emu_struct_9', aggregateType: 'job', aggregateId: 'job_emu_struct_9' } as any,
-        summaryProjection: {
-          jobId: 'job_emu_struct_9',
-          currentVersionId: versionId,
-          category: 'Electrical',
-          buildingComponent: 'Panel',
-          observedProblem: 'Structured quote item analysis',
-          extractedScope: ['Upgrade panel'],
-          recommendedIntervention: 'Full upgrade',
+        const extraction = {
+          extractionId: 'ext_emu_struct_9',
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_struct_9',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_9', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Electrical', problem: 'Structured quote item analysis' },
           evidenceIds: ['ev_emu_struct_9'],
           confidence,
           provenance: { ...provenance, evidenceIds: ['ev_emu_struct_9'] },
-          pipelineVersion: 'v8.1',
-          updatedAt: new Date().toISOString(),
-        },
+        };
+
+        const res = await immutableIntelligenceStore.persistOutput({
+          db: storeDb,
+          aggregateType: 'job',
+          aggregateId: 'job_emu_struct_9',
+          versionId,
+          extraction,
+          event: { eventId: 'ie_emu_struct_9', aggregateType: 'job', aggregateId: 'job_emu_struct_9' } as any,
+          summaryProjection: {
+            jobId: 'job_emu_struct_9',
+            currentVersionId: versionId,
+            category: 'Electrical',
+            buildingComponent: 'Panel',
+            observedProblem: 'Structured quote item analysis',
+            extractedScope: ['Upgrade panel'],
+            recommendedIntervention: 'Full upgrade',
+            evidenceIds: ['ev_emu_struct_9'],
+            confidence,
+            provenance: { ...provenance, evidenceIds: ['ev_emu_struct_9'] },
+            pipelineVersion: 'v8.1',
+            updatedAt: new Date().toISOString(),
+          },
+        });
+
+        expect(res.isNew).toBe(true);
+
+        const jobSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_struct_9'));
+        expect(jobSnap.exists()).toBe(true);
+        expect(jobSnap.data()?.currentVersionId).toBe(versionId);
       });
-
-      expect(res.isNew).toBe(true);
-
-      const jobSnap = await getDoc(doc(adminDb, 'intelligence_jobs', 'job_emu_struct_9'));
-      expect(jobSnap.exists()).toBe(true);
-      expect(jobSnap.data()?.currentVersionId).toBe(versionId);
     });
 
     // 10. Concurrent identical write under real emulator transaction -> exactly one creates, other idempotent return, no duplicate documents
     it('10. Concurrent identical write under real emulator transaction -> exactly one creates, other idempotent return, no duplicate documents', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_10', { role: 'admin', admin: true }).firestore();
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-      const versionId = buildVersionId('job', 'job_emu_con_10', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+        const versionId = buildVersionId('job', 'job_emu_con_10', 1, 'v8.1', 'gemini-3.7-flash', 'job_v1', '1.0.0');
 
-      await seedEvidenceDoc(adminDb, {
-        evidenceId: 'ev_emu_con_10',
-        aggregateType: 'job',
-        aggregateId: 'job_emu_con_10',
-        sourceVersion: 1,
-        integrityStatus: 'verified',
-        verified: true,
-        contentHash: validHash,
-        byteSize: 300,
+        await seedEvidenceDoc(adminDb, {
+          evidenceId: 'ev_emu_con_10',
+          aggregateType: 'job',
+          aggregateId: 'job_emu_con_10',
+          sourceVersion: 1,
+          integrityStatus: 'verified',
+          verified: true,
+          contentHash: validHash,
+          byteSize: 300,
+        });
+
+        const extraction = {
+          extractionId: 'ext_emu_con_10',
+          versionId,
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_con_10',
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          sourceVersion: 1,
+          provider: 'google_genai',
+          createdAt: new Date().toISOString(),
+          generatedAt: new Date().toISOString(),
+          rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_10', createdAt: new Date().toISOString() },
+          structuredCandidate: { category: 'Plumbing', problem: 'Concurrent Burst Pipe' },
+          evidenceIds: ['ev_emu_con_10'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
+        };
+
+        const event = {
+          eventId: 'ie_emu_con_10',
+          aggregateType: 'job' as const,
+          aggregateId: 'job_emu_con_10',
+          eventType: 'JOB_ANALYSIS_COMPLETED' as const,
+          schemaVersion: '1.0.0',
+          pipelineVersion: 'v8.1',
+          modelVersion: 'gemini-3.7-flash',
+          promptVersion: 'job_v1',
+          createdAt: new Date().toISOString(),
+          source: 'jobs/job_emu_con_10',
+          evidenceIds: ['ev_emu_con_10'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
+          status: 'valid' as const,
+          payload: { category: 'Plumbing' },
+        };
+
+        const summary = {
+          jobId: 'job_emu_con_10',
+          currentVersionId: versionId,
+          category: 'Plumbing',
+          buildingComponent: 'Pipe',
+          observedProblem: 'Concurrent Burst Pipe',
+          extractedScope: ['Repair pipe'],
+          recommendedIntervention: 'Drain and fix',
+          evidenceIds: ['ev_emu_con_10'],
+          confidence,
+          provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
+          pipelineVersion: 'v8.1',
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Launch 3 concurrent persistence calls against real Firestore emulator
+        const results = await Promise.all([
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_con_10',
+            versionId,
+            extraction,
+            event: { ...event, eventId: 'ie_emu_con_10_w1' },
+            summaryProjection: summary,
+          }),
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_con_10',
+            versionId,
+            extraction,
+            event: { ...event, eventId: 'ie_emu_con_10_w2' },
+            summaryProjection: summary,
+          }),
+          immutableIntelligenceStore.persistOutput({
+            db: storeDb,
+            aggregateType: 'job',
+            aggregateId: 'job_emu_con_10',
+            versionId,
+            extraction,
+            event: { ...event, eventId: 'ie_emu_con_10_w3' },
+            summaryProjection: summary,
+          }),
+        ]);
+
+        expect(results.length).toBe(3);
+        const newCount = results.filter((r) => r.isNew).length;
+        const idempotentCount = results.filter((r) => !r.isNew).length;
+
+        expect(newCount).toBe(1);
+        expect(idempotentCount).toBe(2);
+
+        // Verify exactly 1 extraction document exists in real Firestore emulator
+        const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
+        expect(docSnap.exists()).toBe(true);
+        expect(docSnap.data()?.versionId).toBe(versionId);
       });
-
-      const extraction = {
-        extractionId: 'ext_emu_con_10',
-        versionId,
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_con_10',
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        sourceVersion: 1,
-        provider: 'google_genai',
-        createdAt: new Date().toISOString(),
-        generatedAt: new Date().toISOString(),
-        rawManifest: { sha256: validHash, encoding: 'gzip' as const, originalBytes: 50, compressedBytes: 50, compressionRatio: 1, schemaVersion: '1.0.0', storagePath: 'sp_10', createdAt: new Date().toISOString() },
-        structuredCandidate: { category: 'Plumbing', problem: 'Concurrent Burst Pipe' },
-        evidenceIds: ['ev_emu_con_10'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
-      };
-
-      const event = {
-        eventId: 'ie_emu_con_10',
-        aggregateType: 'job' as const,
-        aggregateId: 'job_emu_con_10',
-        eventType: 'JOB_ANALYSIS_COMPLETED' as const,
-        schemaVersion: '1.0.0',
-        pipelineVersion: 'v8.1',
-        modelVersion: 'gemini-3.7-flash',
-        promptVersion: 'job_v1',
-        createdAt: new Date().toISOString(),
-        source: 'jobs/job_emu_con_10',
-        evidenceIds: ['ev_emu_con_10'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
-        status: 'valid' as const,
-        payload: { category: 'Plumbing' },
-      };
-
-      const summary = {
-        jobId: 'job_emu_con_10',
-        currentVersionId: versionId,
-        category: 'Plumbing',
-        buildingComponent: 'Pipe',
-        observedProblem: 'Concurrent Burst Pipe',
-        extractedScope: ['Repair pipe'],
-        recommendedIntervention: 'Drain and fix',
-        evidenceIds: ['ev_emu_con_10'],
-        confidence,
-        provenance: { ...provenance, evidenceIds: ['ev_emu_con_10'] },
-        pipelineVersion: 'v8.1',
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Launch 3 concurrent persistence calls against real Firestore emulator
-      const results = await Promise.all([
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
-          aggregateId: 'job_emu_con_10',
-          versionId,
-          extraction,
-          event: { ...event, eventId: 'ie_emu_con_10_w1' },
-          summaryProjection: summary,
-        }),
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
-          aggregateId: 'job_emu_con_10',
-          versionId,
-          extraction,
-          event: { ...event, eventId: 'ie_emu_con_10_w2' },
-          summaryProjection: summary,
-        }),
-        immutableIntelligenceStore.persistOutput({
-          db: storeDb,
-          aggregateType: 'job',
-          aggregateId: 'job_emu_con_10',
-          versionId,
-          extraction,
-          event: { ...event, eventId: 'ie_emu_con_10_w3' },
-          summaryProjection: summary,
-        }),
-      ]);
-
-      expect(results.length).toBe(3);
-      const newCount = results.filter((r) => r.isNew).length;
-      const idempotentCount = results.filter((r) => !r.isNew).length;
-
-      expect(newCount).toBe(1);
-      expect(idempotentCount).toBe(2);
-
-      // Verify exactly 1 extraction document exists in real Firestore emulator
-      const docSnap = await getDoc(doc(adminDb, 'intelligence_extractions', versionId));
-      expect(docSnap.exists()).toBe(true);
-      expect(docSnap.data()?.versionId).toBe(versionId);
     });
   });
 
   describe('Task 11: Canonical Intelligence Normalization & Schema Enforcement Emulator Suite', () => {
     it('Task 11 Invariant 1: Admin can persist canonical intelligence into live Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_9', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const evidenceId = 'ev_emu_t11_roof_1';
         const jobId = 'job_emu_t11_101';
 
@@ -3298,61 +3321,62 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           verified: true,
           metadata: {},
           createdAt: new Date().toISOString(),
+        });
+
+        const canonical = canonicalizeIntelligence({
+          aggregateType: 'job',
+          aggregateId: jobId,
+          domain: 'roofing',
+          category: 'Roof Repair',
+          component: 'flat roof',
+          observations: [
+            {
+              observationId: 'obs_t11_1',
+              component: 'roof',
+              condition: 'damaged',
+              description: 'Slipped slate tile near chimney stack',
+              evidenceIds: [evidenceId],
+            },
+          ],
+          inferences: [
+            {
+              inferenceId: 'inf_t11_1',
+              type: 'problem',
+              targetComponent: 'roof',
+              hypothesis: 'Chimney flashing compromised, moisture penetrating loft timbers',
+              confidence: 0.86,
+              supportingEvidenceIds: [evidenceId],
+              severity: 'high',
+              urgency: 'immediate',
+            },
+          ],
+          evidenceIds: [evidenceId],
+          schemaVersion: 'v8.1.0',
+        });
+
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+
+        const persistResult = await persistCanonicalIntelligence({
+          db: storeDb,
+          canonical,
+        });
+
+        expect(persistResult.isNew).toBe(true);
+        expect(persistResult.versionId).toBe(canonical.canonicalId);
+
+        // Verify extraction read from emulator
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', canonical.canonicalId));
+        expect(extSnap.exists()).toBe(true);
+        expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
+        expect(extSnap.data()?.structuredCandidate?.component).toBe('roof');
+        expect(extSnap.data()?.structuredCandidate?.observations?.length).toBe(1);
+
+        // Verify active projection pointer in Firestore emulator
+        const ptrSnap = await getDoc(doc(adminDb, 'intelligence_jobs', jobId));
+        expect(ptrSnap.exists()).toBe(true);
+        expect(ptrSnap.data()?.currentVersionId).toBe(canonical.canonicalId);
+        expect(ptrSnap.data()?.domain).toBe('roofing');
       });
-
-      const canonical = canonicalizeIntelligence({
-        aggregateType: 'job',
-        aggregateId: jobId,
-        domain: 'roofing',
-        category: 'Roof Repair',
-        component: 'flat roof',
-        observations: [
-          {
-            observationId: 'obs_t11_1',
-            component: 'roof',
-            condition: 'damaged',
-            description: 'Slipped slate tile near chimney stack',
-            evidenceIds: [evidenceId],
-          },
-        ],
-        inferences: [
-          {
-            inferenceId: 'inf_t11_1',
-            type: 'problem',
-            targetComponent: 'roof',
-            hypothesis: 'Chimney flashing compromised, moisture penetrating loft timbers',
-            confidence: 0.86,
-            supportingEvidenceIds: [evidenceId],
-            severity: 'high',
-            urgency: 'immediate',
-          },
-        ],
-        evidenceIds: [evidenceId],
-        schemaVersion: 'v8.1.0',
-      });
-
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-
-      const persistResult = await persistCanonicalIntelligence({
-        db: storeDb,
-        canonical,
-      });
-
-      expect(persistResult.isNew).toBe(true);
-      expect(persistResult.versionId).toBe(canonical.canonicalId);
-
-      // Verify extraction read from emulator
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', canonical.canonicalId));
-      expect(extSnap.exists()).toBe(true);
-      expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
-      expect(extSnap.data()?.structuredCandidate?.component).toBe('roof');
-      expect(extSnap.data()?.structuredCandidate?.observations?.length).toBe(1);
-
-      // Verify active projection pointer in Firestore emulator
-      const ptrSnap = await getDoc(doc(adminDb, 'intelligence_jobs', jobId));
-      expect(ptrSnap.exists()).toBe(true);
-      expect(ptrSnap.data()?.currentVersionId).toBe(canonical.canonicalId);
-      expect(ptrSnap.data()?.domain).toBe('roofing');
     });
 
     it('Task 11 Invariant 2: Direct unauthenticated and non-admin client writes to /intelligence_extractions are blocked', async () => {
@@ -3377,8 +3401,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('Task 11 Invariant 3: Lineage check against live emulator rejects canonical persistence when evidence is missing', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_10', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const missingEvidenceId = 'ev_emu_missing_999';
         const jobId = 'job_emu_t11_102';
 
@@ -3395,23 +3418,23 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           ],
           evidenceIds: [missingEvidenceId],
           schemaVersion: 'v8.1.0',
+        });
+
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+
+        await expect(
+          persistCanonicalIntelligence({
+            db: storeDb,
+            canonical,
+          })
+        ).rejects.toThrow(/does not exist in authoritative Firestore store/i);
       });
-
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-
-      await expect(
-        persistCanonicalIntelligence({
-          db: storeDb,
-          canonical,
-        })
-      ).rejects.toThrow(/does not exist in authoritative Firestore store/i);
     });
   });
 
   describe('Task 12: Real Firestore Emulator AI Candidate Security Boundary Invariants', () => {
     it('Task 12 Invariant 1: Valid AI Candidate with verified evidence passes lineage check and persists to Firestore emulator', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const jobId = 'job_t12_emu_101';
         const evidenceId = 'ev_t12_valid_emu_1';
         const contentHash = 'b'.repeat(64);
@@ -3429,59 +3452,56 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           integrityStatus: 'verified',
           verified: true,
           createdAt: new Date().toISOString(),
+        });
+
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+
+        const rawCandidate = {
+          domain: 'roofing',
+          category: 'Slate Roof',
+          component: 'valley flashing',
+          observations: [
+            {
+              description: 'Loose slate valley tile',
+              evidenceIds: [evidenceId],
+            },
+          ],
+          inferences: [
+            {
+              hypothesis: 'Valley flashing leak vulnerability',
+              confidence: 0.9,
+              supportingEvidenceIds: [evidenceId],
+            },
+          ],
+        };
+
+        const serverContext: TrustedServerContext = {
+          aggregateType: 'job',
+          aggregateId: jobId,
+          sourceId: 'usr_homeowner_t12',
+          sourceVersion: 'v1',
+          pipelineVersion: 'v8.1.0_prod',
+          modelVersion: 'gemini-2.5-flash',
+        };
+
+        const result = await processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        });
+
+        expect(result.persisted).toBe(true);
+        expect(result.canonical.canonicalId).toBeDefined();
+
+        // Verify record exists in real Firestore emulator
+        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', result.canonical.canonicalId));
+        expect(extSnap.exists()).toBe(true);
+        expect(extSnap.data()?.aggregateId).toBe(jobId);
+        expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
       });
-    
-
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-
-      const rawCandidate = {
-        domain: 'roofing',
-        category: 'Slate Roof',
-        component: 'valley flashing',
-        observations: [
-          {
-            description: 'Loose slate valley tile',
-            evidenceIds: [evidenceId],
-          },
-        ],
-        inferences: [
-          {
-            hypothesis: 'Valley flashing leak vulnerability',
-            confidence: 0.9,
-            supportingEvidenceIds: [evidenceId],
-          },
-        ],
-      };
-
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'job',
-        aggregateId: jobId,
-        sourceId: 'usr_homeowner_t12',
-        sourceVersion: 'v1',
-        pipelineVersion: 'v8.1.0_prod',
-        modelVersion: 'gemini-2.5-flash',
-      };
-
-      const result = await processAICandidateToCanonical(rawCandidate, serverContext, {
-        firestoreDb: storeDb,
-        persistToStore: true,
-      });
-
-      expect(result.persisted).toBe(true);
-      expect(result.canonical.canonicalId).toBeDefined();
-
-      // Verify record exists in real Firestore emulator
-      const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', result.canonical.canonicalId));
-      expect(extSnap.exists()).toBe(true);
-      expect(extSnap.data()?.aggregateId).toBe(jobId);
-      expect(extSnap.data()?.structuredCandidate?.domain).toBe('roofing');
     });
 
     it('Task 12 Invariant 2: Candidate referencing missing evidence fails lineage validation on Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store2', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const jobId = 'job_t12_emu_102';
         const missingEvidenceId = 'ev_t12_nonexistent_999';
 
@@ -3507,15 +3527,13 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           processAICandidateToCanonical(rawCandidate, serverContext, {
             firestoreDb: storeDb,
             persistToStore: true,
-        })
-      ).rejects.toThrow(AICandidateSecurityError);
+          })
+        ).rejects.toThrow(AICandidateSecurityError);
+      });
     });
 
     it('Task 12 Invariant 3: Candidate referencing evidence from another aggregate fails lineage on Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_worker_store3', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const jobId = 'job_t12_emu_103';
         const foreignJobId = 'job_t12_FOREIGN_999';
         const foreignEvidenceId = 'ev_t12_foreign_1';
@@ -3532,32 +3550,33 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           integrityStatus: 'verified',
           verified: true,
           createdAt: new Date().toISOString(),
+        });
+
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+
+        const rawCandidate = {
+          domain: 'electrical',
+          observations: [
+            {
+              description: 'Cross-aggregate evidence reference',
+              evidenceIds: [foreignEvidenceId],
+            },
+          ],
+        };
+
+        const serverContext: TrustedServerContext = {
+          aggregateType: 'job',
+          aggregateId: jobId,
+          sourceId: 'usr_homeowner_t12',
+        };
+
+        await expect(
+          processAICandidateToCanonical(rawCandidate, serverContext, {
+            firestoreDb: storeDb,
+            persistToStore: true,
+          })
+        ).rejects.toThrow(AICandidateSecurityError);
       });
-
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-
-      const rawCandidate = {
-        domain: 'electrical',
-        observations: [
-          {
-            description: 'Cross-aggregate evidence reference',
-            evidenceIds: [foreignEvidenceId],
-          },
-        ],
-      };
-
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'job',
-        aggregateId: jobId,
-        sourceId: 'usr_homeowner_t12',
-      };
-
-      await expect(
-        processAICandidateToCanonical(rawCandidate, serverContext, {
-          firestoreDb: storeDb,
-          persistToStore: true,
-        })
-      ).rejects.toThrow(AICandidateSecurityError);
     });
 
     it('Task 12 Invariant 4: AI output attempting to self-create evidence is rejected', async () => {
@@ -3614,10 +3633,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     });
 
     it('Task 12 Invariant 6: Concurrent identical pipeline executions produce idempotent persistence on Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_1', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const jobId = 'job_t12_emu_106';
         const evidenceId = 'ev_t12_valid_emu_6';
         const contentHash = 'd'.repeat(64);
@@ -3634,52 +3650,49 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           integrityStatus: 'verified',
           verified: true,
           createdAt: new Date().toISOString(),
+        });
+
+        const storeDb = createRealFirestoreStoreDb(adminDb);
+
+        const rawCandidate = {
+          domain: 'heating',
+          category: 'Boiler Repair',
+          observations: [
+            {
+              description: 'Boiler pressure drops below 0.5 bar',
+              evidenceIds: [evidenceId],
+            },
+          ],
+        };
+
+        const serverContext: TrustedServerContext = {
+          aggregateType: 'job',
+          aggregateId: jobId,
+          sourceId: 'usr_homeowner_t12',
+          sourceVersion: 'v1',
+        };
+
+        // Run pipeline twice
+        const res1 = await processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        });
+
+        expect(res1.persisted).toBe(true);
+
+        // Second identical run must succeed idempotently (or produce identical canonicalId)
+        const res2 = await processAICandidateToCanonical(rawCandidate, serverContext, {
+          firestoreDb: storeDb,
+          persistToStore: true,
+        });
+
+        expect(res2.canonical.canonicalId).toBe(res1.canonical.canonicalId);
+        expect(res2.canonical.contentHash).toBe(res1.canonical.contentHash);
       });
-    
-
-      const storeDb = createRealFirestoreStoreDb(adminDb);
-
-      const rawCandidate = {
-        domain: 'heating',
-        category: 'Boiler Repair',
-        observations: [
-          {
-            description: 'Boiler pressure drops below 0.5 bar',
-            evidenceIds: [evidenceId],
-          },
-        ],
-      };
-
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'job',
-        aggregateId: jobId,
-        sourceId: 'usr_homeowner_t12',
-        sourceVersion: 'v1',
-      };
-
-      // Run pipeline twice
-      const res1 = await processAICandidateToCanonical(rawCandidate, serverContext, {
-        firestoreDb: storeDb,
-        persistToStore: true,
-      });
-
-      expect(res1.persisted).toBe(true);
-
-      // Second identical run must succeed idempotently (or produce identical canonicalId)
-      const res2 = await processAICandidateToCanonical(rawCandidate, serverContext, {
-        firestoreDb: storeDb,
-        persistToStore: true,
-      });
-
-      expect(res2.canonical.canonicalId).toBe(res1.canonical.canonicalId);
-      expect(res2.canonical.contentHash).toBe(res1.canonical.contentHash);
     });
 
     it('Task 12A Emulator Invariant 1: Caller attempting skipLineageCheck on missing evidence fails hard on Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_2', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const rawCandidate = {
@@ -3704,13 +3717,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             skipLineageCheck: true,
           } as any)
         ).rejects.toThrow(AICandidateSecurityError);
+      });
     });
 
     it('Task 12A Emulator Invariant 2: Platform-wide aggregate types (contractor, material, project, customer_request) persist to real Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_3', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const platformAggs: Array<'contractor' | 'material' | 'project' | 'customer_request'> = [
@@ -3737,39 +3748,40 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             integrityStatus: 'verified',
             verified: true,
             createdAt: new Date().toISOString(),
-        });
+          });
 
-        const rawCandidate = {
-          domain: aggType,
-          observations: [
-            {
-              description: `Emulator test observation for ${aggType}`,
-              evidenceIds: [evId],
-            },
-          ],
-        };
+          const rawCandidate = {
+            domain: aggType,
+            observations: [
+              {
+                description: `Emulator test observation for ${aggType}`,
+                evidenceIds: [evId],
+              },
+            ],
+          };
 
-        const serverContext: TrustedServerContext = {
-          aggregateType: aggType,
-          aggregateId: aggId,
-          sourceId: `usr_${aggType}_owner`,
-          sourceVersion: 'v1',
-        };
+          const serverContext: TrustedServerContext = {
+            aggregateType: aggType,
+            aggregateId: aggId,
+            sourceId: `usr_${aggType}_owner`,
+            sourceVersion: 'v1',
+          };
 
-        const res = await processAICandidateToCanonical(rawCandidate, serverContext, {
-          firestoreDb: storeDb,
-          persistToStore: true,
-        });
+          const res = await processAICandidateToCanonical(rawCandidate, serverContext, {
+            firestoreDb: storeDb,
+            persistToStore: true,
+          });
 
-        expect(res.persisted).toBe(true);
-        expect(res.canonical.aggregateType).toBe(aggType);
-        expect(res.canonical.aggregateId).toBe(aggId);
+          expect(res.persisted).toBe(true);
+          expect(res.canonical.aggregateType).toBe(aggType);
+          expect(res.canonical.aggregateId).toBe(aggId);
 
-        // Verify record created in Firestore emulator under intelligence_extractions
-        const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', res.canonical.canonicalId));
-        expect(extSnap.exists()).toBe(true);
-        expect(extSnap.data()?.aggregateType).toBe(aggType);
-      }
+          // Verify record created in Firestore emulator under intelligence_extractions
+          const extSnap = await getDoc(doc(adminDb, 'intelligence_extractions', res.canonical.canonicalId));
+          expect(extSnap.exists()).toBe(true);
+          expect(extSnap.data()?.aggregateType).toBe(aggType);
+        }
+      });
     });
 
     it('Task 12A Emulator Invariant 3: Invoking processAICandidateToCanonical without firestoreDb throws AICandidateSecurityError', async () => {
@@ -3790,7 +3802,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   // ==========================================================
   describe('Task 14B: Real Firestore Emulator Transaction-Only Processing Run Persistence Boundary', () => {
     it('1. Create processing run record in real Firestore emulator using runTransaction', async () => {
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_4', { role: 'admin', admin: true }).firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_1', 1, 'lease_t14b_1');
@@ -3817,12 +3829,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(snap.exists()).toBe(true);
         expect(snap.data()?.status).toBe('started');
         expect(snap.data()?.taskId).toBe('task_t14b_1');
+      });
     });
 
     it('2. Duplicate same execution (same taskId + attempt + leaseId) returns existing run idempotently', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_5', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_2', 1, 'lease_t14b_2');
@@ -3847,12 +3858,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.exists()).toBe(true);
         expect(snap.data()?.attempt).toBe(1);
+      });
     });
 
     it('3. Concurrent same execution creates exactly one record in real Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_6', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_3', 1, 'lease_t14b_3');
@@ -3881,12 +3891,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.exists()).toBe(true);
+      });
     });
 
     it('4. Different attempt creates different run document in real Firestore emulator', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_7', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runIdAttempt1 = buildProcessingRunId('task_t14b_4', 1, 'lease_t14b_4_1');
@@ -3932,12 +3941,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(snap1.exists()).toBe(true);
         expect(snap2.exists()).toBe(true);
         expect(snap1.id).not.toBe(snap2.id);
+      });
     });
 
     it('5. Transaction-backed finalization (recordRunSucceeded / recordRunFailed) updates real Firestore emulator state', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_8', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runIdSucc = buildProcessingRunId('task_t14b_5_succ', 1, 'lease_5_succ');
@@ -4005,12 +4013,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         const snapFail = await getDoc(doc(adminDb, 'intelligence_processing_runs', runIdFail));
         expect(snapFail.data()?.status).toBe('retrying');
         expect(snapFail.data()?.retryable).toBe(true);
+      });
     });
 
     it('6. Transaction contention on real Firestore emulator resolves atomically', async () => {
-
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_9', { role: 'admin', admin: true }).firestore();
-
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_6', 1, 'lease_t14b_6');
@@ -4037,34 +4044,35 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
             return runTransaction(targetAdminDb, async (rawTx) => {
               contentionAttempts++;
+              const docRef = doc(targetAdminDb, 'intelligence_processing_runs', runId);
+              const snap = await rawTx.get(docRef);
               if (contentionAttempts === 1) {
                 await updateDoc(doc(targetAdminDb, 'intelligence_processing_runs', runId), {
                   contentionTouch: contentionAttempts,
-              });
-            }
-            const docRef = doc(targetAdminDb, 'intelligence_processing_runs', runId);
-            const snap = await rawTx.get(docRef);
-            const txWrapper = {
-              get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
-              set: (ref: any, data: any, opts?: any) => {
-                if (opts?.merge) rawTx.set(docRef, data, { merge: true });
-                else rawTx.set(docRef, data);
-              },
-            };
-            return await updateFn(txWrapper);
-          });
-        },
-      };
+                });
+              }
+              const txWrapper = {
+                get: async () => ({ id: snap.id, exists: snap.exists(), data: () => snap.data() }),
+                set: (ref: any, data: any, opts?: any) => {
+                  if (opts?.merge) rawTx.set(docRef, data, { merge: true });
+                  else rawTx.set(docRef, data);
+                },
+              };
+              return await updateFn(txWrapper);
+            });
+          },
+        };
 
-      const res = await processingRunStore.recordRunSucceeded(
-        runId,
-        { workerId: 'worker_14b_6', leaseId: 'lease_t14b_6' },
-        contentionDb as any
-      );
+        const res = await processingRunStore.recordRunSucceeded(
+          runId,
+          { workerId: 'worker_14b_6', leaseId: 'lease_t14b_6' },
+          contentionDb as any
+        );
 
-      expect(res.status).toBe('succeeded');
-      expect(contentionAttempts).toBeGreaterThanOrEqual(2);
-  
+        expect(res.status).toBe('succeeded');
+        expect(contentionAttempts).toBeGreaterThanOrEqual(2);
+      });
+    });
 
     it('7. Transaction failure propagation (permission error on unauthorized context) propagates without swallowing', async () => {
       const unauthCtx = testEnv!.unauthenticatedContext();
@@ -4104,9 +4112,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       const unauthDb = unauthCtx.firestore();
       const unauthStoreDb = createRealFirestoreStoreDb(unauthDb);
 
-      const adminDb = testEnv!.authenticatedContext('admin_emu_val_10', { role: 'admin', admin: true }).firestore();
-
-
+      await withAdminDb(async (adminDb) => {
         const runId = buildProcessingRunId('task_t14b_8', 1, 'lease_t14b_8');
 
         await expect(
@@ -4129,13 +4135,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.exists()).toBe(false);
+      });
     });
 
     it('9. Worker and lease ownership mismatch rejects update and protects run in real Firestore emulator', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_task11', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_9', 1, 'lease_valid');
@@ -4173,13 +4177,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', runId));
         expect(snap.data()?.status).toBe('started');
+      });
     });
 
     it('10. Terminal state protection prevents invalid state transitions (succeeded -> failed, dead_letter -> retrying) in real Firestore emulator', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_task11_missing', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_10', 1, 'lease_t14b_10');
@@ -4230,13 +4232,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           storeDb as any
         );
         expect(rerun.status).toBe('succeeded');
+      });
     });
 
     it('11. Processing run durability verified after a fresh direct Firestore read on adminDb', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_1', { admin: true });
-
-        const adminDb = adminCtx.firestore();
+      await withAdminDb(async (adminDb) => {
         const storeDb = createRealFirestoreStoreDb(adminDb);
 
         const runId = buildProcessingRunId('task_t14b_11', 1, 'lease_t14b_11');
@@ -4287,13 +4287,11 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         expect(data.startedAt).toBeDefined();
         expect(data.finishedAt).toBeDefined();
         expect(data.durationMs).toBeGreaterThanOrEqual(0);
+      });
     });
 
     it('12. Missing runTransaction on database fails closed without making any non-transactional fallback writes', async () => {
-
-      const adminCtx = testEnv!.authenticatedContext('admin_user_t12_2', { admin: true });
-
-
+      await withAdminDb(async (adminDb) => {
         const nonTxDb = {
           collection: () => ({
             doc: () => ({
@@ -4312,6 +4310,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
 
         const snap = await getDoc(doc(adminDb, 'intelligence_processing_runs', 'run_no_tx_emu'));
         expect(snap.exists()).toBe(false);
+      });
     });
   });
 
@@ -5952,5 +5951,4 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       );
     });
   });
-});
 });
