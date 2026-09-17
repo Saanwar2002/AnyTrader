@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, Star, MapPin, CheckCircle, ChevronRight, X, SlidersHorizontal, Award, ShieldCheck, Clock, Briefcase, Users, FileText, Shield, Heart, Zap, MessageSquare, AlertTriangle, Info, Plus, Building, Mic, History, Trash2, Tag, ArrowRightLeft, CheckSquare, Square, Scale, Sparkles, Check, Map, List, Compass, GripHorizontal, GripVertical, ChevronDown, Trophy, Play, Pause, Share2, Loader2 } from "lucide-react";
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF, CircleF } from "@react-google-maps/api";
 import { getGoogleMapsApiKey, triggerHaptic } from "@/src/lib/capacitor";
-import { db, collection, query, where, orderBy, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType } from "@/src/firebase";
+import { db, collection, query, where, orderBy, onSnapshot, setDoc, updateDoc, doc, handleFirestoreError, OperationType, increment } from "@/src/firebase";
 import { DidYouMeanSuggestion } from "./common/DidYouMeanSuggestion";
 import { findFuzzySuggestion, buildCandidateDictionary, matchTraderWithSearchQuery, textContainsTokenMatch, categoryMatchesSearch, CATEGORY_SYNONYMS, FuzzyMatchResult, CandidateItem } from "@/src/lib/fuzzyMatch";
 import { initSearchOptimizationService, recordUnmatchedSearch, onDynamicSynonymsUpdate } from "@/src/services/searchOptimizationService";
@@ -1236,29 +1236,15 @@ export default function FindTrades() {
     }
   }, [searchQuery, finalDisplayList.length, autocompleteSuggestions.matchingCategories.length, profile?.postcode, postcodeFilterValue]);
 
-  // Handle logging clicks and deducting budget on promoted profile clicks
+  // Handle logging clicks on promoted profile cards
   const handlePromotedCardClick = async (tp: any) => {
     if (tp.isPromotedAd && tp.adId && !String(tp.adId).startsWith("default") && !String(tp.adId).startsWith("seed-")) {
       try {
         const adRef = doc(db, "advertisements", tp.adId);
-        const cost = tp.costPerDisplay || 1.00;
-        const currentBal = tp.prepaidBalance || cost;
-        const newBal = Math.max(0, currentBal - cost);
-
-        const updateData: any = {
-          clicks: (tp.clicks || 0) + 1,
-          searchFeedClicks: (tp.searchFeedClicks || 0) + 1,
-          prepaidBalance: newBal
-        };
-
-        // Smart Auto Top-Up: Reload £50 when balance drops <= £10
-        if (tp.adData?.autoTopUpEnabled && newBal <= (tp.adData?.autoTopUpThreshold || 10)) {
-          const topUpAmount = tp.adData?.autoTopUpAmount || 50;
-          updateData.prepaidBalance = newBal + topUpAmount;
-          updateData.lastAutoTopUpAt = new Date().toISOString();
-        }
-
-        await setDoc(adRef, updateData, { merge: true });
+        await updateDoc(adRef, {
+          clicks: increment(1),
+          searchFeedClicks: increment(1)
+        });
       } catch (e) {
         console.error("Error logging promoted profile click:", e);
       }

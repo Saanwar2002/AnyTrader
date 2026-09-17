@@ -1,5 +1,15 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Security Remediation H2: Advertisement Budget & State Server-Authority (September 17, 2026)
+- **1. Server-Authoritative Financial & State Protection (`firestore.rules`)**: Hardened `/advertisements/{adId}` rules so that clients cannot modify money, budget, and state fields (`prepaidBalance`, `isActive`, `lastAutoTopUpAt`, `approvalStatus`, `totalBudget`, `totalCost`, `dailyRate`, `recurringPrice`, `advertiserUid`, `advertiserId`). Initial ad creation enforces zero balance (`prepaidBalance: 0`), inactive state (`isActive: false`), and pending approval (`approvalStatus: "pending"`).
+- **2. Monotonic Controlled Engagement Tracking**: Restricted client engagement updates to strictly monotonic increments (+1 maximum, no decrement) on allowed engagement counters only (`clicks`, `bannerClicks`, `searchFeedClicks`, `impressions`).
+- **3. Authoritative Ad Management Endpoints (`server.ts`)**:
+  - `POST /api/ads/:id/toggle-active`: Authenticates user, verifies ad ownership, confirms approval status, and toggles `isActive` via Firebase Admin SDK.
+  - `POST /api/ads/create-banner`: Authenticates user, verifies available ad wallet balance, atomically deducts balance, and provisions approved active promotional campaign.
+  - `POST /api/ads/:id/topup`: Authenticates user, verifies ad wallet funds, atomically deducts wallet and credits ad `prepaidBalance`.
+- **4. Client Components Refactoring**: Refactored `PartnerAdvertisement.tsx`, `FindTrades.tsx`, `TraderAdStudio.tsx`, and `TradesBannerAdStudio.tsx` to remove direct balance/state mutations from client SDKs and route balance top-ups and activation toggling through secure backend endpoints.
+- **5. Comprehensive Verification**: Deployed updated rules via `deploy_firebase`. Added Category 7 test suite in `tests/unit/firebaseEmulatorSecurityRules.test.ts` (12 test scenarios) and dedicated unit suite `tests/unit/advertisementsSecurityH2.test.ts` (11 tests). 100% test pass rate across 33 test suites (521/521 tests passing). Clean TypeScript compilation (`npm run lint`) and clean build (`compile_applet`).
+
 ## 🛡️ AnyTrader V8.1 — Security Remediation H1: Private PII Isolation & Public Profile Synchronization (September 17, 2026)
 - **1. Split Collection Architecture for User Profiles**: Enforced strict separation between sensitive private user documents (`/users/{uid}`) and public metadata (`/public_profiles/{uid}`). Private documents store PII (email, phone number, address, device and fraud telemetry, Stripe account references) and are accessible only by the owning user (`isOwner(uid)`) and platform administrators (`isAdmin()`).
 - **2. Non-PII Public Profile Sync on Onboarding & Edit**: Updated `src/components/Onboarding.tsx` and `src/components/Profile.tsx` to automatically mirror non-PII fields (display name, trades, categories, services, skills, city, trust badges, rating summary) to `/public_profiles/{uid}` upon trader registration and profile modifications.

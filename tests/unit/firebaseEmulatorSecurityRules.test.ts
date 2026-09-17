@@ -1064,4 +1064,196 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       await assertSucceeds(getDocs(collection(unauthDb, "public_profiles")));
     });
   });
+
+  // =========================================================================
+  // CATEGORY 7: SECURITY REMEDIATION H2 — ADVERTISEMENTS BUDGET & STATE INTEGRITY
+  // =========================================================================
+  describe("Category 7: Security Remediation H2 — Advertisements Budget & State Integrity", () => {
+    const seedTestAdvertisement = async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, "advertisements", "ad_userA_1"), {
+          id: "ad_userA_1",
+          advertiserUid: "userA",
+          advertiserId: "userA",
+          advertiserName: "Alice Plumbing",
+          title: "Alice Quality Plumbing",
+          description: "Emergency leak repairs 24/7",
+          bgColor: "bg-blue-600",
+          iconName: "Zap",
+          targetRole: "homeowner",
+          targetCategories: ["Plumbing"],
+          costPerDisplay: 0.50,
+          dailyDisplayLimit: 100,
+          durationDays: 30,
+          isActive: false,
+          approvalStatus: "pending",
+          billingCycle: "prepaid",
+          totalBudget: 100,
+          prepaidBalance: 100,
+          clicks: 10,
+          bannerClicks: 5,
+          searchFeedClicks: 5,
+          impressions: 50,
+          lastAutoTopUpAt: "2026-09-01T00:00:00.000Z",
+          createdAt: new Date().toISOString(),
+        });
+      });
+    };
+
+    beforeEach(async () => {
+      await seedTestAdvertisement();
+    });
+
+    it("57. H2 Test 1 — unrelated user cannot modify advertisement creative/metadata (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(updateDoc(doc(userBDb, "advertisements", "ad_userA_1"), {
+        title: "Malicious Title Overwrite",
+        description: "Compromised ad copy",
+      }));
+    });
+
+    it("58. H2 Test 2 — unrelated user cannot change prepaidBalance (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(updateDoc(doc(userBDb, "advertisements", "ad_userA_1"), {
+        prepaidBalance: 5000,
+      }));
+    });
+
+    it("59. H2 Test 3 — unrelated user cannot change isActive (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(updateDoc(doc(userBDb, "advertisements", "ad_userA_1"), {
+        isActive: true,
+      }));
+    });
+
+    it("60. H2 Test 4 — unrelated user cannot change lastAutoTopUpAt (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(updateDoc(doc(userBDb, "advertisements", "ad_userA_1"), {
+        lastAutoTopUpAt: "2026-09-17T12:00:00.000Z",
+      }));
+    });
+
+    it("61. H2 Test 5 — owner cannot directly change prepaidBalance through client write (PERMISSION_DENIED)", async () => {
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertFails(updateDoc(doc(userADb, "advertisements", "ad_userA_1"), {
+        prepaidBalance: 9999,
+      }));
+    });
+
+    it("62. H2 Test 6 — owner cannot change isActive through client write (PERMISSION_DENIED)", async () => {
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertFails(updateDoc(doc(userADb, "advertisements", "ad_userA_1"), {
+        isActive: true,
+      }));
+    });
+
+    it("63. H2 Test 7 — owner cannot change lastAutoTopUpAt through client write (PERMISSION_DENIED)", async () => {
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertFails(updateDoc(doc(userADb, "advertisements", "ad_userA_1"), {
+        lastAutoTopUpAt: "2026-09-17T12:00:00.000Z",
+      }));
+    });
+
+    it("64. H2 Test 8 — protected-field injection is rejected when combined with valid engagement counters (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(updateDoc(doc(userBDb, "advertisements", "ad_userA_1"), {
+        clicks: 11,
+        prepaidBalance: 9999,
+      }));
+
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertFails(updateDoc(doc(userADb, "advertisements", "ad_userA_1"), {
+        clicks: 11,
+        isActive: true,
+      }));
+    });
+
+    it("65. H2 Test 9 — valid engagement counter increments pass (+1 monotonic step) (PASS)", async () => {
+      const viewerDb = testEnv.authenticatedContext("viewer_user").firestore();
+      
+      // Step 1: Single counter increment (+1)
+      await assertSucceeds(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        clicks: 11,
+      }));
+
+      // Step 2: Multi-counter increment (+1 clicks, +1 bannerClicks)
+      await assertSucceeds(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        clicks: 12,
+        bannerClicks: 6,
+      }));
+
+      // Step 3: Impression increment (+1 impressions)
+      await assertSucceeds(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        impressions: 51,
+      }));
+    });
+
+    it("66. H2 Test 10 — counter decrease is rejected (PERMISSION_DENIED)", async () => {
+      const viewerDb = testEnv.authenticatedContext("viewer_user").firestore();
+      
+      // Attempt to decrease clicks from 10 to 9
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        clicks: 9,
+      }));
+
+      // Attempt to decrease bannerClicks from 5 to 4
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        bannerClicks: 4,
+      }));
+
+      // Attempt to decrease impressions from 50 to 0
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        impressions: 0,
+      }));
+    });
+
+    it("67. H2 Test 11 — arbitrary counter jump is rejected (PERMISSION_DENIED)", async () => {
+      const viewerDb = testEnv.authenticatedContext("viewer_user").firestore();
+      
+      // Attempt to jump clicks by +5 (from 10 to 15)
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        clicks: 15,
+      }));
+
+      // Attempt to jump clicks to 1000
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        clicks: 1000,
+      }));
+
+      // Attempt to jump impressions by +10
+      await assertFails(updateDoc(doc(viewerDb, "advertisements", "ad_userA_1"), {
+        impressions: 60,
+      }));
+    });
+
+    it("68. H2 Test 12 — server/Admin SDK can maintain protected fields (prepaidBalance, isActive, lastAutoTopUpAt) (PASS)", async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await assertSucceeds(updateDoc(doc(adminDb, "advertisements", "ad_userA_1"), {
+          prepaidBalance: 250,
+          totalBudget: 250,
+          isActive: true,
+          approvalStatus: "approved",
+          lastAutoTopUpAt: "2026-09-17T12:00:00.000Z",
+        }));
+
+        const updatedDoc = await getDoc(doc(adminDb, "advertisements", "ad_userA_1"));
+        expect(updatedDoc.data()?.prepaidBalance).toBe(250);
+        expect(updatedDoc.data()?.isActive).toBe(true);
+        expect(updatedDoc.data()?.approvalStatus).toBe("approved");
+      });
+    });
+
+    it("69. H2 Supplementary — owner CAN update non-financial creative metadata (PASS)", async () => {
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertSucceeds(updateDoc(doc(userADb, "advertisements", "ad_userA_1"), {
+        title: "Alice Plumbing & Heating Specialist",
+        description: "Boiler installations, emergency leak repair, central heating",
+        url: "/profile/userA",
+        bgColor: "bg-emerald-600",
+        iconName: "Flame",
+      }));
+    });
+  });
 });

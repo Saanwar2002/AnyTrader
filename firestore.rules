@@ -103,21 +103,56 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         isAdmin() || (
           request.resource.data.advertiserUid == request.auth.uid &&
-          request.resource.data.get('advertiserId', request.auth.uid) == request.auth.uid
+          request.resource.data.get('advertiserId', request.auth.uid) == request.auth.uid &&
+          request.resource.data.get('isActive', false) == false &&
+          request.resource.data.get('approvalStatus', 'pending') == 'pending' &&
+          request.resource.data.get('prepaidBalance', 0) == 0 &&
+          request.resource.data.get('clicks', 0) == 0 &&
+          request.resource.data.get('bannerClicks', 0) == 0 &&
+          request.resource.data.get('searchFeedClicks', 0) == 0 &&
+          request.resource.data.get('impressions', 0) == 0
         )
       );
       allow update: if isAdmin() || (
         isSignedIn() && (
-          // Ad owner can update their own ad, but cannot reassign advertiserUid or advertiserId
+          // 1. Controlled Engagement Tracking (Monotonic Increment +1 Only, No Financial/State Modification)
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'clicks', 'bannerClicks', 'searchFeedClicks', 'impressions'
+            ]) &&
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['clicks']) || (
+              request.resource.data.clicks is int &&
+              request.resource.data.clicks >= resource.data.get('clicks', 0) &&
+              request.resource.data.clicks <= resource.data.get('clicks', 0) + 1
+            )) &&
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['bannerClicks']) || (
+              request.resource.data.bannerClicks is int &&
+              request.resource.data.bannerClicks >= resource.data.get('bannerClicks', 0) &&
+              request.resource.data.bannerClicks <= resource.data.get('bannerClicks', 0) + 1
+            )) &&
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['searchFeedClicks']) || (
+              request.resource.data.searchFeedClicks is int &&
+              request.resource.data.searchFeedClicks >= resource.data.get('searchFeedClicks', 0) &&
+              request.resource.data.searchFeedClicks <= resource.data.get('searchFeedClicks', 0) + 1
+            )) &&
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['impressions']) || (
+              request.resource.data.impressions is int &&
+              request.resource.data.impressions >= resource.data.get('impressions', 0) &&
+              request.resource.data.impressions <= resource.data.get('impressions', 0) + 1
+            ))
+          ) ||
+          // 2. Ad Owner Creative/Metadata Updates (Strictly Prohibiting Financial & State Tampering)
           (
             (resource.data.advertiserUid == request.auth.uid || resource.data.get('advertiserId', '') == request.auth.uid) &&
             request.resource.data.advertiserUid == resource.data.advertiserUid &&
-            request.resource.data.get('advertiserId', resource.data.advertiserUid) == resource.data.get('advertiserId', resource.data.advertiserUid)
-          ) ||
-          // Public click tracking updates (budget deduction, clicks count increment)
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'clicks', 'bannerClicks', 'searchFeedClicks', 'impressions', 'prepaidBalance', 'isActive', 'lastAutoTopUpAt'
-          ])
+            request.resource.data.get('advertiserId', resource.data.advertiserUid) == resource.data.get('advertiserId', resource.data.advertiserUid) &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'prepaidBalance', 'isActive', 'lastAutoTopUpAt', 'approvalStatus',
+              'totalBudget', 'totalCost', 'dailyRate', 'recurringPrice',
+              'advertiserUid', 'advertiserId',
+              'clicks', 'bannerClicks', 'searchFeedClicks', 'impressions'
+            ])
+          )
         )
       );
       allow delete: if isAdmin() || (

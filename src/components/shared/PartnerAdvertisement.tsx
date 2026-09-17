@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
-  collection, query, where, onSnapshot, doc, setDoc, increment, 
+  collection, query, where, onSnapshot, doc, setDoc, updateDoc, increment, 
   addDoc, serverTimestamp 
 } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -503,56 +503,12 @@ export default function PartnerAdvertisement({
   const handleAdClick = (clickedAd: PartnerAdItem, e?: React.MouseEvent) => {
     if (e) e.preventDefault();
 
-    // Track clicks and bill prepaid balances for live database ads asynchronously in background (non-blocking)
+    // Track engagement counters for live database ads asynchronously in background (non-blocking)
     if (clickedAd.id && !String(clickedAd.id).startsWith("homeowner-") && !String(clickedAd.id).startsWith("trade-") && !String(clickedAd.id).startsWith("default-") && !String(clickedAd.id).startsWith("seed-")) {
       (async () => {
         try {
-          const updateData: any = { clicks: increment(1), bannerClicks: increment(1) };
-          const cost = clickedAd.costPerDisplay || 0;
-          
-          if (clickedAd.billingCycle === "prepaid" && typeof clickedAd.prepaidBalance === "number") {
-            const newBalance = clickedAd.prepaidBalance - cost;
-            
-            if (clickedAd.autoTopUpEnabled && newBalance <= (clickedAd.autoTopUpThreshold || 10)) {
-              const reloadAmount = clickedAd.autoTopUpAmount || 50;
-              updateData.prepaidBalance = increment(-cost + reloadAmount);
-              updateData.lastAutoTopUpAt = new Date().toISOString();
-            } else {
-              updateData.prepaidBalance = increment(-cost);
-              if (newBalance <= 0) {
-                updateData.isActive = false; // Pause campaign when balance runs out
-              }
-            }
-            
-            // Send low budget alert notification to advertiser if needed
-            const advertiserUid = clickedAd.advertiserUid || clickedAd.advertiserId;
-            if (advertiserUid && clickedAd.totalBudget) {
-              const pct = newBalance / clickedAd.totalBudget;
-              const oldPct = clickedAd.prepaidBalance / clickedAd.totalBudget;
-              
-              let noticeMsg: string | null = null;
-              if (oldPct > 0.9 && pct <= 0.9) {
-                noticeMsg = `Your ad campaign "${clickedAd.title}" has reached 90% of its budget capacity.`;
-              } else if (oldPct > 0.1 && pct <= 0.1) {
-                noticeMsg = `CRITICAL: Your ad campaign "${clickedAd.title}" has reached 10% of its budget capacity! Top up soon.`;
-              } else if (oldPct > 0 && pct <= 0) {
-                noticeMsg = `Your ad campaign "${clickedAd.title}" has run out of budget and has been paused.`;
-              }
-              
-              if (noticeMsg) {
-                await addDoc(collection(db, "notifications"), {
-                  userId: advertiserUid,
-                  title: "Ad Budget Alert",
-                  body: noticeMsg,
-                  type: "alert",
-                  read: false,
-                  createdAt: serverTimestamp()
-                });
-              }
-            }
-          }
-          
-          await setDoc(doc(db, "advertisements", clickedAd.id), updateData, { merge: true });
+          const updateData = { clicks: increment(1), bannerClicks: increment(1) };
+          await updateDoc(doc(db, "advertisements", clickedAd.id), updateData);
         } catch (err) {
           console.warn("Failed to track ad click:", err);
         }

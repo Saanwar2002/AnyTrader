@@ -2518,6 +2518,197 @@ async function startServer() {
     }
   });
 
+  // =========================================================================
+  // ADVERTISEMENTS SERVER-AUTHORITATIVE MANAGEMENT (H2 Remediated)
+  // =========================================================================
+
+  // Server-Authoritative Toggle Active (Pause / Resume)
+  app.post("/api/ads/:id/toggle-active", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUid = (req as any).user.uid;
+      const isAdminUser = (req as any).user.admin === true || (req as any).user.isAdmin === true;
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const adRef = db.collection("advertisements").doc(id);
+      const adDoc = await adRef.get();
+
+      if (!adDoc.exists) {
+        return res.status(404).json({ error: "Advertisement not found" });
+      }
+
+      const adData = adDoc.data() || {};
+      const isOwner = adData.advertiserUid === authUid || adData.advertiserId === authUid;
+
+      if (!isOwner && !isAdminUser) {
+        return res.status(403).json({ error: "Unauthorized: You do not own this advertisement" });
+      }
+
+      const nextActive = !adData.isActive;
+
+      // If activating, verify approval status and balance if prepaid
+      if (nextActive && !isAdminUser) {
+        if (adData.approvalStatus && adData.approvalStatus !== "approved") {
+          return res.status(400).json({ error: "Cannot activate an unapproved campaign" });
+        }
+        if (adData.billingCycle === "prepaid" && typeof adData.prepaidBalance === "number" && adData.prepaidBalance <= 0) {
+          return res.status(400).json({ error: "Cannot activate campaign with zero prepaid balance. Please top up first." });
+        }
+      }
+
+      await adRef.update({
+        isActive: nextActive,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return res.json({ success: true, isActive: nextActive });
+    } catch (err: any) {
+      console.error("Toggle ad active status error:", err);
+      return res.status(500).json({ error: "Failed to update advertisement status" });
+    }
+  });
+
+  // Server-Authoritative Ad Top-Up from User Ad Wallet
+  app.post("/api/ads/:id/topup", requireAuth, paymentLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const authUid = (req as any).user.uid;
+      const { amount } = req.body;
+      const topupAmount = Math.max(10, Math.min(5000, Number(amount) || 50));
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const adRef = db.collection("advertisements").doc(id);
+      const userRef = db.collection("users").doc(authUid);
+
+      await db.runTransaction(async (transaction) => {
+        const adDoc = await transaction.get(adRef);
+        if (!adDoc.exists) {
+          throw new Error("Advertisement not found");
+        }
+        const adData = adDoc.data() || {};
+        if (adData.advertiserUid !== authUid && adData.advertiserId !== authUid) {
+          throw new Error("Unauthorized: You do not own this advertisement");
+        }
+
+        const userDoc = await transaction.get(userRef);
+        const userData = userDoc.data() || {};
+        const currentWallet = Number(userData.adWalletBalance || 0);
+
+        if (currentWallet < topupAmount) {
+          throw new Error(`Insufficient wallet balance (£${currentWallet.toFixed(2)}). Please top up your ad wallet first.`);
+        }
+
+        // Deduct from user wallet, credit ad balance
+        transaction.update(userRef, {
+          adWalletBalance: admin.firestore.FieldValue.increment(-topupAmount),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        transaction.update(adRef, {
+          prepaidBalance: admin.firestore.FieldValue.increment(topupAmount),
+          totalBudget: admin.firestore.FieldValue.increment(topupAmount),
+          isActive: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      });
+
+      return res.json({ success: true, topupAmount });
+    } catch (err: any) {
+      console.error("Ad topup error:", err);
+      return res.status(400).json({ error: err.message || "Failed to top up advertisement" });
+    }
+  });
+
+  // Server-Authoritative Banner Campaign Creation
+  app.post("/api/ads/create-banner", requireAuth, async (req, res) => {
+    try {
+      const authUid = (req as any).user.uid;
+      const { headline, durationDays, targetCategories } = req.body;
+
+      if (!db) {
+        return res.status(500).json({ error: "Database service unavailable" });
+      }
+
+      const days = Math.max(1, Math.min(365, Number(durationDays) || 7));
+      const DAILY_RATE = 4.99;
+      const totalCost = Number((days * DAILY_RATE).toFixed(2));
+
+      const userRef = db.collection("users").doc(authUid);
+      let createdAdId = "";
+
+      await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists) {
+          throw new Error("User profile not found");
+        }
+        const userData = userDoc.data() || {};
+        const currentWallet = Number(userData.adWalletBalance || 0);
+
+        if (currentWallet < totalCost) {
+          throw new Error(`Insufficient ad wallet balance (£${currentWallet.toFixed(2)}). Total cost is £${totalCost.toFixed(2)}. Please top up your wallet.`);
+        }
+
+        transaction.update(userRef, {
+          adWalletBalance: admin.firestore.FieldValue.increment(-totalCost),
+          adSpendTotal: admin.firestore.FieldValue.increment(totalCost),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        const startDate = new Date();
+        const endDate = new Date(startDate.getTime() + days * 24 * 60 * 60 * 1000);
+        const businessTitle = userData.businessName || userData.name || "Verified Trade Specialist";
+        const cleanHeadline = (typeof headline === "string" && headline.trim()) ? headline.trim().slice(0, 100) : (userData.trade || "Expert Quality Guaranteed");
+
+        const newAdRef = db.collection("advertisements").doc();
+        createdAdId = newAdRef.id;
+
+        transaction.set(newAdRef, {
+          type: "trader_promo",
+          title: businessTitle,
+          description: cleanHeadline,
+          bgColor: "bg-slate-900",
+          iconName: "Star",
+          url: `/profile/${authUid}`,
+          targetRole: "homeowner",
+          targetCategories: Array.isArray(targetCategories) ? targetCategories : [userData.trade || "all", "all"],
+          advertiserId: authUid,
+          advertiserUid: authUid,
+          advertiserName: businessTitle,
+          advertiserEmail: userData.email || "",
+          imageUrl: userData.avatarUrl || "",
+          isTraderAd: true,
+          badgeLabel: "FEATURED PRO",
+          perkText: userData.isAvailableForEmergency ? "⚡ 24/7 Response Guaranteed" : "⭐ Verified Pro",
+          dailyRate: DAILY_RATE,
+          durationDays: days,
+          totalCost,
+          isActive: true,
+          status: "active",
+          approvalStatus: "approved",
+          clicks: 0,
+          bannerClicks: 0,
+          searchFeedClicks: 0,
+          impressions: 0,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      });
+
+      return res.json({ success: true, adId: createdAdId, totalCost });
+    } catch (err: any) {
+      console.error("Create banner campaign error:", err);
+      return res.status(400).json({ error: err.message || "Failed to create banner campaign" });
+    }
+  });
+
   // Server-Authoritative Ride Acceptance (V6 Hardened against BOLA)
   app.post("/api/rides/accept", requireAuth, async (req, res) => {
     try {

@@ -194,54 +194,29 @@ export default function TradesBannerAdStudio() {
     
     setIsSaving(true);
     try {
-      // 1. Deduct cost from wallet
-      await setDoc(doc(db, "users", user.uid), {
-        adWalletBalance: increment(-totalCost)
-      }, { merge: true });
-
-      setLiveWalletBalance(prev => Math.max(0, prev - totalCost));
-      
-      const startDate = new Date();
-      const endDate = new Date(startDate.getTime() + durationDays * 24 * 60 * 60 * 1000);
-      const businessTitle = profile?.businessName || profile?.name || "Verified Trade Specialist";
-      const cleanHeadline = headline.trim() || profile?.trade || "Expert Quality Guaranteed";
-      
-      // 2. Add advertisement document
-      const adDocRef = await addDoc(collection(db, "advertisements"), {
-        type: "trader_promo",
-        title: businessTitle,
-        description: cleanHeadline,
-        bgColor: "bg-slate-900",
-        iconName: "Star",
-        url: `/profile/${user.uid}`,
-        targetRole: "homeowner",
-        targetCategories: [profile?.trade || "all", "all"],
-        
-        advertiserId: user.uid,
-        advertiserUid: user.uid,
-        advertiserName: businessTitle,
-        advertiserEmail: profile?.email || user.email || "",
-        imageUrl: profile?.avatarUrl || "",
-        isTraderAd: true,
-        badgeLabel: "FEATURED PRO",
-        perkText: profile?.isAvailableForEmergency ? "⚡ 24/7 Response Guaranteed" : "⭐ Verified Pro",
-        
-        dailyRate: DAILY_RATE,
-        durationDays,
-        totalCost,
-        
-        isActive: true,
-        status: "active", 
-        approvalStatus: "approved",
-        clicks: 0,
-        bannerClicks: 0,
-        startDate,
-        endDate,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      const token = await user.getIdToken();
+      const response = await fetch("/api/ads/create-banner", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          headline: headline.trim(),
+          durationDays,
+          targetCategories: [profile?.trade || "all", "all"]
+        })
       });
 
-      // 3. Log notification for the trader
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create ad campaign");
+      }
+
+      setLiveWalletBalance(prev => Math.max(0, prev - totalCost));
+      const businessTitle = profile?.businessName || profile?.name || "Verified Trade Specialist";
+
+      // Log notification for the trader
       try {
         await addDoc(collection(db, "notifications"), {
           userId: user.uid,
@@ -249,7 +224,7 @@ export default function TradesBannerAdStudio() {
           body: `Your banner promotion for "${businessTitle}" is now live on homeowner dashboards for ${durationDays} days.`,
           type: "promotion",
           read: false,
-          adId: adDocRef.id,
+          adId: data.adId,
           createdAt: serverTimestamp()
         });
       } catch {
@@ -261,9 +236,9 @@ export default function TradesBannerAdStudio() {
       });
       setShowModal(false);
       setHeadline("");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Create campaign error:", err);
-      toast.error("Failed to create campaign. Please try again.");
+      toast.error(err.message || "Failed to create campaign. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -271,18 +246,28 @@ export default function TradesBannerAdStudio() {
 
   // Toggle Pause / Resume
   const handleToggleActive = async (ad: any) => {
+    if (!user) return;
     try {
-      const nextActive = !ad.isActive;
-      await updateDoc(doc(db, "advertisements", ad.id), {
-        isActive: nextActive,
-        updatedAt: serverTimestamp()
+      const token = await user.getIdToken();
+      const response = await fetch(`/api/ads/${ad.id}/toggle-active`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
       });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update campaign status");
+      }
+
+      const nextActive = data.isActive;
       toast.success(nextActive ? "Promotion Resumed" : "Promotion Paused", {
         description: nextActive ? "Your ad is now visible to homeowners." : "Your ad is temporarily hidden."
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error("Failed to update campaign status.");
+      toast.error(err.message || "Failed to update campaign status.");
     }
   };
 

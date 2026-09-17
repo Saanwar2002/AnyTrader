@@ -69,10 +69,11 @@ export default function TraderAdStudio() {
         approvalStatus: "pending",
         billingCycle: "prepaid",
         totalBudget: budget,
-        prepaidBalance: budget,
+        prepaidBalance: 0,
         clicks: 0,
         searchFeedClicks: 0,
         bannerClicks: 0,
+        impressions: 0,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -84,15 +85,26 @@ export default function TraderAdStudio() {
   };
 
   const handleTopup = async (adId: string, currentBalance: number, amount: number) => {
-    if (confirm(`Charge £${amount} to your default payment method to top up ad balance?`)) {
+    if (!user) return;
+    if (confirm(`Top up £${amount} from your ad wallet to this campaign balance?`)) {
       try {
-        await updateDoc(doc(db, "advertisements", adId), {
-          prepaidBalance: (currentBalance || 0) + amount,
-          totalBudget: amount // Note: simple logic as total top-ups just adds it
+        const token = await user.getIdToken();
+        const response = await fetch(`/api/ads/${adId}/topup`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ amount })
         });
-        alert(`Successfully topped up £${amount}`);
-      } catch (err) {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to top up ad balance");
+        }
+        alert(`Successfully topped up £${amount} to campaign!`);
+      } catch (err: any) {
         console.error(err);
+        alert(err.message || "Failed to top up ad balance");
       }
     }
   };
@@ -311,7 +323,21 @@ export default function TraderAdStudio() {
                     {ad.approvalStatus !== "pending" && (
                         <button 
                          onClick={async () => {
-                             await updateDoc(doc(db, "advertisements", ad.id), { isActive: !ad.isActive });
+                           if (!user) return;
+                           try {
+                             const token = await user.getIdToken();
+                             const response = await fetch(`/api/ads/${ad.id}/toggle-active`, {
+                               method: "POST",
+                               headers: { Authorization: `Bearer ${token}` }
+                             });
+                             const data = await response.json();
+                             if (!response.ok) {
+                               throw new Error(data.error || "Failed to update status");
+                             }
+                           } catch (err: any) {
+                             console.error(err);
+                             alert(err.message || "Failed to update campaign status");
+                           }
                          }}
                          className={`px-4 py-2 rounded-xl text-sm font-bold ${ad.isActive ? "bg-slate-100 text-slate-700 hover:bg-slate-200" : "bg-green-100 text-green-700 hover:bg-green-200"}`}
                         >
