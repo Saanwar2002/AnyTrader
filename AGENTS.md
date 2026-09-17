@@ -6,10 +6,10 @@
 - **DOCUMENTATION**: You **MUST** update `DEVELOPMENT.md` after completing your work to capture any architecture or schema changes for the next agent.
 
 ## Current Status
-- **Last Updated**: 2026-09-15
-- **Working State**: Application is fully functional with Enterprise V6/V7 Modular Server Architecture, V8.1 Fail-Closed Intelligence Task Queue & Processing Observability Store, Server-Authoritative Pricing Catalog (`pricingCatalog.ts`) with Dynamic Firestore Admin Overrides, Stripe Connect Direct Routing (Zero Platform Custody of Client Funds), Formal State Machines, Payment Ledger, Concurrency Locks, Business-Logic Abuse Defense, Abuse & Automation Shields, and 100% Automated Test Pass Rate (447/447 tests passing across 29 test suites).
-- **Security & Test Invariants (Audited September 10, 2026)**:
-  - **Comprehensive Test Results (195/195 Passing)**:
+- **Last Updated**: 2026-09-17
+- **Working State**: Application is fully functional with Enterprise V6/V7 Modular Server Architecture, V8.1 Fail-Closed Intelligence Task Queue & Processing Observability Store, Server-Authoritative Pricing Catalog (`pricingCatalog.ts`) with Dynamic Firestore Admin Overrides, Stripe Connect Direct Routing (Zero Platform Custody of Client Funds), Formal State Machines, Payment Ledger, Concurrency Locks, Business-Logic Abuse Defense, Abuse & Automation Shields, and 100% Automated Test Pass Rate (544/544 tests passing across 35 test suites).
+- **Security & Test Invariants (Audited September 17, 2026)**:
+  - **Comprehensive Test Results (544/544 Passing)**:
     1. `tests/unit/stripeConnectFinancialAudit.test.ts` (6 tests, 100% pass): Strict Stripe Connect destination charge routing for client funds, zero platform custody, server-authoritative pricing catalog with dynamic Firestore admin overrides for tiers/add-ons/commissions, volume-tiered B2B SaaS math, and price manipulation defense.
     2. `tests/unit/vulnerabilityFixesV7.test.ts` (7 tests, 100% pass): Escrow bypass rejection, BOLA checks, rate limiting integration, error sanitization, and mass-assignment defense.
     3. `tests/unit/adversarialPlatformSecurity.test.ts` (19 tests, 100% pass): Multi-tenant estate B2B SaaS IDOR, taxi ride BOLA & lifecycle hijacks, 1-to-1 direct quote interception, tenant repair report PII protection, and concurrent double-spend / double-accept / ownership locks.
@@ -24,6 +24,8 @@
     12. `tests/unit/paymentLedger.test.ts` (3 tests, 100% pass): Deterministic 12% platform fee calculation, double-entry escrow tracking, and idempotent operation replay.
     13. `tests/unit/productionChecks.test.ts` (3 tests, 100% pass): Environment variables and pre-flight security gates.
     14. `src/lib/useEntitlements.test.ts` (3 tests, 100% pass): User entitlement evaluation and role enforcement.
+    15. `tests/unit/notificationQueueSecurityH3.test.ts` (14 tests, 100% pass): Server-authoritative notifications, SMS/Email queue locking, and rate limiting.
+    16. `tests/unit/notificationAuthorizationH3A.test.ts` (9 tests, 100% pass): Elimination of recipient existence fallback; mandatory authoritative relationship verification across Job, Conversation, Project, and Ride contexts.
   - **OWASP API 5-Vector Defenses Enforced**:
     - **Vector 1: IDOR / BOLA**: `src/server/authorization.ts` (`assertCanAccessJob`, `assertCanModifyJob`, `assertCanAccessProperty`, `assertCanModifyProperty`, `assertCanModifyQuote`, `assertCanDeleteQuote`, `assertCanAccessDispute`, `assertCanModifyDispute`) + `firestore.rules` participant validation on `/conversations/{conversationId}/messages/{messageId}`.
     - **Vector 2: Property-Level Privilege Escalation**: `SERVER_OWNED_PROTECTED_KEYS` strips 25+ privileged attributes (`role`, `isAdmin`, `verified`, `isVerified`, `idVerified`, `paymentStatus`, `payoutStatus`, `ownerId`, `homeownerId`, `completed`, `funded`, `balance`, `credits`) from client inputs; `firestore.rules` enforces `.diff(resource.data).affectedKeys().hasAny([...])` rejection on protected user and job keys.
@@ -68,7 +70,7 @@
   - **Direct-to-Driver QR Payments**: Fully integrated Stripe Connect split-payment system with automatic 12% commission deduction.
 
 ## Active Task
-- **Completed**: Phase 1, Phase 2, Phase 3, Phase 4 & Phase 5 (TradeOS Core, Property Passport, Multi-Property Portfolio Automation, Tenant Repair Portal, 1-Tap Specs Dispatch, AI Price Transparency, 40+ Signal Engine, Trader Video Verification, B2B Enterprise Portal "Gotham" Layer, BNPL FlexiPay Repair Financing, and Property Risk Analytics) fully implemented, verified, and compiled cleanly.
+- **Completed**: Phase 1, Phase 2, Phase 3, Phase 4 & Phase 5 (TradeOS Core, Property Passport, Multi-Property Portfolio Automation, Tenant Repair Portal, 1-Tap Specs Dispatch, AI Price Transparency, 40+ Signal Engine, Trader Video Verification, B2B Enterprise Portal "Gotham" Layer, BNPL FlexiPay Repair Financing, and Property Risk Analytics) fully implemented, verified, and compiled cleanly. Security Remediation H3 and H3A (Cross-User Notification Authorization Bypass Fix) completed with 100% test pass rate.
 
 ## Project Conventions
 - **Styling**: Tailwind CSS with a "Modern Professional" aesthetic.
@@ -94,3 +96,263 @@ If you need to revive the project or understand the current architecture:
 
 ## Pending Verification
 - All pending verifications completed. The AI Job Recommendations system correctly handles guest traders and expired emergency jobs.
+
+---
+
+## Permanent AnyTrader Engineering & Synchronization Workflow
+
+### 1. Canonical Source of Truth
+GitHub is the canonical source of truth for AnyTrader.
+- **Canonical Repository**: `Saanwar2002/AnyTrader`
+- **Canonical Branch**: `main`
+- **Standard Workflow**:
+  `GitHub` $\rightarrow$ `AI Studio synchronization` $\rightarrow$ `Gemini reads AGENTS.md` $\rightarrow$ `inspect current baseline` $\rightarrow$ `ONE TASK` $\rightarrow$ `implementation` $\rightarrow$ `tests` $\rightarrow$ `complete diff review` $\rightarrow$ `commit` $\rightarrow$ `GitHub` $\rightarrow$ `AI Studio re-synchronization` $\rightarrow$ `next task`
+- Never assume an old ZIP, previous Gemini conversation, or stale AI Studio copy represents the current source of truth.
+
+### 2. AGENTS.md Must Always Be Read
+At the beginning of **EVERY** AnyTrader task:
+1. Locate `AGENTS.md`.
+2. Read it completely.
+3. Follow it for the current task.
+4. Inspect the current repository state.
+5. Confirm the current baseline before editing.
+
+`AGENTS.md` is a permanent instruction file. It must be treated as mandatory for every future task unless the project owner explicitly changes it. Do not rely on memory of previous instructions instead of reading the current file.
+
+### 3. One Task at a Time
+Every assigned task is isolated. Gemini **MUST**:
+- Implement only the assigned task;
+- Avoid unrelated refactoring;
+- Avoid unrelated security changes;
+- Avoid dependency upgrades unless explicitly assigned;
+- Avoid future roadmap work;
+- Avoid silently fixing unrelated findings.
+Unrelated discoveries must be reported separately as follow-up work.
+
+### 4. Inspect Before Editing
+Before modifying code:
+- Inspect the current implementation;
+- Inspect relevant tests;
+- Inspect relevant Firebase rules/configuration;
+- Inspect relevant documentation;
+- Establish the current commit/version;
+- Identify the existing architecture;
+- Identify the security/integrity invariant the task must enforce.
+
+If the current AI Studio code differs unexpectedly from GitHub: **STOP**. Do not blindly overwrite either version. Report the divergence first.
+
+### 5. No Security Bypasses
+Never introduce production bypasses such as:
+- `skipSecurity`
+- `skipAuth`
+- `skipAuthorization`
+- `skipLineage`
+- `skipValidation`
+- `unsafeMode`
+- `force=true`
+- Forced task execution
+- Process-memory authority for durable state
+- Non-transactional fallback where transactions are required
+
+Equivalent mechanisms with different names are also prohibited. Never weaken a security boundary simply to make a test or feature pass.
+
+### 6. Tests Must Not Be Weakened
+Never:
+- Delete a failing test;
+- Disable a failing test;
+- Silently skip a test;
+- Reduce assertions;
+- Replace a real security test with a mock merely to obtain a pass;
+- Change expected security behaviour solely to make CI green.
+
+A failing test must be investigated. Determine whether the failure is: implementation, test, environment, synchronization, or pre-existing. Then fix only what belongs to the assigned task.
+
+### 7. Firebase Security Testing
+When Firebase Firestore or Storage behaviour is changed:
+- Use the **REAL Firebase Emulator**.
+- Test where applicable: unauthenticated access, authorized access, unrelated-user access, cross-resource access, admin access, nested paths, client writes, client updates, and client deletes.
+- Emulator setup failures must fail hard. Never silently skip security tests because the emulator is unavailable.
+- Do not retain Firestore instances obtained from a security-disabled emulator callback after that callback completes. Use callback-scoped trusted contexts.
+
+### 8. Authorization
+Never consider the following sufficient proof of authorization:
+- Existence of a user ID;
+- Existence of a recipient;
+- Client-supplied owner ID;
+- Client-supplied role;
+- Client-supplied relationship;
+- URL parameters;
+- Hidden UI controls.
+
+Authorization must be derived from trusted identity and the actual authoritative relationship to the resource.
+
+### 9. Server-Owned Data
+Clients must not arbitrarily modify:
+- Financial fields;
+- Security fields;
+- Audit fields;
+- Ownership fields;
+- Processing state;
+- Privilege fields;
+- Server timestamps;
+- Counters that affect billing/ranking/security;
+- Intelligence provenance;
+- Immutable historical records.
+
+Use controlled server operations.
+
+### 10. Intelligence Architecture
+Preserve the established V8.1 intelligence boundary:
+`SOURCE` $\rightarrow$ `EVIDENCE` $\rightarrow$ `AI / MODEL` $\rightarrow$ `UNTRUSTED CANDIDATE` $\rightarrow$ `STRUCTURAL VALIDATION` $\rightarrow$ `SEMANTIC VALIDATION` $\rightarrow$ `EVIDENCE LINEAGE` $\rightarrow$ `CANONICALIZATION` $\rightarrow$ `CONFIDENCE / PROVENANCE` $\rightarrow$ `IMMUTABLE INTELLIGENCE` $\rightarrow$ `CURRENT PROJECTION`
+
+- AI output is untrusted.
+- AI cannot create evidence.
+- No evidence means no source-backed assertion.
+- Historical intelligence is append-only and must not be silently overwritten.
+- Current projections may be mutable.
+- Durable authoritative state must not depend on process memory.
+
+### 11. Task Processing
+Preserve the established durable task lifecycle:
+`pending` $\rightarrow$ `processing` $\rightarrow$ `succeeded`
+or:
+`processing` $\rightarrow$ `retrying` $\rightarrow$ `processing`
+and eventually:
+`retrying` $\rightarrow$ `dead_letter`
+
+Worker ownership must be transactional. Lease ownership must be respected. A worker that loses its lease must not finalize the task. Do not introduce memory fallback for authoritative task state.
+
+### 12. Processing Observability
+Processing records must remain durable and integrity protected. Preserve relevant:
+- Task identity;
+- Attempt;
+- Worker identity;
+- Lease identity;
+- Timing;
+- Provider/model metadata;
+- Pipeline/version metadata;
+- Cost metadata;
+- Controlled error metadata.
+
+A task must not be reported as successful when required durable processing persistence failed.
+
+### 13. Error Handling
+Do not swallow failures involving:
+- Authorization;
+- Persistence;
+- Auditability;
+- Task ownership;
+- Processing state;
+- Provenance;
+- Evidence lineage;
+- Financial correctness.
+
+Do not expose raw internal errors, stack traces, secrets, provider details, or database details to clients.
+
+### 14. Diff Review
+Before committing every task: Review the **COMPLETE** diff. Verify:
+- Only task-related files changed;
+- No unrelated refactor slipped in;
+- No secrets were introduced;
+- No debug code remains;
+- No security bypass exists;
+- No Firebase rule was weakened;
+- No test was disabled;
+- No process-memory authority was introduced;
+- No unsafe persistence fallback was introduced.
+
+### 15. Validation
+Run the strongest applicable validation. Normally this includes:
+- `npm test`;
+- Relevant Firebase Emulator suites;
+- Relevant intelligence Emulator suites;
+- Typecheck (`npm run typecheck` or `lint_applet`);
+- Lint;
+- Production build (`compile_applet`);
+- Release audit.
+
+Never claim a test passed unless it actually ran. If something cannot run, explicitly report: what failed, why it could not run, and whether it is an environment issue or code issue.
+
+### 16. GitHub Synchronization
+After successful validation:
+1. Review complete diff.
+2. Commit only the assigned task.
+3. Use a task-specific commit message.
+4. Record the commit SHA.
+5. Push the completed task to the canonical GitHub branch.
+6. Re-synchronize AI Studio from GitHub.
+7. Verify the AI Studio copy matches the committed GitHub state.
+8. Only then begin the next task.
+
+Never start the next task from stale AI Studio code.
+
+### 17. Divergence Protocol
+If GitHub and AI Studio differ unexpectedly: **STOP**. Determine:
+- GitHub commit;
+- AI Studio baseline;
+- Local changes;
+- Intentional changes;
+- Accidental changes.
+
+Do not blindly overwrite either side. Report the divergence and wait for reconciliation if necessary.
+
+### 18. Completion Report Format
+Every completed task must report:
+
+```
+TASK:
+[task ID and title]
+
+BASELINE COMMIT:
+[SHA]
+
+IMPLEMENTATION COMMIT:
+[SHA]
+
+FILES CHANGED:
+[list]
+
+WHAT CHANGED:
+[summary]
+
+SECURITY / INTEGRITY INVARIANT:
+[what is now guaranteed]
+
+TESTS ADDED OR UPDATED:
+[list]
+
+VALIDATION:
+- Unit tests:
+- Emulator tests:
+- Typecheck:
+- Lint:
+- Build:
+- Release audit:
+
+RESULT:
+PASS / FAIL / BLOCKED
+
+KNOWN LIMITATIONS:
+[list or None]
+
+UNRELATED FINDINGS:
+[list or None]
+```
+
+### 19. Stop Conditions
+**STOP** rather than improvise when:
+- Requirements are ambiguous;
+- GitHub and AI Studio unexpectedly diverge;
+- A security invariant cannot be preserved;
+- Required tests cannot run;
+- The architecture appears contradictory;
+- Unrelated systems would need modification;
+- A production bypass appears necessary;
+- A migration could risk existing data.
+
+Do not guess.
+
+### 20. Definition of Done
+A task is complete only when applicable:
+`Implementation` + `Regression tests` + `Real Emulator verification` + `Validation` + `Complete diff review` + `GitHub commit` + `AI Studio synchronization`
+have been completed. If any required stage is blocked, report it explicitly.
