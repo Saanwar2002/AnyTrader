@@ -616,6 +616,7 @@ export function validateNotificationPayload(payload: Record<string, any>): {
   jobId?: string;
   conversationId?: string;
   projectId?: string;
+  rideId?: string;
 } {
   if (!payload || typeof payload !== "object") {
     throw new BadRequestError("Notification payload must be an object.");
