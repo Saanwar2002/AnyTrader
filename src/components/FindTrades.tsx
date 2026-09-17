@@ -857,7 +857,7 @@ export default function FindTrades() {
       console.error("Error fetching active search ads:", err);
     });
 
-    const q = query(collection(db, "users"), where("role", "in", ["tradesperson", "trader", "business"]));
+    const q = query(collection(db, "public_profiles"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dbTraders = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as Tradesperson));
       const seedPool = INITIAL_MOCK_TRADERS as Tradesperson[];
@@ -866,8 +866,8 @@ export default function FindTrades() {
       setTradespeople(merged);
       setLoading(false);
     }, (error) => {
-      console.error("Error fetching tradespeople:", error);
-      handleFirestoreError(error, OperationType.LIST, "users");
+      console.error("Error fetching tradespeople from public_profiles:", error);
+      handleFirestoreError(error, OperationType.LIST, "public_profiles");
       setLoading(false);
     });
     

@@ -1651,8 +1651,8 @@ export async function getHybridTraderRecommendations(
     let firestoreTraders: Tradesperson[] = [];
     if (!liveTradersPool || liveTradersPool.length === 0) {
       try {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("role", "in", ["tradesperson", "trader", "business"]), limit(50));
+        const profilesRef = collection(db, "public_profiles");
+        const q = query(profilesRef, limit(50));
         const snap = await getDocs(q);
         if (!snap.empty) {
           firestoreTraders = snap.docs.map(d => ({ uid: d.id, ...d.data() } as Tradesperson));

@@ -283,24 +283,34 @@ const libraries: any[] = ['places', 'geometry'];
           const data = jobDoc.data();
           setJob({ id: jobDoc.id, ...data });
 
-          // Fetch homeowner profile once
+          // Fetch homeowner profile once (only if owner or admin)
           if (data.homeownerId && fetchedHomeownerIdRef.current !== data.homeownerId) {
             fetchedHomeownerIdRef.current = data.homeownerId;
-            const hoDoc = await getDoc(doc(db, "users", data.homeownerId));
-            if (hoDoc.exists()) {
-              setHomeownerProfile(hoDoc.data());
+            if (user?.uid === data.homeownerId || profile?.role === "admin" || (profile as any)?.isAdmin) {
+              try {
+                const hoDoc = await getDoc(doc(db, "users", data.homeownerId));
+                if (hoDoc.exists()) {
+                  setHomeownerProfile(hoDoc.data());
+                }
+              } catch (e) {
+                console.warn("Homeowner private profile read skipped:", e);
+              }
             }
           }
 
           // Fetch accepted tradesperson profile if not already fetched
           if (data.acceptedTradespersonId && fetchedTradespersonIdRef.current !== data.acceptedTradespersonId) {
             fetchedTradespersonIdRef.current = data.acceptedTradespersonId;
-            const tpDoc = await getDoc(doc(db, "users", data.acceptedTradespersonId));
-            if (tpDoc.exists()) {
-              setTradespersonProfiles(prev => ({
-                ...prev,
-                [data.acceptedTradespersonId]: tpDoc.data()
-              }));
+            try {
+              const tpDoc = await getDoc(doc(db, "public_profiles", data.acceptedTradespersonId));
+              if (tpDoc.exists()) {
+                setTradespersonProfiles(prev => ({
+                  ...prev,
+                  [data.acceptedTradespersonId]: tpDoc.data()
+                }));
+              }
+            } catch (e) {
+              console.warn("Tradesperson public profile read skipped:", e);
             }
           }
 
@@ -438,13 +448,20 @@ const libraries: any[] = ['places', 'geometry'];
       // Fetch profiles for tradespeople who quoted
       quotesData.forEach(async (quote: any) => {
         if (!tradespersonProfiles[quote.tradespersonId]) {
-          const profileDoc = await getDoc(doc(db, "users", quote.tradespersonId));
-          if (profileDoc.exists()) {
-            setTradespersonProfiles(prev => ({
-              ...prev,
-              [quote.tradespersonId]: profileDoc.data()
-            }));
+          let profileDoc: any = null;
+          try {
+            profileDoc = await getDoc(doc(db, "public_profiles", quote.tradespersonId));
+            if (profileDoc.exists()) {
+              setTradespersonProfiles(prev => ({
+                ...prev,
+                [quote.tradespersonId]: profileDoc.data()
+              }));
+            }
+          } catch (e) {
+            console.warn("Quote trader public profile read notice:", e);
+          }
 
+          if (profileDoc && profileDoc.exists()) {
             // Fetch reviews and generate summary
             try {
               const profileData = profileDoc.data();
@@ -471,11 +488,6 @@ const libraries: any[] = ['places', 'geometry'];
                     ...prev,
                     [quote.tradespersonId]: summary
                   }));
-                  // Save generated summary to the user profile
-                  await updateDoc(doc(db, "users", quote.tradespersonId), {
-                    aiReviewSummary: summary,
-                    aiReviewSummaryAt: serverTimestamp()
-                  });
                 } else {
                   setReviewSummaries(prev => ({
                     ...prev,
@@ -486,25 +498,25 @@ const libraries: any[] = ['places', 'geometry'];
             } catch (err) {
               console.error("Error generating review summary:", err);
             }
+          }
 
-            // Analyze quote with AI if estimate is available
-            if (isHomeowner && job.estimateMin && job.estimateMax && !quoteAnalyses[quote.id]) {
-              try {
-                const analysis = await analyzeQuote(
-                  job.title,
-                  job.description,
-                  quote.amount,
-                  quote.message,
-                  job.estimateMin,
-                  job.estimateMax
-                );
-                setQuoteAnalyses(prev => ({
-                  ...prev,
-                  [quote.id]: analysis
-                }));
-              } catch (err) {
-                console.error("Error analyzing quote:", err);
-              }
+          // Analyze quote with AI if estimate is available
+          if (isHomeowner && job.estimateMin && job.estimateMax && !quoteAnalyses[quote.id]) {
+            try {
+              const analysis = await analyzeQuote(
+                job.title,
+                job.description,
+                quote.amount,
+                quote.message,
+                job.estimateMin,
+                job.estimateMax
+              );
+              setQuoteAnalyses(prev => ({
+                ...prev,
+                [quote.id]: analysis
+              }));
+            } catch (err) {
+              console.error("Error analyzing quote:", err);
             }
           }
         }
@@ -960,29 +972,33 @@ const libraries: any[] = ['places', 'geometry'];
       });
 
       // 6. Ecosystem Synergy: Trigger AI equipment alerts for high-tier traders (background)
-      const acceptedTraderDoc = await getDoc(doc(db, "users", quote.tradespersonId));
-      if (acceptedTraderDoc.exists()) {
-        const traderData = acceptedTraderDoc.data();
-        const tier = traderData.subscriptionType; // Simplified tier check
-        if (tier === "Gold Elite" || tier === "Platinum Enterprise") {
-          Promise.resolve().then(async () => {
-            try {
-              const recommendations = await getEquipmentRecommendations(`${job.title} - ${job.description}`, [job.category]);
-              if (recommendations.length > 0) {
-                const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
-                await sendNotification(
-                  quote.tradespersonId,
-                  "AI Tool Recommendations",
-                  `Based on this job scope, we recommend: \n${recText}`,
-                  "status",
-                  `/chat/${id}` // Or link to shop
-                );
+      try {
+        const acceptedTraderDoc = await getDoc(doc(db, "public_profiles", quote.tradespersonId));
+        if (acceptedTraderDoc.exists()) {
+          const traderData = acceptedTraderDoc.data();
+          const tier = traderData.subscriptionType; // Simplified tier check
+          if (tier === "Gold Elite" || tier === "Platinum Enterprise") {
+            Promise.resolve().then(async () => {
+              try {
+                const recommendations = await getEquipmentRecommendations(`${job.title} - ${job.description}`, [job.category]);
+                if (recommendations.length > 0) {
+                  const recText = recommendations.map(r => `• ${r.item}: ${r.reason}`).join("\n");
+                  await sendNotification(
+                    quote.tradespersonId,
+                    "AI Tool Recommendations",
+                    `Based on this job scope, we recommend: \n${recText}`,
+                    "status",
+                    `/chat/${id}` // Or link to shop
+                  );
+                }
+              } catch (aiErr) {
+                console.error("Failed to generate equipment alerts:", aiErr);
               }
-            } catch (aiErr) {
-              console.error("Failed to generate equipment alerts:", aiErr);
-            }
-          });
+            });
+          }
         }
+      } catch (err) {
+        console.warn("Public profile lookup notice:", err);
       }
     } catch (err) {
       console.error("Error accepting quote:", err);

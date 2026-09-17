@@ -203,7 +203,7 @@ export default function PublicProfile() {
     const fetchProfile = async () => {
       if (!id) return;
       try {
-        const docRef = doc(db, "users", id);
+        const docRef = doc(db, "public_profiles", id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const profileData = { uid: docSnap.id, ...docSnap.data() };
@@ -243,7 +243,7 @@ export default function PublicProfile() {
         if (mockMatch) {
           setProfile(mockMatch);
         } else {
-          handleFirestoreError(error, OperationType.GET, `users/${id}`);
+          handleFirestoreError(error, OperationType.GET, `public_profiles/${id}`);
         }
       } finally {
         setLoading(false);

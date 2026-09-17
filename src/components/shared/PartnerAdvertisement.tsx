@@ -340,7 +340,7 @@ export default function PartnerAdvertisement({
     let isMounted = true;
 
     // 0. Fetch live tradespeople to enrich promoted trader profiles
-    const unsubTraders = onSnapshot(query(collection(db, "users"), where("role", "in", ["tradesperson", "trader", "business"])), (snapshot) => {
+    const unsubTraders = onSnapshot(query(collection(db, "public_profiles")), (snapshot) => {
       if (!isMounted) return;
       const map: Record<string, Tradesperson> = {};
       INITIAL_MOCK_TRADERS.forEach((t: any) => {

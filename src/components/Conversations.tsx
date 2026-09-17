@@ -46,7 +46,7 @@ export default function Conversations() {
       if (missingRecipientIds.length > 0) {
         Promise.all(missingRecipientIds.map(async (recipientId) => {
           try {
-            const profileDoc = await getDoc(doc(db, "users", recipientId));
+            const profileDoc = await getDoc(doc(db, "public_profiles", recipientId));
             return profileDoc.exists() ? { id: recipientId, data: profileDoc.data() } : null;
           } catch (e) {
             return null;
@@ -140,12 +140,16 @@ export default function Conversations() {
       await Promise.all(convs.map(async (conv: any) => {
         const recipientId = conv.participants.find((p: string) => p !== user.uid);
         if (recipientId && !profiles[recipientId]) {
-          const profileDoc = await getDoc(doc(db, "users", recipientId));
-          if (profileDoc.exists()) {
-            setProfiles(prev => ({
-              ...prev,
-              [recipientId]: profileDoc.data()
-            }));
+          try {
+            const profileDoc = await getDoc(doc(db, "public_profiles", recipientId));
+            if (profileDoc.exists()) {
+              setProfiles(prev => ({
+                ...prev,
+                [recipientId]: profileDoc.data()
+              }));
+            }
+          } catch (e) {
+            // Silently fallback
           }
         }
       }));

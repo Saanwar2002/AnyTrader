@@ -3,7 +3,7 @@ import { useAuth } from "./AuthProvider";
 import { BiometricService } from "@/src/services/biometricService";
 import { Fingerprint, ScanFace } from "lucide-react";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth, logout, db, doc, updateDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
+import { auth, logout, db, doc, updateDoc, setDoc, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, uploadStorageFile, collection, query, where, or, and, orderBy, getDocs, onSnapshot, sendNotification } from "@/src/firebase";
 import { 
   LogOut, User, Mail, MapPin, Calendar, Shield, Edit2, Check, X, Loader2, Download, FileCheck, Upload, Clock, Star, Image as ImageIcon, Trash2, Briefcase, ChevronRight, Plus,
   Bell, Layout, Home, CreditCard, Bot, BarChart3, Search, History, Zap, HelpCircle, FileText, Pencil, Camera, GripVertical, Info, BookOpen, AlertCircle, Users, ChevronDown,
@@ -1237,6 +1237,33 @@ export default function Profile() {
       }
       
       await updateDoc(doc(db, "users", user.uid), finalData);
+
+      // If user is a trader, sync non-PII fields to public_profiles
+      if (profile?.role === "tradesperson" || (profile?.role as any) === "trader" || profile?.role === "business") {
+        try {
+          const publicFields: Record<string, any> = {};
+          if (finalData.name !== undefined) publicFields.name = finalData.name;
+          if (finalData.bio !== undefined) publicFields.bio = finalData.bio;
+          if (finalData.avatarUrl !== undefined) publicFields.avatarUrl = finalData.avatarUrl;
+          if (finalData.trades !== undefined) publicFields.trades = finalData.trades;
+          if (finalData.category !== undefined) publicFields.category = finalData.category;
+          if (finalData.categories !== undefined) publicFields.categories = finalData.categories;
+          if (finalData.subcategories !== undefined) publicFields.subcategories = finalData.subcategories;
+          if (finalData.services !== undefined) publicFields.services = finalData.services;
+          if (finalData.skills !== undefined) publicFields.skills = finalData.skills;
+          if (finalData.city !== undefined) publicFields.city = finalData.city;
+          if (finalData.callOutFee !== undefined) publicFields.callOutFee = finalData.callOutFee;
+          if (finalData.hourlyRate !== undefined) publicFields.hourlyRate = finalData.hourlyRate;
+          if (finalData.extraInfo !== undefined) publicFields.extraInfo = finalData.extraInfo;
+          if (finalData.isAvailableForEmergency !== undefined) publicFields.isAvailableForEmergency = finalData.isAvailableForEmergency;
+          
+          if (Object.keys(publicFields).length > 0) {
+            await setDoc(doc(db, "public_profiles", user.uid), publicFields, { merge: true });
+          }
+        } catch (pubSyncErr) {
+          console.warn("Public profile update sync skipped:", pubSyncErr);
+        }
+      }
       setProfile((prev: any) => ({ ...prev, ...finalData }));
       setIsEditing(false);
     } catch (err) {

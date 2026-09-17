@@ -735,7 +735,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       await assertSucceeds(getDoc(doc(verifiedTenantDb, "properties/prop_tenant_test")));
     });
 
-    it("40. FINDING 8: Ordinary user cannot read Driver profile from /users collection", async () => {
+    it("40. FINDING 8: Ordinary user cannot read Driver or Trader profile from /users collection", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         await setDoc(doc(context.firestore(), "users/driver_steve"), {
           role: "driver",
@@ -744,6 +744,11 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         });
         await setDoc(doc(context.firestore(), "users/trader_steve"), {
           role: "tradesperson",
+          trade: "Electrician",
+          email: "steve.sparks@example.com",
+        });
+        await setDoc(doc(context.firestore(), "public_profiles/trader_steve"), {
+          name: "Steve Sparks",
           trade: "Electrician",
         });
       });
@@ -757,8 +762,11 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       // Steve can read his own driver document
       await assertSucceeds(getDoc(doc(steveDriverDb, "users/driver_steve")));
 
-      // Alice can read public trader document in /users
-      await assertSucceeds(getDoc(doc(aliceDb, "users/trader_steve")));
+      // H1 REMEDIATION: Alice cannot read Steve's private trader document in /users (PERMISSION_DENIED)
+      await assertFails(getDoc(doc(aliceDb, "users/trader_steve")));
+
+      // Alice can read Steve's public profile in /public_profiles
+      await assertSucceeds(getDoc(doc(aliceDb, "public_profiles/trader_steve")));
     });
 
     it("41. FINDING 9: User cannot create a review without an associated job they participated in", async () => {
@@ -984,6 +992,76 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       const unauthDb = testEnv.unauthenticatedContext().firestore();
       await assertSucceeds(getDoc(doc(unauthDb, "public_properties", "reg_prop_g")));
       await assertSucceeds(getDocs(collection(unauthDb, "public_properties")));
+    });
+  });
+
+  // =========================================================================
+  // CATEGORY 6: SECURITY REMEDIATION H1 — PRIVATE USER PROFILES (PII) ISOLATION
+  // =========================================================================
+  describe("Category 6: Security Remediation H1 — Private User Profiles (PII) Isolation", () => {
+    const seedTestUsersAndProfiles = async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        // Private user document for User A (Trader with sensitive PII)
+        await setDoc(doc(adminDb, "users", "userA"), {
+          uid: "userA",
+          name: "Alice Trader",
+          role: "tradesperson",
+          trade: "Plumber",
+          email: "alice.private@example.com",
+          phoneNumber: "+447700900111",
+          homeAddress: "10 Private Lane, London",
+          stripeCustomerId: "cus_sec_12345",
+          stripeAccountId: "acct_sec_67890",
+          balance: 5400,
+        });
+
+        // Corresponding sanitized public profile for User A (non-PII)
+        await setDoc(doc(adminDb, "public_profiles", "userA"), {
+          uid: "userA",
+          name: "Alice Trader",
+          trade: "Plumber",
+          rating: 4.9,
+          totalReviews: 42,
+          city: "London",
+        });
+      });
+    };
+
+    beforeEach(async () => {
+      await seedTestUsersAndProfiles();
+    });
+
+    it("52. H1 Test 1 — owner can read own user document (PASS)", async () => {
+      const userADb = testEnv.authenticatedContext("userA").firestore();
+      await assertSucceeds(getDoc(doc(userADb, "users", "userA")));
+    });
+
+    it("53. H1 Test 2 — admin can read user document (PASS)", async () => {
+      const adminDb = testEnv.authenticatedContext("admin_user", { isAdmin: true }).firestore();
+      await assertSucceeds(getDoc(doc(adminDb, "users", "userA")));
+    });
+
+    it("54. H1 Test 3 — unrelated authenticated user cannot read another user's private document (PERMISSION_DENIED)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      await assertFails(getDoc(doc(userBDb, "users", "userA")));
+    });
+
+    it("55. H1 Test 4 — unauthenticated user cannot read private user document (PERMISSION_DENIED)", async () => {
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+      await assertFails(getDoc(doc(unauthDb, "users", "userA")));
+    });
+
+    it("56. H1 Test 5 — public trader profile remains accessible through public_profiles (PASS)", async () => {
+      const userBDb = testEnv.authenticatedContext("userB").firestore();
+      const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+      // Authenticated user can read public profile
+      await assertSucceeds(getDoc(doc(userBDb, "public_profiles", "userA")));
+      // Unauthenticated user can read public profile
+      await assertSucceeds(getDoc(doc(unauthDb, "public_profiles", "userA")));
+      // Public directory listing is allowed
+      await assertSucceeds(getDocs(collection(unauthDb, "public_profiles")));
     });
   });
 });

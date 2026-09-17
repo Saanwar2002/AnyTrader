@@ -441,6 +441,34 @@ export default function Onboarding() {
       console.log("Saving setDoc, user.uid:", user.uid);
       await setDoc(doc(db, "users", user.uid), profile);
       console.log("setDoc success");
+
+      // Sync non-PII public profile for trader discovery
+      if (role === "business" || (finalRole as string) === "tradesperson") {
+        try {
+          await setDoc(doc(db, "public_profiles", user.uid), {
+            uid: user.uid,
+            name: profile.name,
+            role: profile.role,
+            trade: (profile as any).trade || "",
+            trades: (profile as any).trades || [],
+            category: (profile as any).category || "",
+            categories: (profile as any).categories || [],
+            subcategories: (profile as any).subcategories || [],
+            services: (profile as any).services || [],
+            skills: (profile as any).skills || [],
+            city: (profile as any).city || "",
+            rating: 0,
+            trustScore: 0,
+            totalReviews: 0,
+            verifiedTrader: false,
+            isVerified: false,
+            videoVerified: false,
+            createdAt: serverTimestamp()
+          }, { merge: true });
+        } catch (pubErr) {
+          console.warn("Public profile creation skipped:", pubErr);
+        }
+      }
       
       // Trigger automated public record checks for each uploaded document
       console.log("Checking verification docs");

@@ -13,10 +13,9 @@ export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, pr
       try {
         setLoading(true);
         // Step 1: Fetch candidate professionals from Firebase
-        // In reality, this might be filtered by some rough criteria. Here we fetch businesses.
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("role", "in", ["tradesperson", "trader", "business"]));
-        const snapshot = await getDocs(q);
+        // Public profiles provide non-PII directory information
+        const profilesRef = collection(db, "public_profiles");
+        const snapshot = await getDocs(profilesRef);
         
         let candidatePros = snapshot.docs.map(doc => ({
           id: doc.id,
