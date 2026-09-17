@@ -19,7 +19,7 @@ import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotF
 import { runProductionChecks } from "./src/server/productionChecks.ts";
 import { validateJobTransition, validateMilestoneTransition, validateRideTransition } from "./src/server/stateMachine.ts";
 import { PaymentLedgerEngine } from "./src/server/paymentLedger.ts";
-import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload, validateNotificationPayload, isUserAdminClaim } from "./src/server/authorization.ts";
+import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload, validateNotificationPayload, authorizeNotificationRequest, isUserAdminClaim } from "./src/server/authorization.ts";
 import { AbuseDefenseEngine } from "./src/server/abuseDefense.ts";
 import { BusinessLogicDefense } from "./src/server/businessLogicDefense.ts";
 import { domainEvents } from "./src/server/domainEvents.ts";
@@ -4877,92 +4877,12 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         const validated = validateNotificationPayload(req.body);
         const { recipientId, title, message, type, link, jobId, conversationId, projectId } = validated;
 
-        const isCallerAdmin = isUserAdminClaim((req as any).user);
-
-        // 1. Authorization checks:
-        // Rule A: Admin can notify anyone
-        // Rule B: User can notify themselves (e.g. AI optimizer recommendations, local digests)
-        // Rule C: User can notify another user ONLY if a valid relationship exists (Job, Conversation, Project, or Quote)
-        let isAuthorized = isCallerAdmin || (recipientId === callerUid);
-
-        if (!isAuthorized && jobId) {
-          try {
-            const jobDoc = await db.collection("jobs").doc(jobId).get();
-            if (jobDoc.exists) {
-              const job = jobDoc.data() || {};
-              const ownerId = job.homeownerId || job.userId || job.ownerId || job.customerId;
-              const assignedTraderId = job.acceptedTradespersonId || job.tradespersonId || job.assignedTraderId || job.targetTraderId;
-
-              // Check if caller is homeowner and recipient is assigned or quoted trader
-              if (callerUid === ownerId) {
-                if (recipientId === assignedTraderId) {
-                  isAuthorized = true;
-                } else {
-                  // Check if recipient has submitted a quote on this job
-                  const quotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").where("tradespersonId", "==", recipientId).limit(1).get();
-                  if (!quotesSnap.empty) {
-                    isAuthorized = true;
-                  }
-                }
-              }
-              // Check if caller is trader and recipient is homeowner
-              else if (callerUid === assignedTraderId && recipientId === ownerId) {
-                isAuthorized = true;
-              } else {
-                // Check if caller submitted a quote on this job and recipient is homeowner
-                const myQuotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").where("tradespersonId", "==", callerUid).limit(1).get();
-                if (!myQuotesSnap.empty && recipientId === ownerId) {
-                  isAuthorized = true;
-                }
-              }
-            }
-          } catch (jobErr) {
-            console.warn("[Notification Auth] Job check error:", jobErr);
-          }
-        }
-
-        if (!isAuthorized && conversationId) {
-          try {
-            const convDoc = await db.collection("conversations").doc(conversationId).get();
-            if (convDoc.exists) {
-              const convData = convDoc.data() || {};
-              const participants = convData.participants || [];
-              if (Array.isArray(participants) && participants.includes(callerUid) && participants.includes(recipientId)) {
-                isAuthorized = true;
-              }
-            }
-          } catch (convErr) {
-            console.warn("[Notification Auth] Conversation check error:", convErr);
-          }
-        }
-
-        if (!isAuthorized && projectId) {
-          try {
-            const projDoc = await db.collection("projects").doc(projectId).get();
-            if (projDoc.exists) {
-              const projData = projDoc.data() || {};
-              const managerId = projData.managerId || projData.landlordId || projData.ownerId || projData.userId;
-              if (callerUid === managerId || recipientId === managerId) {
-                isAuthorized = true;
-              }
-            }
-          } catch (projErr) {
-            console.warn("[Notification Auth] Project check error:", projErr);
-          }
-        }
-
-        // If type is a direct 1-to-1 quote request or booking request, verify recipient exists as a tradesperson
-        if (!isAuthorized && (type === "quote" || type === "job_lead" || type === "status")) {
-          try {
-            const recipientDoc = await db.collection("users").doc(recipientId).get();
-            if (recipientDoc.exists) {
-              // Valid recipient user on platform
-              isAuthorized = true;
-            }
-          } catch (uErr) {
-            console.warn("[Notification Auth] User check error:", uErr);
-          }
-        }
+        const isAuthorized = await authorizeNotificationRequest(
+          db,
+          callerUid,
+          (req as any).user,
+          { recipientId, type, link, jobId, conversationId, projectId, rideId: (validated as any).rideId }
+        );
 
         if (!isAuthorized) {
           throw new ForbiddenError("You do not have authorization to send notifications to this recipient.");

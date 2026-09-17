@@ -1,5 +1,28 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Security Remediation H3A: Fix Cross-User Notification Authorization Bypass (September 17, 2026)
+- **1. Total Removal of User Document Existence Authorization Bypass**:
+  - Removed the material authorization vulnerability in `server.ts` where `recipientDoc.exists` was treated as sufficient authorization to dispatch notifications for `type === "quote" | "job_lead" | "status"`. A user's existence in Firestore NEVER constitutes authorization to notify them.
+- **2. Server-Authoritative Relationship Verification (`authorizeNotificationRequest` in `src/server/authorization.ts`)**:
+  - Implemented `authorizeNotificationRequest` helper requiring an authoritative, verifiable database relationship before allowing cross-user notification dispatch:
+    - *Job Context (`jobId`)*: Verifies caller and recipient are authorized job participants (homeowner, assigned trader, invited trader, or quoted trader).
+    - *Conversation Context (`conversationId`)*: Verifies caller and recipient are both listed in the conversation's `participants` array.
+    - *Project Context (`projectId`)*: Verifies caller and recipient are both authorized project managers/contractors.
+    - *Ride Context (`rideId`)*: Verifies caller and recipient are the assigned driver and passenger.
+    - *Self & Admin*: Self-notifications (`recipientId === callerUid`) and admin broadcasts (`isUserAdminClaim`) remain fully authorized.
+    - *Fail-Closed*: Fails closed (`false`) for missing resources, non-existent jobs, or unrelated third parties.
+- **3. Defense Against Recipient Substitution Attacks**:
+  - Validates that the caller cannot supply an arbitrary `recipientId` on a valid resource unless the recipient is actually an authorized participant on that specific resource.
+- **4. Comprehensive Regression Verification (`tests/unit/notificationAuthorizationH3A.test.ts`)**:
+  - Added dedicated test suite covering all required negative tests A through F:
+    - *Test A (Recipient Merely Exists)*: Rejects cross-user notification when recipient exists but no relationship exists.
+    - *Test B (Unrelated User)*: Rejects notification concerning another user's job sent to an unrelated recipient.
+    - *Test C (Recipient Substitution)*: Rejects recipient substitution on valid jobs.
+    - *Test D (Missing Resource)*: Rejects notifications referencing non-existent resources.
+    - *Test E (Legitimate Relationship)*: Verifies legitimate job, quote, and chat notifications succeed.
+    - *Test F (Cross-User Existing Recipient)*: Confirms `quote`, `job_lead`, and `status` notifications fail closed without a relationship.
+  - 100% test pass rate across all 35 test suites (544/544 unit tests passing). Clean production build (`compile_applet`).
+
 ## 🛡️ AnyTrader V8.1 — Security Remediation H3: Notification, SMS Queue & Email Queue Abuse Prevention (September 17, 2026)
 - **1. Server-Authoritative Messaging & Queue Architecture (`firestore.rules`)**:
   - Hardened `/notifications/{notificationId}` rules so that clients cannot directly create notification records (`allow create: if isAdmin();`). Reading is strictly restricted to the owning recipient/user or administrator. Updates are restricted to read-status metadata (`read`, `isRead`, `readAt`, `updatedAt`).

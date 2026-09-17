@@ -682,7 +682,236 @@ export function validateNotificationPayload(payload: Record<string, any>): {
     jobId: typeof payload.jobId === "string" ? payload.jobId.trim() : undefined,
     conversationId: typeof payload.conversationId === "string" ? payload.conversationId.trim() : undefined,
     projectId: typeof payload.projectId === "string" ? payload.projectId.trim() : undefined,
+    rideId: typeof payload.rideId === "string" ? payload.rideId.trim() : undefined,
   };
+}
+
+/**
+ * Server-Authoritative Notification Authorization Helper (H3A Hardened):
+ * Evaluates whether an authenticated user is authorized to dispatch a notification to a recipient.
+ * 
+ * Strict Invariants:
+ * 1. Admin callers can notify any recipient.
+ * 2. Authenticated users can notify themselves (recipientId === callerUid).
+ * 3. Cross-user notifications REQUIRE an authoritative, verifiable database relationship
+ *    (Job, Conversation, Project, or Ride/Trip).
+ * 4. Merely existing as a user in Firestore NEVER constitutes authorization.
+ * 5. Recipient substitution attacks are blocked by verifying that the recipient is an authorized participant
+ *    on the targeted resource.
+ */
+export async function authorizeNotificationRequest(
+  db: any,
+  callerUid: string,
+  callerUser: AuthenticatedUser | null,
+  payload: {
+    recipientId: string;
+    type: string;
+    link?: string;
+    jobId?: string;
+    conversationId?: string;
+    projectId?: string;
+    rideId?: string;
+  }
+): Promise<boolean> {
+  if (!db || !callerUid || !payload || !payload.recipientId) {
+    return false;
+  }
+
+  const { recipientId, link } = payload;
+
+  // Rule 1: Admin callers can notify any recipient
+  if (isUserAdminClaim(callerUser)) {
+    return true;
+  }
+
+  // Rule 2: Users can notify themselves
+  if (recipientId === callerUid) {
+    return true;
+  }
+
+  // Infer context IDs from link if not explicitly provided
+  let jobId = payload.jobId;
+  let conversationId = payload.conversationId;
+  let projectId = payload.projectId;
+  let rideId = payload.rideId;
+
+  if (link) {
+    if (!jobId) {
+      const jobMatch = link.match(/\/(?:jobs?|job)\/([a-zA-Z0-9_-]+)/);
+      if (jobMatch) jobId = jobMatch[1];
+    }
+    if (!conversationId) {
+      const convMatch = link.match(/\/(?:chat|conversations?)\/([a-zA-Z0-9_-]+)/);
+      if (convMatch) conversationId = convMatch[1];
+    }
+    if (!projectId) {
+      const projMatch = link.match(/\/(?:projects?|project)\/([a-zA-Z0-9_-]+)/);
+      if (projMatch) projectId = projMatch[1];
+    }
+    if (!rideId) {
+      const rideMatch = link.match(/\/(?:rides?|ride|trips?|trip)\/([a-zA-Z0-9_-]+)/);
+      if (rideMatch) rideId = rideMatch[1];
+    }
+  }
+
+  // Rule 3A: Authoritative Job Relationship Check
+  if (jobId) {
+    try {
+      const jobDoc = await db.collection("jobs").doc(jobId).get();
+      if (!jobDoc.exists) {
+        return false; // Fail closed if job does not exist
+      }
+      const job = jobDoc.data() || {};
+      const ownerId = job.homeownerId || job.userId || job.ownerId || job.customerId;
+      const assignedTraderId = job.acceptedTradespersonId || job.tradespersonId || job.assignedTraderId;
+      const targetTraderId = job.targetTradespersonId || job.targetTraderId || job.directTraderId || job.requestedTraderId;
+      const invitedTraderIds = Array.isArray(job.invitedTraderIds) ? job.invitedTraderIds : [];
+      const jobStatus = job.status || "open";
+
+      // If caller is the Homeowner/Job Creator:
+      if (callerUid === ownerId) {
+        // Recipient must be assigned trader, direct target, or invited trader
+        if (
+          recipientId === assignedTraderId ||
+          recipientId === targetTraderId ||
+          invitedTraderIds.includes(recipientId)
+        ) {
+          return true;
+        }
+        // Or recipient submitted a quote on this job
+        const quotesSnap = await db
+          .collection("jobs")
+          .doc(jobId)
+          .collection("quotes")
+          .where("tradespersonId", "==", recipientId)
+          .limit(1)
+          .get();
+        if (!quotesSnap.empty) {
+          return true;
+        }
+        // Otherwise, homeowner attempting to notify an unrelated recipient on this job -> DENIED
+        return false;
+      }
+
+      // If recipient is the Homeowner/Job Creator:
+      if (recipientId === ownerId) {
+        // Caller must be assigned trader, direct target, or invited trader
+        if (
+          callerUid === assignedTraderId ||
+          callerUid === targetTraderId ||
+          invitedTraderIds.includes(callerUid)
+        ) {
+          return true;
+        }
+        // Or caller submitted a quote on this job
+        const myQuotesSnap = await db
+          .collection("jobs")
+          .doc(jobId)
+          .collection("quotes")
+          .where("tradespersonId", "==", callerUid)
+          .limit(1)
+          .get();
+        if (!myQuotesSnap.empty) {
+          return true;
+        }
+        // Or job is open/quoted/pending and caller is reaching out to job owner
+        if (jobStatus === "open" || jobStatus === "quoted" || jobStatus === "pending") {
+          return true;
+        }
+        return false;
+      }
+
+      // If caller and recipient are both participants on assigned job
+      if (
+        (callerUid === assignedTraderId || callerUid === ownerId) &&
+        (recipientId === assignedTraderId || recipientId === ownerId)
+      ) {
+        return true;
+      }
+
+      return false;
+    } catch (err) {
+      console.warn("[Notification Auth] Error evaluating job relationship:", err);
+      return false;
+    }
+  }
+
+  // Rule 3B: Authoritative Conversation Relationship Check
+  if (conversationId) {
+    try {
+      const convDoc = await db.collection("conversations").doc(conversationId).get();
+      if (!convDoc.exists) {
+        return false;
+      }
+      const convData = convDoc.data() || {};
+      const participants = Array.isArray(convData.participants) ? convData.participants : [];
+      if (participants.includes(callerUid) && participants.includes(recipientId)) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn("[Notification Auth] Error evaluating conversation relationship:", err);
+      return false;
+    }
+  }
+
+  // Rule 3C: Authoritative Project Relationship Check
+  if (projectId) {
+    try {
+      const projDoc = await db.collection("projects").doc(projectId).get();
+      if (!projDoc.exists) {
+        return false;
+      }
+      const projData = projDoc.data() || {};
+      const managerId = projData.managerId || projData.landlordId || projData.ownerId || projData.userId;
+      const participants = Array.isArray(projData.participants)
+        ? projData.participants
+        : Array.isArray(projData.contractors)
+        ? projData.contractors
+        : [];
+
+      if (
+        (callerUid === managerId || participants.includes(callerUid)) &&
+        (recipientId === managerId || participants.includes(recipientId))
+      ) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn("[Notification Auth] Error evaluating project relationship:", err);
+      return false;
+    }
+  }
+
+  // Rule 3D: Authoritative Ride / Taxi Request Relationship Check
+  if (rideId) {
+    try {
+      let rideDoc = await db.collection("ride_requests").doc(rideId).get();
+      if (!rideDoc.exists) {
+        rideDoc = await db.collection("rides").doc(rideId).get();
+      }
+      if (!rideDoc.exists) {
+        return false;
+      }
+      const rideData = rideDoc.data() || {};
+      const passengerId = rideData.passengerId || rideData.userId || rideData.riderId || rideData.customerId;
+      const driverId = rideData.assignedDriverId || rideData.driverId;
+
+      if (
+        (callerUid === passengerId && recipientId === driverId) ||
+        (callerUid === driverId && recipientId === passengerId)
+      ) {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.warn("[Notification Auth] Error evaluating ride relationship:", err);
+      return false;
+    }
+  }
+
+  // No legitimate relationship found -> Fail closed
+  return false;
 }
 
 

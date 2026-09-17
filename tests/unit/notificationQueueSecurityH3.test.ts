@@ -143,7 +143,7 @@ describe("Security Remediation H3 — Notification & Queue Abuse Prevention Audi
     });
 
     it("verifies relationship/authorization before dispatching notification to another user", () => {
-      expect(serverCode).toContain('isCallerAdmin || (recipientId === callerUid)');
+      expect(serverCode).toContain('authorizeNotificationRequest');
       expect(serverCode).toContain('You do not have authorization to send notifications to this recipient');
     });
   });
