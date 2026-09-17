@@ -324,21 +324,45 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 
 
-export const sendNotification = async (userId: string, title: string, message: string, type: "quote" | "message" | "status" | "system", link?: string) => {
+export const sendNotification = async (
+  userId: string,
+  title: string,
+  message: string,
+  type: "quote" | "message" | "status" | "system" | "job_lead" | "promotion" | "profile_optimization" | "general" | "emergency_alert" = "system",
+  link?: string,
+  context?: { jobId?: string; conversationId?: string; projectId?: string }
+) => {
   try {
-    const notificationRef = doc(collection(db, "notifications"));
-    await setDoc(notificationRef, {
-      id: notificationRef.id,
-      userId,
-      title,
-      message,
-      type,
-      link,
-      read: false,
-      createdAt: serverTimestamp(),
-    });
+    const currentUser = auth.currentUser;
+    const token = currentUser ? await currentUser.getIdToken().catch(() => null) : null;
+
+    if (token) {
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          recipientId: userId,
+          title,
+          message,
+          type,
+          link,
+          jobId: context?.jobId,
+          conversationId: context?.conversationId,
+          projectId: context?.projectId
+        })
+      });
+      if (res.ok) {
+        return await res.json();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.warn("[sendNotification] Server returned error:", errorData);
+      }
+    }
   } catch (err) {
-    console.error("Error sending notification:", err);
+    console.error("Error sending notification via server API:", err);
   }
 };
 

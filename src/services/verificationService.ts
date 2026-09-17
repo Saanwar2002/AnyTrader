@@ -1,4 +1,4 @@
-import { db, doc, updateDoc, getDoc, addDoc, collection, handleFirestoreError, OperationType } from "../firebase";
+import { db, doc, updateDoc, getDoc, addDoc, collection, handleFirestoreError, OperationType, sendNotification } from "../firebase";
 
 export interface AutoCheckResult {
   status: "passed" | "failed" | "manual_required";
@@ -109,14 +109,12 @@ export const performInitialPublicRecordCheck = async (userId: string, certType: 
             });
 
             // Notify referrer
-            await addDoc(collection(db, "notifications"), {
-              userId: userData.referredBy,
-              title: "Referral Reward Granted!",
-              message: `Your referral ${userData.name} has been verified. You've received a ${boostDays}-day profile boost!`,
-              type: "system",
-              read: false,
-              createdAt: new Date().toISOString()
-            });
+            await sendNotification(
+              userData.referredBy,
+              "Referral Reward Granted!",
+              `Your referral ${userData.name} has been verified. You've received a ${boostDays}-day profile boost!`,
+              "system"
+            );
           }
         } catch (err) {
           console.error("Error processing referral reward:", err);

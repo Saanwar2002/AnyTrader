@@ -1,5 +1,20 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Security Remediation H3: Notification, SMS Queue & Email Queue Abuse Prevention (September 17, 2026)
+- **1. Server-Authoritative Messaging & Queue Architecture (`firestore.rules`)**:
+  - Hardened `/notifications/{notificationId}` rules so that clients cannot directly create notification records (`allow create: if isAdmin();`). Reading is strictly restricted to the owning recipient/user or administrator. Updates are restricted to read-status metadata (`read`, `isRead`, `readAt`, `updatedAt`).
+  - Hardened `/sms_queue/{queueId}`, `/email_queue/{queueId}`, and `/email_alerts_queue/{queueId}` so that all direct client read/write operations are denied (`allow read, write: if isAdmin();`), preventing service-cost abuse, phishing, spamming, and template spoofing.
+- **2. Server-Authoritative Endpoints (`server.ts`)**:
+  - `POST /api/notifications`: Authenticated, authorized, and rate-limited via `AbuseDefenseEngine.createMiddleware("NOTIFICATION_SEND")`. Requires valid recipient, verified sender-recipient relationship (self-notification, admin broadcast, shared job participant, active conversation participant, or managed project), and sanitized payload.
+  - `POST /api/jobs/:id/distribute-leads`: Authenticated and authorized to job creator or administrator. Automatically queries matching local tradespeople and enqueues server-controlled in-app notifications and emergency SMS alerts server-side.
+- **3. Payload Validation & Anti-Phishing Guardrails (`src/server/authorization.ts`)**:
+  - `validateNotificationPayload`: Enforces strict type constraints, maximum title length (120 chars), maximum message length (500 chars), valid notification types, and rejects external URLs, open redirects, and protocol injections (`javascript:`, `data:`).
+- **4. Complete Client Refactoring Across All Portals**:
+  - Refactored `sendNotification` in `src/firebase.ts` to call `/api/notifications`.
+  - Refactored `distributeJobNotifications` in `src/services/notificationService.ts` to call `/api/jobs/:id/distribute-leads`.
+  - Refactored all direct client writes in `ProMatchmakerModal.tsx`, `ReviewReminder.tsx`, `HomeHealthWidget.tsx`, `AuthProvider.tsx`, `ConsultancyBids.tsx`, `TradesBannerAdStudio.tsx`, `aiProfileOptimizationService.ts`, `traderNotificationEngine.ts`, `verificationService.ts`, `adminAuthSecurityService.ts`, `AnyTraderAdmin.tsx`, `EmergencyJobWizard.tsx`, `PostJobWizard.tsx`, and `RideChat.tsx`.
+- **5. Comprehensive Automated Verification**: Added dedicated test suite `tests/unit/notificationQueueSecurityH3.test.ts` (14 tests). Verified 100% test pass rate across 34 test suites (535/535 tests passing). Clean TypeScript compilation (`npm run lint`) and clean build (`compile_applet`).
+
 ## 🛡️ AnyTrader V8.1 — Security Remediation H2: Advertisement Budget & State Server-Authority (September 17, 2026)
 - **1. Server-Authoritative Financial & State Protection (`firestore.rules`)**: Hardened `/advertisements/{adId}` rules so that clients cannot modify money, budget, and state fields (`prepaidBalance`, `isActive`, `lastAutoTopUpAt`, `approvalStatus`, `totalBudget`, `totalCost`, `dailyRate`, `recurringPrice`, `advertiserUid`, `advertiserId`). Initial ad creation enforces zero balance (`prepaidBalance: 0`), inactive state (`isActive: false`), and pending approval (`approvalStatus: "pending"`).
 - **2. Monotonic Controlled Engagement Tracking**: Restricted client engagement updates to strictly monotonic increments (+1 maximum, no decrement) on allowed engagement counters only (`clicks`, `bannerClicks`, `searchFeedClicks`, `impressions`).

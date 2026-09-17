@@ -2218,19 +2218,6 @@ export default function PostJobWizard() {
               formData.urgency,
               false
             );
-            
-            // Dispatch standard email notification queue
-            const emailRef = doc(collection(db, "email_queue"));
-            await setDoc(emailRef, {
-              requestedBy: user.uid,
-              toRole: "tradesperson",
-              category: formData.category,
-              jobId: currentJobRef.id,
-              subject: `New ${formData.category} Job near ${formData.postcode}`,
-              body: `A homeowner has posted a new job: ${formData.title}. Tap here to view and quote.`,
-              status: "pending",
-              createdAt: serverTimestamp()
-            });
           } catch (err) {
             console.error("Error triggering matching system:", err);
           }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, setDoc, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { db, uploadStorageFile } from '@/src/firebase';
+import { db, uploadStorageFile, sendNotification } from '@/src/firebase';
 import { useAuth } from '@/src/components/AuthProvider';
 import { X, Send, MessageSquare, Phone, BellRing, Image as ImageIcon, Loader2, Maximize2, Download } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
@@ -178,18 +178,17 @@ export default function RideChat({ rideId, isOpen, onClose, otherPartyName, othe
        return;
     }
     try {
-       const smsRef = doc(collection(db, "sms_queue"));
-       await setDoc(smsRef, {
-         toUserId: passengerId,
-         rideId: rideId,
-         message: `AnyRoller: Your driver ${user?.displayName || ""} has sent you a message. Please check the app.`,
-         status: "pending",
-         createdAt: serverTimestamp()
-       });
-       toast.success("SMS Alert Sent", { description: "The passenger will receive a text message immediately." });
+       await sendNotification(
+         passengerId,
+         "Driver Message",
+         `AnyRoller: Your driver ${user?.displayName || ""} has sent you a message. Please check the app.`,
+         "message",
+         `/rides/${rideId}`
+       );
+       toast.success("Alert Sent", { description: "The passenger will receive a notification immediately." });
     } catch (err) {
        console.error(err);
-       toast.error("Failed to send SMS alert");
+       toast.error("Failed to send alert");
     }
   };
 

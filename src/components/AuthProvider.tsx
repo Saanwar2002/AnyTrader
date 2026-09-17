@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
-import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, setDoc, addDoc, collection, serverTimestamp, signInWithGoogle } from "@/src/firebase";
+import { auth, db, onAuthStateChanged, type FirebaseUser, doc, onSnapshot, handleFirestoreError, OperationType, logout, updateDoc, setDoc, addDoc, collection, serverTimestamp, signInWithGoogle, sendNotification } from "@/src/firebase";
 import { Loader2, ShieldAlert, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
@@ -304,14 +304,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       needsUpdate = true;
                       newVerificationStatus = "unverified";
                       
-                      addDoc(collection(db, "notifications"), {
-                        userId: firebaseUser.uid,
-                        title: "Verification Expired ⚠️",
-                        message: `Your ${doc.type} has expired. Please upload a new document to restore your verified status.`,
-                        type: "verification",
-                        read: false,
-                        createdAt: serverTimestamp()
-                      }).catch(() => {});
+                      sendNotification(
+                        firebaseUser.uid,
+                        "Verification Expired ⚠️",
+                        `Your ${doc.type} has expired. Please upload a new document to restore your verified status.`,
+                        "status"
+                      ).catch(() => {});
                       
                       return { ...doc, status: "expired" };
                     }
@@ -319,14 +317,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (expiry > now && expiry < thirtyDaysFromNow && !doc.expiryWarningSent) {
                       needsUpdate = true;
                       
-                      addDoc(collection(db, "notifications"), {
-                        userId: firebaseUser.uid,
-                        title: "Verification Expiring Soon ⏳",
-                        message: `Your ${doc.type} will expire on ${expiry.toLocaleDateString()}. Please prepare your renewal documents.`,
-                        type: "verification",
-                        read: false,
-                        createdAt: serverTimestamp()
-                      }).catch(() => {});
+                      sendNotification(
+                        firebaseUser.uid,
+                        "Verification Expiring Soon ⏳",
+                        `Your ${doc.type} will expire on ${expiry.toLocaleDateString()}. Please prepare your renewal documents.`,
+                        "status"
+                      ).catch(() => {});
                       
                       return { ...doc, expiryWarningSent: true };
                     }

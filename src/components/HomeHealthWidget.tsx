@@ -14,7 +14,7 @@ import { useAuth } from "./AuthProvider";
 import { 
   db, collection, query, where, onSnapshot, doc, 
   setDoc, deleteDoc, updateDoc, addDoc, serverTimestamp, 
-  handleFirestoreError, OperationType 
+  handleFirestoreError, OperationType, sendNotification 
 } from "@/src/firebase";
 import { cn } from "@/src/lib/utils";
 import PropertyRiskAnalyticsWidget from "./PropertyRiskAnalyticsWidget";
@@ -674,22 +674,16 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
         const firestoreData = JSON.parse(JSON.stringify(newTask));
         await setDoc(doc(db, "scheduledRepairs", taskId), firestoreData);
 
-        const notifRef = doc(collection(db, "notifications"));
         const formattedDesc = `Scheduled Maintenance: ${plannerTitle}\nProperty: ${propName} (${propAddress})\nCategory: ${plannerCategory}\nTarget Date: ${plannerTargetDate}\nEstimated Budget: ${plannerBudget}\nNotes: ${plannerNotes}`;
         const postJobUrl = `/post-job?category=${encodeURIComponent(plannerCategory)}&title=${encodeURIComponent(plannerTitle)}&budget=${encodeURIComponent(plannerBudget)}&description=${encodeURIComponent(formattedDesc)}&prefilledByAI=true`;
         
-        await setDoc(notifRef, {
-          userId: user.uid,
-          type: "scheduled_repair_reminder",
-          title: `⏰ Maintenance Alert: ${plannerTitle}`,
-          message: `Your scheduled task "${plannerTitle}" for ${propName} is targeted for ${plannerTargetDate}. Tap to request quotes.`,
-          visibleAt: visibleAtTimestamp,
-          read: false,
-          createdAt: serverTimestamp(),
-          actionPath: postJobUrl,
-          link: postJobUrl,
-          icon: "Calendar"
-        });
+        await sendNotification(
+          user.uid,
+          `⏰ Maintenance Alert: ${plannerTitle}`,
+          `Your scheduled task "${plannerTitle}" for ${propName} is targeted for ${plannerTargetDate}. Tap to request quotes.`,
+          "status",
+          postJobUrl
+        );
       }
 
       const updated = scheduledTasks.filter(t => t.id !== taskId);

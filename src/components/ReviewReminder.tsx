@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { db, collection, query, where, getDocs, collectionGroup, serverTimestamp, addDoc, doc, getDoc } from "@/src/firebase";
+import { db, collection, query, where, getDocs, collectionGroup, serverTimestamp, doc, getDoc, sendNotification } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
 import { toast } from "sonner";
 import { Star, MessageSquare } from "lucide-react";
@@ -84,15 +84,14 @@ export function ReviewReminder() {
       // but a real notification in the DB is better.
       const hasRemindedToday = localStorage.getItem(reminderKey);
       if (!hasRemindedToday) {
-        await addDoc(collection(db, "notifications"), {
-          userId: user.uid,
-          title: "Review Reminder",
-          message: `Please leave a review for "${jobTitle}". It's been over 14 days since completion.`,
-          type: "status",
-          link: `/job/${jobId}`,
-          read: false,
-          createdAt: serverTimestamp()
-        });
+        await sendNotification(
+          user.uid,
+          "Review Reminder",
+          `Please leave a review for "${jobTitle}". It's been over 14 days since completion.`,
+          "status",
+          `/job/${jobId}`,
+          { jobId }
+        );
         localStorage.setItem(reminderKey, "true");
       }
     };

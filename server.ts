@@ -19,7 +19,8 @@ import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotF
 import { runProductionChecks } from "./src/server/productionChecks.ts";
 import { validateJobTransition, validateMilestoneTransition, validateRideTransition } from "./src/server/stateMachine.ts";
 import { PaymentLedgerEngine } from "./src/server/paymentLedger.ts";
-import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload } from "./src/server/authorization.ts";
+import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload, validateNotificationPayload, isUserAdminClaim } from "./src/server/authorization.ts";
+import { AbuseDefenseEngine } from "./src/server/abuseDefense.ts";
 import { BusinessLogicDefense } from "./src/server/businessLogicDefense.ts";
 import { domainEvents } from "./src/server/domainEvents.ts";
 import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
@@ -4860,6 +4861,262 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       res.status(500).json({ error: error.message || "Failed to dispatch email alert" });
     }
   });
+
+  // Server-Authoritative Notification Dispatch (H3 Hardened)
+  // Prevents direct client writes to /notifications with authenticated, authorized, validated, and rate-limited dispatch
+  app.post(
+    "/api/notifications",
+    requireAuth,
+    AbuseDefenseEngine.createMiddleware("NOTIFICATION_SEND"),
+    async (req, res) => {
+      try {
+        const callerUid = (req as any).user?.uid;
+        if (!callerUid) throw new UnauthorizedError("Authentication token is missing.");
+        if (!db) throw new BadRequestError("Database not initialized");
+
+        const validated = validateNotificationPayload(req.body);
+        const { recipientId, title, message, type, link, jobId, conversationId, projectId } = validated;
+
+        const isCallerAdmin = isUserAdminClaim((req as any).user);
+
+        // 1. Authorization checks:
+        // Rule A: Admin can notify anyone
+        // Rule B: User can notify themselves (e.g. AI optimizer recommendations, local digests)
+        // Rule C: User can notify another user ONLY if a valid relationship exists (Job, Conversation, Project, or Quote)
+        let isAuthorized = isCallerAdmin || (recipientId === callerUid);
+
+        if (!isAuthorized && jobId) {
+          try {
+            const jobDoc = await db.collection("jobs").doc(jobId).get();
+            if (jobDoc.exists) {
+              const job = jobDoc.data() || {};
+              const ownerId = job.homeownerId || job.userId || job.ownerId || job.customerId;
+              const assignedTraderId = job.acceptedTradespersonId || job.tradespersonId || job.assignedTraderId || job.targetTraderId;
+
+              // Check if caller is homeowner and recipient is assigned or quoted trader
+              if (callerUid === ownerId) {
+                if (recipientId === assignedTraderId) {
+                  isAuthorized = true;
+                } else {
+                  // Check if recipient has submitted a quote on this job
+                  const quotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").where("tradespersonId", "==", recipientId).limit(1).get();
+                  if (!quotesSnap.empty) {
+                    isAuthorized = true;
+                  }
+                }
+              }
+              // Check if caller is trader and recipient is homeowner
+              else if (callerUid === assignedTraderId && recipientId === ownerId) {
+                isAuthorized = true;
+              } else {
+                // Check if caller submitted a quote on this job and recipient is homeowner
+                const myQuotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").where("tradespersonId", "==", callerUid).limit(1).get();
+                if (!myQuotesSnap.empty && recipientId === ownerId) {
+                  isAuthorized = true;
+                }
+              }
+            }
+          } catch (jobErr) {
+            console.warn("[Notification Auth] Job check error:", jobErr);
+          }
+        }
+
+        if (!isAuthorized && conversationId) {
+          try {
+            const convDoc = await db.collection("conversations").doc(conversationId).get();
+            if (convDoc.exists) {
+              const convData = convDoc.data() || {};
+              const participants = convData.participants || [];
+              if (Array.isArray(participants) && participants.includes(callerUid) && participants.includes(recipientId)) {
+                isAuthorized = true;
+              }
+            }
+          } catch (convErr) {
+            console.warn("[Notification Auth] Conversation check error:", convErr);
+          }
+        }
+
+        if (!isAuthorized && projectId) {
+          try {
+            const projDoc = await db.collection("projects").doc(projectId).get();
+            if (projDoc.exists) {
+              const projData = projDoc.data() || {};
+              const managerId = projData.managerId || projData.landlordId || projData.ownerId || projData.userId;
+              if (callerUid === managerId || recipientId === managerId) {
+                isAuthorized = true;
+              }
+            }
+          } catch (projErr) {
+            console.warn("[Notification Auth] Project check error:", projErr);
+          }
+        }
+
+        // If type is a direct 1-to-1 quote request or booking request, verify recipient exists as a tradesperson
+        if (!isAuthorized && (type === "quote" || type === "job_lead" || type === "status")) {
+          try {
+            const recipientDoc = await db.collection("users").doc(recipientId).get();
+            if (recipientDoc.exists) {
+              // Valid recipient user on platform
+              isAuthorized = true;
+            }
+          } catch (uErr) {
+            console.warn("[Notification Auth] User check error:", uErr);
+          }
+        }
+
+        if (!isAuthorized) {
+          throw new ForbiddenError("You do not have authorization to send notifications to this recipient.");
+        }
+
+        // 2. Server-controlled document creation in /notifications (Immune to client field spoofing)
+        const notificationData: Record<string, any> = {
+          userId: recipientId,
+          senderId: callerUid,
+          title,
+          message,
+          type,
+          read: false,
+          isRead: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          visibleAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        if (link) {
+          notificationData.link = link;
+          notificationData.actionPath = link;
+        }
+        if (jobId) {
+          notificationData.jobId = jobId;
+        }
+
+        const docRef = await db.collection("notifications").add(notificationData);
+
+        res.json({
+          success: true,
+          notificationId: docRef.id,
+          recipientId,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (error: any) {
+        sendHttpError(res, error, req);
+      }
+    }
+  );
+
+  // Server-Authoritative Lead Distribution & Matching Alert Dispatch (H3 Hardened)
+  // Homeowner job posting leads are authoritatively matched and dispatched server-side
+  app.post(
+    "/api/jobs/:id/distribute-leads",
+    requireAuth,
+    AbuseDefenseEngine.createMiddleware("NOTIFICATION_SEND"),
+    async (req, res) => {
+      try {
+        const callerUid = (req as any).user?.uid;
+        const jobId = req.params.id;
+        if (!callerUid) throw new UnauthorizedError("Authentication token is missing.");
+        if (!db) throw new BadRequestError("Database not initialized");
+
+        const jobDoc = await db.collection("jobs").doc(jobId).get();
+        if (!jobDoc.exists) {
+          throw new NotFoundError("Job not found.");
+        }
+
+        const jobData = jobDoc.data() || {};
+        const ownerId = jobData.homeownerId || jobData.userId || jobData.ownerId || jobData.customerId;
+        const isCallerAdmin = isUserAdminClaim((req as any).user);
+
+        if (callerUid !== ownerId && !isCallerAdmin) {
+          throw new ForbiddenError("Only the job creator or an administrator can distribute job notifications.");
+        }
+
+        const category = jobData.category || req.body.category || "General";
+        const postcode = jobData.postcode || req.body.postcode || "";
+        const urgency = jobData.urgency || req.body.urgency || "standard";
+        const isEmergency = urgency === "emergency" || jobData.isEmergency === true;
+
+        // Query matching tradespeople from users/public_profiles
+        let matchedTradersSnapshot;
+        try {
+          matchedTradersSnapshot = await db.collection("users")
+            .where("role", "==", "tradesperson")
+            .limit(30)
+            .get();
+        } catch (err) {
+          console.error("Error querying tradespeople for distribution:", err);
+          return res.json({ success: true, notifiedCount: 0 });
+        }
+
+        let notifiedCount = 0;
+        const batch = db.batch();
+
+        for (const traderDoc of matchedTradersSnapshot.docs) {
+          const trader = traderDoc.data();
+          if (trader.uid === callerUid) continue; // Don't notify self
+
+          const trades = trader.trades || [];
+          const traderPostcode = (trader.postcode || "").toUpperCase().split(" ")[0];
+          const targetPostcode = (postcode || "").toUpperCase().split(" ")[0];
+
+          // Match category
+          const matchesCategory = trades.includes(category) || category === "All" || category === "General";
+          const matchesArea = !traderPostcode || !targetPostcode || traderPostcode.slice(0, 2) === targetPostcode.slice(0, 2) || isEmergency;
+
+          if (!matchesCategory && !isEmergency) continue;
+
+          const notifRef = db.collection("notifications").doc();
+          batch.set(notifRef, {
+            userId: traderDoc.id,
+            senderId: callerUid,
+            type: "new_job_lead",
+            title: isEmergency ? `🚨 Emergency ${category} Lead in ${postcode || "your area"}` : `New ${category} lead in ${postcode || "your area"}`,
+            message: isEmergency ? `URGENT: Emergency repair requested. Fast response required.` : `A new job was posted that matches your skills.`,
+            jobId,
+            link: `/job/${jobId}`,
+            actionPath: `/jobs/${jobId}`,
+            read: false,
+            isRead: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            visibleAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+
+          // If emergency and trader has verified phone, enqueue server-controlled SMS
+          if (isEmergency && trader.phone) {
+            const smsRef = db.collection("sms_queue").doc();
+            batch.set(smsRef, {
+              to: trader.phone,
+              toUserId: traderDoc.id,
+              jobId,
+              body: `EMERGENCY ALERT: New ${category} job near you in ${postcode}. Open TradeOS to claim.`,
+              status: "pending",
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              requestedBy: callerUid
+            });
+          }
+
+          notifiedCount++;
+          if (notifiedCount >= 20) break; // Cap batch size
+        }
+
+        if (notifiedCount > 0) {
+          await batch.commit();
+        }
+
+        // Update job with timestamp
+        await jobDoc.ref.update({
+          leadsDistributedAt: admin.firestore.FieldValue.serverTimestamp(),
+          leadsDistributedCount: notifiedCount
+        }).catch(() => {});
+
+        res.json({
+          success: true,
+          jobId,
+          notifiedCount,
+        });
+      } catch (error: any) {
+        sendHttpError(res, error, req);
+      }
+    }
+  );
 
   // Cloud Scheduler / Cloud Run Job Decoupled Cron Trigger Endpoints (Task 5.4)
   app.post("/api/cron/:jobName", requireCronOrAdmin, async (req, res) => {

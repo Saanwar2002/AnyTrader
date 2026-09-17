@@ -9,7 +9,7 @@ import {
   collection, query, where, onSnapshot, addDoc, serverTimestamp, 
   doc, setDoc, updateDoc, deleteDoc, increment 
 } from "firebase/firestore";
-import { db, auth } from "../firebase";
+import { db, auth, sendNotification } from "../firebase";
 import { useAuth } from "./AuthProvider";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
@@ -218,15 +218,12 @@ export default function TradesBannerAdStudio() {
 
       // Log notification for the trader
       try {
-        await addDoc(collection(db, "notifications"), {
-          userId: user.uid,
-          title: "🚀 Promotion Boost Live!",
-          body: `Your banner promotion for "${businessTitle}" is now live on homeowner dashboards for ${durationDays} days.`,
-          type: "promotion",
-          read: false,
-          adId: data.adId,
-          createdAt: serverTimestamp()
-        });
+        await sendNotification(
+          user.uid,
+          "🚀 Promotion Boost Live!",
+          `Your banner promotion for "${businessTitle}" is now live on homeowner dashboards for ${durationDays} days.`,
+          "promotion"
+        );
       } catch {
         // Non-blocking
       }

@@ -1,4 +1,4 @@
-import { db } from "@/src/firebase";
+import { db, sendNotification } from "@/src/firebase";
 import { doc, getDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { polishBio } from "@/src/services/gemini";
 import { TRADE_CATEGORIES } from "@/src/constants";
@@ -357,15 +357,13 @@ export async function auditProfileAndAccountReadiness(
   // Dispatch In-App Notification if suggestions exist
   if (suggestions.length > 0 && profile.uid) {
     try {
-      await addDoc(collection(db, "notifications"), {
-        userId: profile.uid,
-        title: "✨ Profile Optimization Suggestions Available",
-        message: `Our AI Coach found ${suggestions.length} simple ways to improve your profile & match score for local jobs.`,
-        type: "profile_optimization",
-        read: false,
-        actionUrl: "/profile#ai-profile-optimizer",
-        createdAt: new Date().toISOString()
-      });
+      await sendNotification(
+        profile.uid,
+        "✨ Profile Optimization Suggestions Available",
+        `Our AI Coach found ${suggestions.length} simple ways to improve your profile & match score for local jobs.`,
+        "profile_optimization",
+        "/profile#ai-profile-optimizer"
+      );
     } catch (notifErr) {
       console.warn("Could not dispatch profile optimization notification:", notifErr);
     }

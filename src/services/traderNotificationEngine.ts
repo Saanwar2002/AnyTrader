@@ -1,4 +1,4 @@
-import { db, collection, query, where, getDocs, doc, setDoc, updateDoc, serverTimestamp, handleFirestoreError, OperationType } from "../firebase";
+import { db, collection, query, where, getDocs, doc, setDoc, updateDoc, serverTimestamp, handleFirestoreError, OperationType, sendNotification } from "../firebase";
 import { calculateDistanceMiles } from "../lib/utils";
 
 export type MatchNotificationSchedule = "every_5_hours" | "morning_8am" | "afternoon_2pm" | "silent_in_app_only";
@@ -267,19 +267,14 @@ export async function checkAndNotifyTraderMatches(
       });
 
       // 2. Also ensure an in-app Alert document is saved in Firestore so ALERTS badge pulses
-      const alertRef = doc(collection(db, "notifications"));
-      await setDoc(alertRef, {
-        userId: traderProfile.uid,
-        type: shouldBypass ? "emergency_job_nearby" : "matched_jobs_digest",
+      await sendNotification(
+        traderProfile.uid,
         title,
-        message: body,
-        jobId: topJob.id,
-        matchedCount: count,
-        read: false,
-        createdAt: serverTimestamp(),
-        actionPath: `/trade-jobs`,
-        isSilent,
-      });
+        body,
+        shouldBypass ? "emergency_alert" : "job_lead",
+        "/trade-jobs",
+        { jobId: topJob.id }
+      );
 
       // 3. Update Trader Profile lastNotifiedAt timestamp
       if (traderProfile.uid) {

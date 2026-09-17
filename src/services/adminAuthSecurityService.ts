@@ -1,4 +1,4 @@
-import { db, doc, getDoc, setDoc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy, limit } from "@/src/firebase";
+import { db, doc, getDoc, setDoc, onSnapshot, collection, addDoc, serverTimestamp, query, orderBy, limit, sendNotification } from "@/src/firebase";
 
 export interface MasterAdminAuthConfig {
   primaryAdminEmail: string;
@@ -189,15 +189,12 @@ export async function dispatchAdminLoginAlert(params: {
 
     // 3. Create an in-app security notification
     try {
-      await addDoc(collection(db, "notifications"), {
-        userId: "admin_broadcast",
-        title: "🛡️ Admin Session Unlocked",
-        message: `Admin login confirmed for ${adminEmail} from IP ${clientIp}`,
-        type: "system",
-        read: false,
-        createdAt: serverTimestamp(),
-        visibleAt: nowIso
-      });
+      await sendNotification(
+        "admin_broadcast",
+        "🛡️ Admin Session Unlocked",
+        `Admin login confirmed for ${adminEmail} from IP ${clientIp}`,
+        "system"
+      );
     } catch (err) {
       console.debug("Could not record notification:", err);
     }

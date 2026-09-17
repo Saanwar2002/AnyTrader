@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, UserCircle, Star, Calendar, MessageSquare, CheckCircle } from "lucide-react";
-import { db, collection, query, where, getDocs, addDoc, serverTimestamp } from "@/src/firebase";
+import { db, collection, query, where, getDocs, addDoc, serverTimestamp, sendNotification } from "@/src/firebase";
 import { getProMatches } from "@/src/services/gemini";
 
 export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, projectId: string, onClose: () => void }) {
@@ -103,15 +103,14 @@ export function ProMatchmakerModal({ role, projectId, onClose }: { role: any, pr
         createdAt: serverTimestamp()
       });
 
-      await addDoc(collection(db, "notifications"), {
-        userId: matchId,
-        title: "New Project Invitation",
-        message: `You've been invited to bid on the role: ${role.roleName}`,
-        type: "system",
-        read: false,
-        createdAt: serverTimestamp(),
-        visibleAt: serverTimestamp() // Instant visibility
-      });
+      await sendNotification(
+        matchId,
+        "New Project Invitation",
+        `You've been invited to bid on the role: ${role.roleName}`,
+        "system",
+        undefined,
+        { projectId }
+      );
 
       alert("Invitation to bid sent successfully!");
     } catch (err) {

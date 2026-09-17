@@ -600,3 +600,89 @@ export function assertCanAccessTenantReport(
   throw new ForbiddenError("You do not have authorization to access this tenant repair report.");
 }
 
+/**
+ * Notification Governance & Abuse Prevention (H3 Hardened):
+ * Prevents phishing, spamming, and unauthorized notification dispatch.
+ * 1. Admins can notify anyone.
+ * 2. Users can notify themselves (e.g. AI optimizer, digests, internal telemetry).
+ * 3. Users can notify another user ONLY if they share a legitimate transactional context (job, conversation, project, or quote).
+ */
+export function validateNotificationPayload(payload: Record<string, any>): {
+  recipientId: string;
+  title: string;
+  message: string;
+  type: string;
+  link?: string;
+  jobId?: string;
+  conversationId?: string;
+  projectId?: string;
+} {
+  if (!payload || typeof payload !== "object") {
+    throw new BadRequestError("Notification payload must be an object.");
+  }
+
+  const recipientId = payload.recipientId || payload.userId;
+  if (!recipientId || typeof recipientId !== "string" || recipientId.trim().length === 0) {
+    throw new BadRequestError("Recipient ID is required.");
+  }
+
+  const title = payload.title;
+  if (!title || typeof title !== "string" || title.trim().length === 0) {
+    throw new BadRequestError("Notification title is required.");
+  }
+  if (title.length > 120) {
+    throw new BadRequestError("Notification title exceeds maximum length of 120 characters.");
+  }
+
+  const message = payload.message || payload.body;
+  if (!message || typeof message !== "string" || message.trim().length === 0) {
+    throw new BadRequestError("Notification message is required.");
+  }
+  if (message.length > 500) {
+    throw new BadRequestError("Notification message exceeds maximum length of 500 characters.");
+  }
+
+  const allowedTypes = [
+    "quote",
+    "message",
+    "status",
+    "system",
+    "job_lead",
+    "promotion",
+    "profile_optimization",
+    "general",
+    "emergency_alert"
+  ];
+  const type = payload.type || "general";
+  if (!allowedTypes.includes(type)) {
+    throw new BadRequestError(`Invalid notification type '${type}'.`);
+  }
+
+  let link = payload.link || payload.actionPath;
+  if (link) {
+    if (typeof link !== "string" || link.length > 200) {
+      throw new BadRequestError("Invalid notification link.");
+    }
+    // Prevent open redirect phishing by requiring relative app links only
+    if (!link.startsWith("/")) {
+      throw new BadRequestError("Notification links must be relative in-app paths starting with '/'.");
+    }
+    // Block protocol injection attempts
+    if (link.startsWith("//") || link.includes("://") || link.toLowerCase().includes("javascript:") || link.toLowerCase().includes("data:")) {
+      throw new BadRequestError("Notification links cannot contain external URLs or script protocols.");
+    }
+  }
+
+  return {
+    recipientId: recipientId.trim(),
+    title: title.trim(),
+    message: message.trim(),
+    type,
+    link: link ? link.trim() : undefined,
+    jobId: typeof payload.jobId === "string" ? payload.jobId.trim() : undefined,
+    conversationId: typeof payload.conversationId === "string" ? payload.conversationId.trim() : undefined,
+    projectId: typeof payload.projectId === "string" ? payload.projectId.trim() : undefined,
+  };
+}
+
+

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "./AuthProvider";
-import { db, collection, query, where, onSnapshot, updateDoc, doc, getDoc } from "@/src/firebase";
+import { db, collection, query, where, onSnapshot, updateDoc, doc, getDoc, sendNotification } from "@/src/firebase";
 import { Briefcase, Clock, CheckCircle, XCircle } from "lucide-react";
 import { format } from "date-fns";
 
@@ -97,17 +97,14 @@ export function ConsultancyBids() {
           const projDoc = await getDoc(doc(db, "projects", bidData.projectId));
           if (projDoc.exists()) {
              const projData = projDoc.data();
-             import("firebase/firestore").then(({ addDoc, collection, serverTimestamp }) => {
-               addDoc(collection(db, "notifications"), {
-                 userId: projData.managerId,
-                 title: "Bid Accepted",
-                 message: `A professional has accepted the role: ${roleData.roleName}`,
-                 type: "system",
-                 read: false,
-                 createdAt: serverTimestamp(),
-                 visibleAt: serverTimestamp()
-               }).catch(console.error);
-             });
+             sendNotification(
+               projData.managerId,
+               "Bid Accepted",
+               `A professional has accepted the role: ${roleData.roleName}`,
+               "system",
+               undefined,
+               { projectId: bidData.projectId }
+             ).catch(console.error);
           }
 
           // Add to team members
@@ -133,17 +130,14 @@ export function ConsultancyBids() {
          const projDoc = await getDoc(doc(db, "projects", bidData.projectId));
          if (projDoc.exists()) {
             const projData = projDoc.data();
-            import("firebase/firestore").then(({ addDoc, collection, serverTimestamp }) => {
-              addDoc(collection(db, "notifications"), {
-                userId: projData.managerId,
-                title: "Bid Declined",
-                message: `A professional has declined the invitation.`,
-                type: "system",
-                read: false,
-                createdAt: serverTimestamp(),
-                visibleAt: serverTimestamp()
-              }).catch(console.error);
-            });
+            sendNotification(
+              projData.managerId,
+              "Bid Declined",
+              `A professional has declined the invitation.`,
+              "system",
+              undefined,
+              { projectId: bidData.projectId }
+            ).catch(console.error);
          }
       }
     } catch (err) {

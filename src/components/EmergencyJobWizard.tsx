@@ -448,7 +448,7 @@ export default function EmergencyJobWizard() {
         console.warn("Public projection note for emergency job:", projErr);
       }
       
-      // Simulate auto-picking and notifying traders
+      // Notify relevant traders via server-authoritative distribution
       console.log("Notifying relevant traders for job:", jobRef.id);
       await distributeJobNotifications(
         jobRef.id,
@@ -457,21 +457,6 @@ export default function EmergencyJobWizard() {
         "emergency",
         isPaidOption
       );
-      
-      try {
-        // Send urgent SMS via Backend Extension Queue
-        const smsRef = doc(collection(db, "sms_queue"));
-        await setDoc(smsRef, {
-          toRole: "tradesperson",
-          category: formData.category,
-          jobId: jobRef.id,
-          message: `EMERGENCY ALERT: New ${formData.category} job near you. Accept within 5 mins to claim.`,
-          status: "pending",
-          createdAt: serverTimestamp()
-        });
-      } catch (smsErr) {
-        console.error("Failed to send urgent SMS:", smsErr);
-      }
       
       if (!isPaidOption) {
         navigate("/my-jobs");

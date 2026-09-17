@@ -299,7 +299,7 @@ service cloud.firestore {
       allow write: if isOwner(driverId) || isAdmin();
     }
 
-    // --- Notifications (User-scoped read/update; verified sender or admin create) ---
+    // --- Notifications (User-scoped read/update; strictly server/admin created to prevent spoofing/spam) ---
     match /notifications/{notificationId} {
       allow read: if isSignedIn() && (
         resource == null || 
@@ -309,11 +309,9 @@ service cloud.firestore {
         resource.data.get('homeownerId', '') == request.auth.uid || 
         isAdmin()
       );
-      allow create: if isSignedIn() && (
-        request.resource.data.get('senderId', '') == request.auth.uid || 
-        request.resource.data.userId == request.auth.uid || 
-        isAdmin()
-      );
+      // H3 Remediated: Normal authenticated clients CANNOT directly create notifications
+      // All client-triggered notifications MUST flow through authenticated server endpoints (/api/notifications)
+      allow create: if isAdmin();
       allow update: if isAdmin() || (
         isSignedIn() && 
         resource != null && 
@@ -323,14 +321,12 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && resource != null && (resource.data.userId == request.auth.uid || resource.data.get('recipientId', '') == request.auth.uid));
     }
 
-    // --- Server-Only Queues (Locked down from arbitrary client writes) ---
+    // --- Server-Only Queues (Locked down from all direct client writes - H3 Remediated) ---
     match /sms_queue/{queueId} {
-      allow create: if isAdmin() || (isSignedIn() && request.resource.data.get('requestedBy', '') == request.auth.uid);
       allow read, write: if isAdmin();
     }
 
     match /email_queue/{queueId} {
-      allow create: if isAdmin() || (isSignedIn() && request.resource.data.get('requestedBy', '') == request.auth.uid);
       allow read, write: if isAdmin();
     }
 

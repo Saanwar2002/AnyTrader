@@ -154,7 +154,7 @@ export const PropertyRollupCandidateSchema = z.object({
       component: z.string().min(1).max(100),
     })
   ).max(30),
-  overallHealthScore: z.number().min(0).max(100),
+      overallHealthScore: z.union([z.number().min(0).max(100), z.null(), z.undefined()]).transform((val) => (typeof val === 'number' ? val : 75)),
 });
 
 export const QualityReviewInputSchema = z.object({

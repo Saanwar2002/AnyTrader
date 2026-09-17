@@ -840,15 +840,13 @@ export default function AnyTraderAdmin() {
           if (foundingId) {
             console.log(`Assigned Founding ID ${foundingId} to ${userData.name}`);
             // Also notify the user about their prestigious status
-            await addDoc(collection(db, "notifications"), {
+            await sendNotification(
               userId,
-              title: "🎉 Founding Member Status!",
-              message: `Congratulations! You have been verified as one of our first 100 traders. Your new Elite Member ID is ${foundingId}.`,
-              type: "system",
-              read: false,
-              createdAt: serverTimestamp(),
-              link: "/profile"
-            });
+              "🎉 Founding Member Status!",
+              `Congratulations! You have been verified as one of our first 100 traders. Your new Elite Member ID is ${foundingId}.`,
+              "system",
+              "/profile"
+            );
           }
         }
       }
@@ -879,14 +877,12 @@ export default function AnyTraderAdmin() {
               });
 
               // Notify referrer
-              await addDoc(collection(db, "notifications"), {
-                userId: userData.referredBy,
-                title: "Referral Reward Granted!",
-                message: `Your referral ${userData.name} has been verified. You've received a ${boostDays}-day profile boost!`,
-                type: "system",
-                read: false,
-                createdAt: new Date().toISOString()
-              });
+              await sendNotification(
+                userData.referredBy,
+                "Referral Reward Granted!",
+                `Your referral ${userData.name} has been verified. You've received a ${boostDays}-day profile boost!`,
+                "system"
+              );
             }
           } catch (err) {
             console.error("Error processing referral reward:", err);
