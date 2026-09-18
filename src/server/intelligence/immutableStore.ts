@@ -442,7 +442,7 @@ export class ImmutableIntelligenceStore {
     db: FirestoreDbLike | null,
     qualityId: string
   ): Promise<QualityReview | null> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error(
         '[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -463,7 +463,7 @@ export class ImmutableIntelligenceStore {
     db: FirestoreDbLike | null,
     targetId: string
   ): Promise<QualityReview[]> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error(
         '[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -495,7 +495,7 @@ export class ImmutableIntelligenceStore {
     db?: FirestoreDbLike | null;
     evidence: IntelligenceEvidence;
   }): Promise<{ evidenceId: string; isNew: boolean; evidence: IntelligenceEvidence }> {
-    const db = options.db || globalIntelligenceDb;
+    const db = options.db !== undefined ? options.db : globalIntelligenceDb;
     if (!db) {
       throw new Error(
         '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -555,7 +555,7 @@ export class ImmutableIntelligenceStore {
     db: FirestoreDbLike | null,
     evidenceId: string
   ): Promise<IntelligenceEvidence | null> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error(
         '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -577,7 +577,7 @@ export class ImmutableIntelligenceStore {
     aggregateType: string,
     aggregateId: string
   ): Promise<IntelligenceEvidence[]> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error(
         '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'

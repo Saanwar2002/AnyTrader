@@ -318,7 +318,7 @@ export function createEvidenceRecord(params: CreateEvidenceParams): Intelligence
 export async function persistEvidenceToFirestore(
   options: PersistEvidenceOptions
 ): Promise<PersistEvidenceResult> {
-  const db = options.db || getGlobalIntelligenceDb();
+  const db = options.db !== undefined ? options.db : getGlobalIntelligenceDb();
   if (!db) {
     throw new Error(
       '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
