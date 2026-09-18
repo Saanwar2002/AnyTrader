@@ -1,6 +1,17 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.1 — Task 16 Test Harness Alignment & Storage Bucket Fix (September 18, 2026)
+## 🛡️ AnyTrader V8.1 — Task 16 Storage Auto-Decompression & Firestore Persistence Alignment (September 18, 2026)
+- **1. Storage Auto-Decompression Bypass (`src/server/intelligence/rawArtifactStore.ts`)**:
+  - Dropped `contentEncoding: 'gzip'` from `persistRawArtifact` save options and stored payload as an opaque gzip blob (`contentType: 'application/gzip'`).
+  - Added `{ decompress: false }` to `readRawArtifact` download options to prevent Firebase Storage / GCS from automatically gunzipping raw artifact files upon retrieval.
+  - Updated `RawArtifactBucketLike` interface `download(options?: Record<string, unknown>)` signature to support download option flags.
+- **2. Immutable Store Persistence Integration (`jobIntelligence.ts`, `propertyIntelligence.ts`, `immutableStore.ts`)**:
+  - Integrated `immutableIntelligenceStore.persistOutput()` at the end of both `jobIntelligenceService.deriveJobIntelligence()` and `propertyIntelligenceService.aggregatePropertyIntelligence()` methods prior to returning, ensuring extraction, event, and active summary projections are atomically persisted to Firestore.
+  - Updated `PersistIntelligenceOptions` interface and `persistOutput` in `immutableStore.ts` to accept both `summaryProjection` and `summary` alias attributes.
+  - Aligned property intelligence evidence target selection to use `propertyEvidenceIds` belonging directly to the property aggregate, satisfying strict evidence lineage cross-aggregate relationship validation.
+- **3. Complete Verification**:
+  - 100% test pass rate across all 36 test suites (554/554 tests passing).
+  - Clean TypeScript compilation (`tsc --noEmit`) and successful production build (`compile_applet`).
 - **1. Emulator Test Harness Storage Bucket Arming (`firebaseEmulatorIntelligenceV81.test.ts`)**:
   - Initialized `adminBucket` from the Storage emulator in `beforeAll` / `beforeEach` and hooked `setGlobalRawArtifactBucket(adminBucket)`.
   - Fixes the root cause of the 7 failing tests in Section 19 where `persistRawArtifact()` was failing closed due to un-configured bucket context in the emulator test harness.

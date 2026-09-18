@@ -12,7 +12,7 @@ import { StorageManifest } from './types';
 export interface RawArtifactBucketLike {
   file(path: string): {
     save(data: Buffer, opts?: Record<string, unknown>): Promise<void>;
-    download(): Promise<[Buffer]>;
+    download(options?: Record<string, unknown>): Promise<[Buffer]>;
     exists(): Promise<[boolean]>;
   };
 }
@@ -69,9 +69,8 @@ export async function persistRawArtifact(options: {
 
   try {
     await b.file(manifest.storagePath).save(compressedBuffer, {
-      contentType: 'application/json',
+      contentType: 'application/gzip',
       metadata: {
-        contentEncoding: 'gzip',
         metadata: {
           sha256: manifest.sha256,
           schemaVersion: manifest.schemaVersion,
@@ -102,7 +101,7 @@ export async function readRawArtifact(
   let buf: Buffer;
 
   try {
-    const [downloaded] = await b.file(manifest.storagePath).download();
+    const [downloaded] = await b.file(manifest.storagePath).download({ decompress: false } as any);
     buf = downloaded;
   } catch (err) {
     throw new RawArtifactPersistenceError(

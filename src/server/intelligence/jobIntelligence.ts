@@ -18,6 +18,7 @@ import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiP
 import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
 import { persistRawArtifact } from './rawArtifactStore';
+import { immutableIntelligenceStore } from './immutableStore';
 import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence } from './types';
 
 export interface JobSourceInput {
@@ -387,6 +388,19 @@ export class JobIntelligenceService {
     if ((candidate as any).promptVersion) rawCandidateObj.promptVersion = (candidate as any).promptVersion;
     if ((candidate as any).schemaVersion) rawCandidateObj.schemaVersion = (candidate as any).schemaVersion;
     if ((candidate as any).generatedAt) rawCandidateObj.generatedAt = (candidate as any).generatedAt;
+
+    // Persist extraction, event, and active summary projection to Firestore
+    await immutableIntelligenceStore.persistOutput({
+      db: options?.firestoreDb,
+      aggregateType: 'job',
+      aggregateId: job.jobId,
+      versionId,
+      extraction,
+      event,
+      summaryProjection: jobIntelligence,
+      summary: jobIntelligence,
+      sourceVersion,
+    });
 
     return {
       jobIntelligence,

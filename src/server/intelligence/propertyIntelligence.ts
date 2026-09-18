@@ -17,6 +17,7 @@ import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiP
 import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
 import { persistRawArtifact } from './rawArtifactStore';
+import { immutableIntelligenceStore } from './immutableStore';
 import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence, PropertyIntelligence } from './types';
 
 export interface PropertySourceInput {
@@ -131,15 +132,10 @@ export class PropertyIntelligenceService {
       propertyEvidence = await evidenceRegistry.getForAggregate('property', property.propertyId);
     }
 
-    // Combine evidence IDs from property and jobs
-    const combinedEvidenceIds = Array.from(
-      new Set([
-        ...propertyEvidence.map((e) => e.evidenceId),
-        ...historicalJobs.flatMap((j) => j.evidenceIds),
-      ])
-    );
+    // Property-level evidence IDs supporting the property aggregate extraction
+    const propertyEvidenceIds = propertyEvidence.map((e) => e.evidenceId);
 
-    const targetEvidenceIds = overrideEvidenceIds || combinedEvidenceIds;
+    const targetEvidenceIds = overrideEvidenceIds || propertyEvidenceIds;
 
     // Invariant: No evidence, no assertion
     evidenceRegistry.assertHasEvidence(targetEvidenceIds);
@@ -320,6 +316,18 @@ export class PropertyIntelligenceService {
         tokenMetrics: rollupResult.metrics,
       },
     };
+
+    // Persist extraction, event, and active summary projection to Firestore
+    await immutableIntelligenceStore.persistOutput({
+      aggregateType: 'property',
+      aggregateId: property.propertyId,
+      versionId,
+      extraction,
+      event,
+      summaryProjection: propertyIntelligence,
+      summary: propertyIntelligence,
+      sourceVersion,
+    });
 
     return {
       propertyIntelligence,

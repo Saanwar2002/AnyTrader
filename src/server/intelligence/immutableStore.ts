@@ -49,7 +49,8 @@ export interface PersistIntelligenceOptions {
   versionId: string;
   extraction: IntelligenceExtraction;
   event: CanonicalIntelligenceEvent;
-  summaryProjection: JobIntelligence | PropertyIntelligence | Record<string, unknown>;
+  summaryProjection?: JobIntelligence | PropertyIntelligence | Record<string, unknown>;
+  summary?: JobIntelligence | PropertyIntelligence | Record<string, unknown>;
   sourceVersion?: string | number;
 }
 
@@ -106,8 +107,8 @@ export class ImmutableIntelligenceStore {
       versionId,
       extraction,
       event,
-      summaryProjection,
     } = options;
+    const summaryProjection = options.summaryProjection || options.summary || {};
 
     const db = options.db !== undefined ? options.db : globalIntelligenceDb;
     if (!db) {
