@@ -276,7 +276,12 @@ describe('Task 15R-V2: Real Firebase Emulator Provider to AI Security Boundary R
                 const docRef = doc(dbInstance, name, id);
                 const sanitized: any = {};
                 for (const [k, v] of Object.entries(data)) {
-                  sanitized[k] = v === undefined ? deleteField() : v;
+                  sanitized[k] =
+                    v === undefined
+                      ? deleteField()
+                      : v !== null && typeof v === 'object' && !(v instanceof Date)
+                        ? cleanUndefinedFields(v as any)
+                        : v;
                 }
                 return updateDoc(docRef, sanitized);
               },
@@ -327,7 +332,12 @@ describe('Task 15R-V2: Real Firebase Emulator Provider to AI Security Boundary R
               const docRef = doc(dbInstance, col, refObj.id);
               const sanitized: any = {};
               for (const [k, v] of Object.entries(data)) {
-                sanitized[k] = v === undefined ? deleteField() : v;
+                sanitized[k] =
+                  v === undefined
+                    ? deleteField()
+                    : v !== null && typeof v === 'object' && !(v instanceof Date)
+                      ? cleanUndefinedFields(v as any)
+                      : v;
               }
               tx.update(docRef, sanitized);
             },

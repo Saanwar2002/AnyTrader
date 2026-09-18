@@ -1,5 +1,33 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 15R-V2 Fix 3 & Fix 4: Test Double Sanitization & Server Admin Ignore Undefined Settings (September 18, 2026)
+- **1. Test Double Nested Object Deep-Sanitization (Fix 3)**:
+  - Updated the test double `update` and transaction `update` wrappers in `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` and `tests/unit/task15RVIntegration.test.ts` to recursively sanitize nested objects with `cleanUndefinedFields`.
+  - Ensures test doubles accurately reflect Firestore behavior when updating documents containing nested objects.
+- **2. Production Firebase Admin Defense-in-Depth (Fix 4)**:
+  - Enabled `firestoreDb.settings({ ignoreUndefinedProperties: true })` inside `initializeFirebaseAdminAsync()` in `server.ts`.
+  - Guarantees server-side Firestore operations automatically ignore nested `undefined` properties in production.
+- **3. Complete Verification**:
+  - All 4 fixes (Fix 1: Task payload deep-sanitization, Fix 2: Error unmasking & state invariant protection, Fix 3: Test double update sanitization, Fix 4: Server-level ignoreUndefinedProperties) implemented and verified.
+  - 100% test pass rate across all 36 test suites (554/554 tests passing). Clean TypeScript typecheck (`tsc --noEmit`) and clean production build.
+
+## 🛡️ AnyTrader V8.1 — Task 15R-V2 Fix 2: Unmask Real Post-Success Errors & Guard State Machine Invariants (September 18, 2026)
+- **1. Processing Run Status Invariant & Post-Success Error Unmasking (`intelligenceTaskQueue.ts`)**:
+  - Implemented Fix 2 by tracking `runMarkedSucceeded` in `executeTask()`.
+  - When `processingRunStore.recordRunSucceeded(runId, ...)` completes, the run status is durably set to `'succeeded'`.
+  - If a subsequent error occurs during task document finalization, the error catch block checks `runMarkedSucceeded` and rethrows the underlying database/system error directly without attempting to invoke `recordRunFailed(runId, ...)` on the already-succeeded run.
+  - This prevents `ProcessingRunValidationError: cannot transition processing run from 'succeeded' to 'retrying'` from corrupting the state machine or masking genuine database errors.
+- **2. Verification**:
+  - 100% test pass rate across all 36 unit test suites (554/554 tests passing). Clean TypeScript typecheck (`tsc --noEmit`) and clean production build.
+
+## 🛡️ AnyTrader V8.1 — Task 15R-V2 Fix 1: Deep-Sanitize Task Success Finalization Payload (September 18, 2026)
+- **1. Deep Sanitization of Merged Task Payload (`intelligenceTaskQueue.ts`)**:
+  - Implemented Fix 1 by integrating `cleanUndefinedFields` from `src/server/intelligence/evidence.ts` into the success finalization transaction in `executeTask()`.
+  - Canonical intelligence records contain intentional `undefined` values for optional attributes (such as `component`, `condition`, `capturedAt`). When merging handler results into the task document payload, `cleanUndefinedFields({ ...data.payload, ...(result as any) })` recursively strips `undefined` properties while preserving `null`, `Date`, and primitive values.
+  - Prevents Firestore SDK `Unsupported field value: undefined` exceptions during task finalization writes.
+- **2. Verification**:
+  - 100% test pass rate across all 36 unit test suites (554/554 tests passing). Clean TypeScript typecheck (`tsc --noEmit`) and clean production build.
+
 ## 🛡️ AnyTrader V8.1 — Task 15R-V2: Real Firebase Emulator Provider to AI Security Boundary Verification (September 18, 2026)
 - **1. Real Firebase Firestore Emulator Verification**:
   - Migrated and expanded the AI Provider-to-Security-Boundary runtime path verification to execute directly against the live Firebase Firestore Emulator infrastructure using `@firebase/rules-unit-testing` and `RulesTestEnvironment`.

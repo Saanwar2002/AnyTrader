@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 import { IntelligenceTask, TaskStatus, TaskType, IntelligenceAggregateType } from './types';
 import { AICandidateSecurityError } from './aiCandidateBoundary';
 import { processingRunStore, buildProcessingRunId, setGlobalProcessingRunDb } from './processingRunStore';
+import { cleanUndefinedFields } from './evidence';
 
 export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unknown>>;
 
@@ -689,6 +690,7 @@ export class IntelligenceTaskQueue {
     const effectiveAggregateType = task.aggregateType || 'job';
     const effectiveAggregateId = task.aggregateId || taskId;
     const startTime = Date.now();
+    let runMarkedSucceeded = false;
 
     try {
       // 1. Durable Processing Run: Record attempt started (Fail Closed - throws if write fails)
@@ -758,6 +760,7 @@ export class IntelligenceTaskQueue {
         },
         this.firestoreDb
       );
+      runMarkedSucceeded = true;
 
       // 3. SUCCESS FINALIZATION WITH LEASE OWNERSHIP VERIFICATION (MANDATORY TRANSACTION)
       await this.firestoreDb.runTransaction(async (transaction: any) => {
@@ -775,12 +778,16 @@ export class IntelligenceTaskQueue {
           throw new OwnershipLostError(taskId, effectiveWorkerId);
         }
 
+        // Firestore rejects nested undefined; canonicalizeIntelligence emits undefined for
+        // optional fields. Strip undefined before the write (explicit nulls are preserved).
+        const mergedPayload = cleanUndefinedFields({ ...data.payload, ...(result as any) });
+
         transaction.update(taskRef, {
           status: 'succeeded',
           completedAt: nowIso,
           processingDurationMs: durationMs,
           updatedAt: nowIso,
-          payload: { ...data.payload, ...result },
+          payload: mergedPayload,
           workerId: null,
           leaseId: null,
           leaseExpiresAt: null,
@@ -803,6 +810,18 @@ export class IntelligenceTaskQueue {
       if (err instanceof OwnershipLostError) {
         console.warn(`[IntelligenceTaskQueue] ${err.message}`);
         return (await this.getTaskAsync(taskId)) || task;
+      }
+
+      // If the run was already marked succeeded in processingRunStore, post-success finalization
+      // failed (e.g. task document write error). Do not attempt to record failure on the run,
+      // which would violate the processing run state machine and mask the underlying error.
+      if (runMarkedSucceeded) {
+        console.error(
+          `[IntelligenceTaskQueue] Post-success finalization failed for task '${taskId}' ` +
+          `(run '${runId}' remains 'succeeded'):`,
+          (err as any)?.message || err
+        );
+        throw err;
       }
 
       const durationMs = Date.now() - startTime;

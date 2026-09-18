@@ -234,7 +234,12 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
                 const docRef = doc(dbInstance, name, id);
                 const sanitized: any = {};
                 for (const [k, v] of Object.entries(data)) {
-                  sanitized[k] = v === undefined ? deleteField() : v;
+                  sanitized[k] =
+                    v === undefined
+                      ? deleteField()
+                      : v !== null && typeof v === 'object' && !(v instanceof Date)
+                        ? cleanUndefinedFields(v as any)
+                        : v;
                 }
                 return updateDoc(docRef, sanitized);
               },
@@ -285,7 +290,12 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
               const docRef = doc(dbInstance, col, refObj.id);
               const sanitized: any = {};
               for (const [k, v] of Object.entries(data)) {
-                sanitized[k] = v === undefined ? deleteField() : v;
+                sanitized[k] =
+                  v === undefined
+                    ? deleteField()
+                    : v !== null && typeof v === 'object' && !(v instanceof Date)
+                      ? cleanUndefinedFields(v as any)
+                      : v;
               }
               tx.update(docRef, sanitized);
             },

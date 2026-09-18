@@ -119,6 +119,14 @@ export async function initializeFirebaseAdminAsync(): Promise<{ app: admin.app.A
     }
   }
 
+  // Defense-in-depth: Canonical intelligence records carry explicit undefined for optional fields.
+  // Enabling ignoreUndefinedProperties ensures writes containing undefined properties do not throw in production.
+  try {
+    firestoreDb.settings({ ignoreUndefinedProperties: true });
+  } catch {
+    // settings() throws if the instance has already been initialized or used — safe to ignore.
+  }
+
   return { app, db: firestoreDb };
 }
 
