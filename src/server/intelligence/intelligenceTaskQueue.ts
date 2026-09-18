@@ -82,13 +82,15 @@ export function classifyTaskError(err: unknown): {
     code = 'MISSING_HANDLER';
   }
 
-  // Security, lineage validation, schema validation, or missing handlers are strictly NON_RETRYABLE
+  // Security, lineage validation, schema validation, immutability violations, or missing handlers are strictly NON_RETRYABLE
   if (
     err instanceof AICandidateSecurityError ||
     name === 'AICandidateSecurityError' ||
     name === 'LineageValidationError' ||
     name === 'ZodError' ||
     message.includes('Lineage validation failed') ||
+    message.includes('[Intelligence Immutability Error]') ||
+    message.includes('Cannot mutate historical intelligence version') ||
     message.includes('Firestore DB reference is required') ||
     message.includes('No evidence provided') ||
     message.includes('Missing required evidence') ||
@@ -96,6 +98,7 @@ export function classifyTaskError(err: unknown): {
     message.includes('INVALID_PAYLOAD') ||
     message.includes('MISSING_EVIDENCE') ||
     message.includes('SECURITY_VIOLATION') ||
+    message.includes('IMMUTABILITY_VIOLATION') ||
     code === 'PERMISSION_DENIED' ||
     code === 'INVALID_ARGUMENT' ||
     code === 'MISSING_HANDLER'

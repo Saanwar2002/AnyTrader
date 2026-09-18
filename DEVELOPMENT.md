@@ -1,5 +1,15 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 15R-V2 Task Queue Double-Write Elimination & Immutability Classification (September 18, 2026)
+- **1. Opt-Out Legacy Persistence (`jobIntelligence.ts`, `propertyIntelligence.ts`)**:
+  - Added `persist?: boolean` to options parameter in `deriveJobIntelligence()` and `aggregatePropertyIntelligence()`, guarding internal `persistOutput()` calls so that direct unit test callers preserve standard persistence while queued handlers can explicitly opt out.
+- **2. Single-Write Task Queue Handler Alignment (`server.ts`)**:
+  - Updated `job_extraction` queue handler to pass `persist: false` to `deriveJobIntelligence()`, ensuring the security boundary (`processAICandidateToCanonical`) serves as the sole authoritative write path and eliminating unvalidated legacy Firestore writes.
+  - Dynamically synchronized `serverContext.modelVersion` with `derived.extraction.modelVersion` when `job.modelVersion` is omitted, guaranteeing identical `versionId` identity across pipeline stages.
+  - Cleaned up `property_rollup` handler by passing `activeDb` directly to `aggregatePropertyIntelligence()` and removing the redundant secondary `persistOutput()` write.
+- **3. Non-Retryable Immutability Fail-Fast Guard (`intelligenceTaskQueue.ts`)**:
+  - Added `[Intelligence Immutability Error]`, `Cannot mutate historical intelligence version`, and `IMMUTABILITY_VIOLATION` to `NON_RETRYABLE` error conditions, preventing unnecessary retry loops on historical version collisions.
+
 ## 🛡️ AnyTrader V8.1 — Task 16 Storage Auto-Decompression & Firestore Persistence Alignment (September 18, 2026)
 - **1. Storage Auto-Decompression Bypass (`src/server/intelligence/rawArtifactStore.ts`)**:
   - Dropped `contentEncoding: 'gzip'` from `persistRawArtifact` save options and stored payload as an opaque gzip blob (`contentType: 'application/gzip'`).

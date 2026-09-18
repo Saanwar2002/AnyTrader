@@ -170,8 +170,15 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
         {
           firestoreDb: activeDb,
           provider: payload.provider || job.provider,
+          persist: false,
         }
       );
+
+      // Keep provenance truthful: use the model that actually ran, not the default fallback
+      if (derived.extraction?.modelVersion) {
+        serverContext.modelVersion = job.modelVersion || derived.extraction.modelVersion;
+      }
+
       rawCandidate = (derived as any).rawCandidate || (derived as any).extraction?.structuredCandidate;
       if (!rawCandidate) {
         const evIds = derived.jobIntelligence.evidenceIds || [];
@@ -240,19 +247,13 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
     const payload = (task.payload || {}) as any;
     const { property, historicalJobs } = payload;
     if (!property) throw new Error("Missing property payload for rollup");
-    const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
     const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
-    if (activeDb) {
-      await immutableIntelligenceStore.persistOutput({
-        db: activeDb,
-        aggregateType: "property",
-        aggregateId: property.propertyId,
-        versionId: result.versionId,
-        extraction: result.extraction,
-        event: result.event,
-        summaryProjection: result.propertyIntelligence,
-      });
-    }
+    const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
+      property,
+      historicalJobs || [],
+      undefined,
+      { firestoreDb: activeDb }
+    );
     return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId, versionId: result.versionId };
   });
 }

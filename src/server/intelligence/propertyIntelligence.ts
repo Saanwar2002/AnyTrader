@@ -61,7 +61,8 @@ export class PropertyIntelligenceService {
   public async aggregatePropertyIntelligence(
     property: PropertySourceInput,
     historicalJobs: JobIntelligence[],
-    overrideEvidenceIds?: string[]
+    overrideEvidenceIds?: string[],
+    options?: { firestoreDb?: any; persist?: boolean }
   ): Promise<{
     propertyIntelligence: PropertyIntelligence;
     extraction: IntelligenceExtraction;
@@ -318,16 +319,19 @@ export class PropertyIntelligenceService {
     };
 
     // Persist extraction, event, and active summary projection to Firestore
-    await immutableIntelligenceStore.persistOutput({
-      aggregateType: 'property',
-      aggregateId: property.propertyId,
-      versionId,
-      extraction,
-      event,
-      summaryProjection: propertyIntelligence,
-      summary: propertyIntelligence,
-      sourceVersion,
-    });
+    if (options?.persist !== false) {
+      await immutableIntelligenceStore.persistOutput({
+        db: options?.firestoreDb,
+        aggregateType: 'property',
+        aggregateId: property.propertyId,
+        versionId,
+        extraction,
+        event,
+        summaryProjection: propertyIntelligence,
+        summary: propertyIntelligence,
+        sourceVersion,
+      });
+    }
 
     return {
       propertyIntelligence,

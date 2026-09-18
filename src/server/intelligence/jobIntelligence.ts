@@ -71,7 +71,11 @@ export class JobIntelligenceService {
   public async deriveJobIntelligence(
     job: JobSourceInput,
     overrideEvidenceIds?: string[],
-    options?: { firestoreDb?: any; provider?: IntelligenceModelProvider }
+    options?: {
+      firestoreDb?: any;
+      provider?: IntelligenceModelProvider;
+      persist?: boolean;
+    }
   ): Promise<{
     jobIntelligence: JobIntelligence;
     extraction: IntelligenceExtraction;
@@ -390,17 +394,19 @@ export class JobIntelligenceService {
     if ((candidate as any).generatedAt) rawCandidateObj.generatedAt = (candidate as any).generatedAt;
 
     // Persist extraction, event, and active summary projection to Firestore
-    await immutableIntelligenceStore.persistOutput({
-      db: options?.firestoreDb,
-      aggregateType: 'job',
-      aggregateId: job.jobId,
-      versionId,
-      extraction,
-      event,
-      summaryProjection: jobIntelligence,
-      summary: jobIntelligence,
-      sourceVersion,
-    });
+    if (options?.persist !== false) {
+      await immutableIntelligenceStore.persistOutput({
+        db: options?.firestoreDb,
+        aggregateType: 'job',
+        aggregateId: job.jobId,
+        versionId,
+        extraction,
+        event,
+        summaryProjection: jobIntelligence,
+        summary: jobIntelligence,
+        sourceVersion,
+      });
+    }
 
     return {
       jobIntelligence,
