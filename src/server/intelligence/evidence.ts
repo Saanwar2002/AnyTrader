@@ -384,7 +384,7 @@ export async function getEvidenceFromFirestore(
   db: FirestoreDbLike | null,
   evidenceId: string
 ): Promise<IntelligenceEvidence | null> {
-  const effectiveDb = db || getGlobalIntelligenceDb();
+  const effectiveDb = db !== undefined ? db : getGlobalIntelligenceDb();
   if (!effectiveDb) {
     throw new Error(
       '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -406,7 +406,7 @@ export async function getEvidenceForAggregateFromFirestore(
   aggregateType: string,
   aggregateId: string
 ): Promise<IntelligenceEvidence[]> {
-  const effectiveDb = db || getGlobalIntelligenceDb();
+  const effectiveDb = db !== undefined ? db : getGlobalIntelligenceDb();
   if (!effectiveDb) {
     throw new Error(
       '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'
@@ -433,7 +433,7 @@ export async function getEvidenceForSourceFromFirestore(
   sourceType: string,
   sourceId: string
 ): Promise<IntelligenceEvidence[]> {
-  const effectiveDb = db || getGlobalIntelligenceDb();
+  const effectiveDb = db !== undefined ? db : getGlobalIntelligenceDb();
   if (!effectiveDb) {
     throw new Error(
       '[EvidencePersistence Error] Firestore database is not configured or ready. Operational failure (Fail Closed).'

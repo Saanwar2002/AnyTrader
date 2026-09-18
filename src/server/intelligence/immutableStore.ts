@@ -109,7 +109,7 @@ export class ImmutableIntelligenceStore {
       summaryProjection,
     } = options;
 
-    const db = options.db || globalIntelligenceDb;
+    const db = options.db !== undefined ? options.db : globalIntelligenceDb;
     if (!db) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
@@ -216,7 +216,7 @@ export class ImmutableIntelligenceStore {
     aggregateType: IntelligenceAggregateType,
     aggregateId: string
   ): Promise<IntelligenceExtraction[]> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
@@ -244,7 +244,7 @@ export class ImmutableIntelligenceStore {
     db: FirestoreDbLike | null,
     versionId: string
   ): Promise<IntelligenceExtraction | null> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
@@ -265,7 +265,7 @@ export class ImmutableIntelligenceStore {
     aggregateType: IntelligenceAggregateType,
     aggregateId: string
   ): Promise<JobIntelligence | PropertyIntelligence | Record<string, unknown> | null> {
-    const effectiveDb = db || globalIntelligenceDb;
+    const effectiveDb = db !== undefined ? db : globalIntelligenceDb;
     if (!effectiveDb) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }
@@ -292,7 +292,7 @@ export class ImmutableIntelligenceStore {
     review: QualityReview;
     auditEvent: CanonicalIntelligenceEvent;
   }): Promise<{ qualityId: string; eventId: string; isNew: boolean; review: QualityReview }> {
-    const db = options.db || globalIntelligenceDb;
+    const db = options.db !== undefined ? options.db : globalIntelligenceDb;
     if (!db) {
       throw new Error('[ImmutableStore] Firestore database is not configured or ready. Operational failure (Fail Closed).');
     }

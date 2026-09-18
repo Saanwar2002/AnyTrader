@@ -165,6 +165,40 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       throw new Error('createRealFirestoreTaskDb requires a valid Firestore instance');
     }
     const getDbInstance = () => modularDb;
+
+    function createQueryBuilder(name: string, wheres: any[] = [], limitVal?: number) {
+      return {
+        colName: name,
+        collectionName: name,
+        where(field: string, op: any, val: any) {
+          return createQueryBuilder(name, [...wheres, where(field, op, val)], limitVal);
+        },
+        limit(count: number) {
+          return createQueryBuilder(name, wheres, count);
+        },
+        get: async () => {
+          const dbInstance = getDbInstance();
+          const colRef = collection(dbInstance, name);
+          let q: any = colRef;
+          const constraints = [...wheres];
+          if (limitVal !== undefined) {
+            constraints.push(limit(limitVal));
+          }
+          if (constraints.length > 0) {
+            q = query(colRef, ...constraints);
+          }
+          const snap = await getDocs(q);
+          return {
+            empty: snap.empty,
+            docs: snap.docs.map((d) => ({
+              id: d.id,
+              data: () => d.data(),
+            })),
+          };
+        },
+      };
+    }
+
     return {
       collection(name: string) {
         return {
@@ -212,38 +246,13 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
             };
           },
           where(field: string, op: any, val: any) {
-            return {
-              limit(count: number) {
-                return {
-                  get: async () => {
-                    const dbInstance = getDbInstance();
-                    const colRef = collection(dbInstance, name);
-                    const q = query(colRef, where(field, op, val), limit(count));
-                    const snap = await getDocs(q);
-                    return {
-                      empty: snap.empty,
-                      docs: snap.docs.map((d) => ({
-                        id: d.id,
-                        data: () => d.data(),
-                      })),
-                    };
-                  },
-                };
-              },
-              get: async () => {
-                const dbInstance = getDbInstance();
-                const colRef = collection(dbInstance, name);
-                const q = query(colRef, where(field, op, val));
-                const snap = await getDocs(q);
-                return {
-                  empty: snap.empty,
-                  docs: snap.docs.map((d) => ({
-                    id: d.id,
-                    data: () => d.data(),
-                  })),
-                };
-              },
-            };
+            return createQueryBuilder(name, [where(field, op, val)]);
+          },
+          limit(count: number) {
+            return createQueryBuilder(name, [], count);
+          },
+          get: async () => {
+            return createQueryBuilder(name).get();
           },
         };
       },
