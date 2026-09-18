@@ -19,7 +19,7 @@ Following strict audit protocol, the codebase was subjected to deep static code 
 2. **AI Output Security Boundary**: Fully enforced via `aiCandidateBoundary.ts` and `aiCandidateSchema.ts`. Untrusted model outputs are schema-validated with strict payload byte caps (`MAX_AI_PAYLOAD_BYTES`), numeric confidence bounding (`[0, 1]`), and automatic stripping of model-spoofed identity or metadata attributes.
 3. **Hard Provenance Gate ("No Evidence, No Assertion")**: Enforced by `lineageValidator.ts`. Every assertion must trace directly to authoritative evidence records verified in Firestore. Cross-aggregate evidence contamination is strictly rejected.
 4. **Immutable Intelligence Store & Projections**: Handled atomically in `immutableStore.ts`. Historical intelligence extraction documents (`intelligence_extractions`) and audit events (`intelligence_events`) are write-once append-only records. Current projections (`job_intelligence`, `property_intelligence`) are transactionally derived and read-only to client SDKs.
-5. **Tier-B Raw Artifact Storage**: Implemented via `rawArtifactStore.ts`. Raw AI payloads are compressed using GZIP (`contentType: 'application/gzip'`), stored in Firebase Storage with explicit `{ decompress: false }` configuration, verified via cryptographic SHA-256 digests, and protected by `storage.rules` authenticated scoping.
+5. **Tier-B Raw Artifact Storage**: Implemented via `rawArtifactStore.ts`. Raw AI payloads are compressed using GZIP (`contentType: 'application/gzip'`), stored in Firebase Storage with explicit `{ decompress: false }` configuration, verified via cryptographic SHA-256 digests, and restricted strictly to admins under the current Storage rules, with zero direct client access for ordinary owners/tradespeople (handled through server-side trust boundary).
 6. **Task Queue Orchestration & Lease Management**: Handled by `intelligenceTaskQueue.ts` and `processingRunStore.ts`. Implements atomic Firestore transactions for worker lease acquisition, task state transitions (`queued` → `leased` → `processing` → `succeeded` / `failed`), worker identity locks, and terminal state immutability.
 7. **Firebase Security Rules**: Enforced via `firestore.rules` and `storage.rules`. Client SDK write access to all V8.1 collections (`intelligence_extractions`, `intelligence_events`, `intelligence_tasks`, `job_intelligence`, `property_intelligence`, `evidence_registry`, `processing_runs`) is strictly denied (`allow read, write: if false;` or read-only to authorized participants).
 8. **100% Automated Test Gate Pass Rate**:
@@ -52,7 +52,7 @@ The independent audit encompassed the complete V8.1 Structured Intelligence pipe
 
 ## 3. Actual Commit & Branch Audited
 
-- **Git Commit Hash**: `HEAD`
+- **Git Commit Hash**: `6babd973202452042bd66fb68d529582ea4cee36`
 - **Git Branch**: `main`
 - **Working Tree State**: Clean / Verified (0 uncommitted production code changes)
 
@@ -71,7 +71,7 @@ The independent audit encompassed the complete V8.1 Structured Intelligence pipe
 | **Task 7** | Processing Observability Store | **PASS** | `processingRunStore.ts` tracks metrics, duration, costs, and sanitized error logs. |
 | **Task 8** | Property Intelligence Rollup | **PASS** | Multi-job property intelligence aggregation with constituent lineage tracking verified. |
 | **Task 9** | Firestore Security Rules | **PASS** | `firestore.rules` blocks all direct client SDK writes to V8.1 intelligence collections. |
-| **Task 10** | Firebase Storage Rules | **PASS** | `storage.rules` restricts raw artifact access to authenticated owners and admins. |
+| **Task 10** | Firebase Storage Rules | **PASS** | `storage.rules` restricts raw artifact client access strictly to admins. |
 | **Task 11** | End-to-End Pipeline Integration | **PASS** | Full server pipeline (`Task Queue` → `Handler` → `Boundary` → `Store`) verified. |
 | **Task 12** | Concurrency & Race Locks | **PASS** | Atomic Firestore transactions prevent double-processing and state race conditions. |
 | **Task 13E** | Lease & Attempt Invariants | **PASS** | Verified worker/lease ownership locks and lease renewal state guarantees. |
@@ -109,7 +109,7 @@ The independent audit encompassed the complete V8.1 Structured Intelligence pipe
 - **Compression & Storage Format**: Raw AI payloads are compressed using Node.js `zlib.gzipSync()`. Uploaded to Firebase Storage with `contentType: 'application/gzip'`.
 - **Decompression Flag Protection**: Configured with `{ decompress: false }` during download streams to prevent auto-decompression vulnerabilities or payload corruption.
 - **SHA-256 Integrity Digest**: Cryptographic hash computed before compression and validated upon retrieval. Mismatched digests trigger an integrity violation error.
-- **Storage Rules Protection**: `storage.rules` restricts access under `raw_intelligence/{aggregateType}/{aggregateId}/**` to authenticated aggregate owners, assigned tradespeople, or platform admins.
+- **Storage Rules Protection**: `storage.rules` restricts client read/write access under `/intelligence_raw/{aggregateId}/{allPaths=**}` strictly to administrators (`isAdmin()`). Ordinary authenticated homeowners and tradespeople have zero direct client-side access, ensuring a rigid server-side trust boundary where all interactions flow securely via the Admin SDK.
 
 ---
 
@@ -198,5 +198,26 @@ A comprehensive static analysis search was conducted across all files in `src/se
 The AnyTrader V8.1 Structured Intelligence architecture has undergone rigorous, independent audit verification across every security boundary, state machine, persistence layer, task queue, and security rule.
 
 All 219 emulator tests and 554 unit tests are passing with 100% success. Typechecking, build processes, and pre-flight release gates are completely green.
+
+### V8.1 FINAL AUDIT
+**STATUS**: **VERIFIED / CLOSED**
+
+| Area | Verified Result |
+|---|---|
+| Git commit | 6babd973202452042bd66fb68d529582ea4cee36 |
+| Firebase emulator | 219/219 PASS |
+| Security rules | 69/69 PASS |
+| V8.1 intelligence | 138/138 PASS |
+| Task 16 Tier-B | 12/12 PASS |
+| Unit/non-emulator | 554/554 PASS |
+| TypeScript | PASS |
+| Lint | PASS |
+| Production build | PASS |
+| Release audit | 0 critical failures |
+| Tier-B client access | Admin-only under current storage.rules |
+| AI security boundary | Verified |
+| Evidence lineage | Verified |
+| Immutable intelligence | Verified |
+| Task orchestration | Verified |
 
 **FINAL AUDIT DECISION**: **APPROVED & VERIFIED — V8.1 IS OFFICIALLY CLOSED.**
