@@ -145,9 +145,9 @@ A comprehensive static analysis search was conducted across all files in `src/se
 - **Command**: `firebase emulators:exec --project demo-anytrader --only firestore,storage 'npx vitest run --no-file-parallelism tests/unit/firebaseEmulatorSecurityRules.test.ts tests/unit/firebaseEmulatorIntelligenceV81.test.ts tests/unit/task16TierBStorage.test.ts'`
 - **Test Results**: **219 / 219 Passed (100%)**
 - **Test Breakdown**:
-  - `firebaseEmulatorSecurityRules.test.ts`: **114 Passed**
-  - `firebaseEmulatorIntelligenceV81.test.ts`: **84 Passed**
-  - `task16TierBStorage.test.ts`: **21 Passed**
+  - `firebaseEmulatorSecurityRules.test.ts`: **69 Passed**
+  - `firebaseEmulatorIntelligenceV81.test.ts`: **138 Passed**
+  - `task16TierBStorage.test.ts`: **12 Passed**
 
 ### 9.2 Non-Emulator Unit Test Suite (`npm test`)
 - **Command**: `npx vitest run`
