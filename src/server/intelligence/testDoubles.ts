@@ -7,6 +7,31 @@
  */
 
 import { FirestoreDbLike } from './immutableStore';
+import { RawArtifactBucketLike } from './rawArtifactStore';
+
+export function createInMemoryTestBucket(): RawArtifactBucketLike {
+  const storage = new Map<string, Buffer>();
+
+  return {
+    file(filePath: string) {
+      return {
+        save: async (data: Buffer) => {
+          storage.set(filePath, Buffer.from(data));
+        },
+        download: async () => {
+          const buf = storage.get(filePath);
+          if (!buf) {
+            throw new Error(`File ${filePath} not found in test bucket`);
+          }
+          return [Buffer.from(buf)];
+        },
+        exists: async () => {
+          return [storage.has(filePath)];
+        },
+      };
+    },
+  };
+}
 
 export function createInMemoryTestDb(): FirestoreDbLike {
   const collections = new Map<string, Map<string, any>>();

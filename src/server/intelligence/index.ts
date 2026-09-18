@@ -21,6 +21,7 @@ export * from './schemas';
 export * from './provenance';
 export * from './confidence';
 export * from './storageTier';
+export * from './rawArtifactStore';
 export * from './promptDefense';
 export * from './geminiProvider';
 export * from './evidenceRegistry';

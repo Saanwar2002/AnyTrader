@@ -41,20 +41,28 @@ import {
   INTELLIGENCE_SCHEMA_VERSION,
   taskDocumentId,
 } from '../../src/server/intelligence';
-import { createInMemoryTestDb } from '../../src/server/intelligence/testDoubles';
+import { createInMemoryTestDb, createInMemoryTestBucket } from '../../src/server/intelligence/testDoubles';
 import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
+import { setGlobalRawArtifactBucket } from '../../src/server/intelligence/rawArtifactStore';
 
 describe('V8.1 Structured Intelligence Foundation', () => {
   let testDb = createInMemoryTestDb();
+  let testBucket = createInMemoryTestBucket();
 
   beforeEach(() => {
     testDb = createInMemoryTestDb();
+    testBucket = createInMemoryTestBucket();
     setGlobalIntelligenceDb(testDb);
+    setGlobalRawArtifactBucket(testBucket);
     evidenceRegistry.setDb(testDb);
     evidenceRegistry.clear();
     intelligenceTaskQueue.clear();
     intelligenceTaskQueue.setFirestoreDb(testDb);
     qualityReviewService.clear();
+  });
+
+  afterEach(() => {
+    setGlobalRawArtifactBucket(null);
   });
 
   describe('1. Evidence Registry & "No Evidence, No Assertion" Invariant', () => {

@@ -16,6 +16,7 @@ import { evidenceRegistry } from './evidenceRegistry';
 import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiProvider';
 import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
+import { persistRawArtifact } from './rawArtifactStore';
 import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence, PropertyIntelligence } from './types';
 
 export interface PropertySourceInput {
@@ -43,6 +44,14 @@ export interface PropertySourceInput {
 
 export class PropertyIntelligenceService {
   constructor(private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider()) {}
+
+  public setProvider(provider: IntelligenceModelProvider): void {
+    this.provider = provider;
+  }
+
+  public getProvider(): IntelligenceModelProvider {
+    return this.provider;
+  }
 
   /**
    * Aggregates property-level intelligence from historical job intelligence records and property evidence,
@@ -176,8 +185,9 @@ export class PropertyIntelligenceService {
     );
 
     // 4. Tier B: Store Raw Model Output Gzip-Compressed
-    const storagePath = `intelligence_raw/property/${property.propertyId}/rollup_${versionId}_${Date.now()}.json.gz`;
-    const { manifest } = compressPayload(rollupResult.rawResponseText, storagePath);
+    const storagePath = `intelligence_raw/property/${property.propertyId}/rollup_${versionId}.json.gz`;
+    const { compressedBuffer, manifest: rawManifestDraft } = compressPayload(rollupResult.rawResponseText, storagePath);
+    const manifest = await persistRawArtifact({ compressedBuffer, manifest: rawManifestDraft });
 
     // 5. Calculate Multidimensional Confidence
     const hasMedia = historicalJobs.some((j) => j.confidence.evidenceQuality > 0.4);

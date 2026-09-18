@@ -1,5 +1,19 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 16: Durable Tier-B Raw Intelligence Storage (September 18, 2026)
+- **1. Durable Tier-B Raw Artifact Persistence (`src/server/intelligence/rawArtifactStore.ts`)**:
+  - Implemented gzip payload compression, SHA-256 checksum verification, and fail-closed persistence for raw provider responses in Firebase Storage under `intelligence_raw/job/{jobId}/extraction_{versionId}.json.gz` and `intelligence_raw/property/{propertyId}/rollup_{versionId}.json.gz`.
+  - Introduced `RawArtifactBucketLike` interface supporting global dependency injection (`setGlobalRawArtifactBucket`), eliminating false manifests and ensuring raw model outputs are physically written to Storage before returning manifests.
+- **2. Fail-Closed Pipelines & Deterministic Versioning (`jobIntelligence.ts`, `propertyIntelligence.ts`)**:
+  - Replaced temporary `Date.now()` filenames with deterministic `versionId` paths to prevent uncontrolled duplicate storage objects.
+  - Wired `persistRawArtifact` directly into `jobIntelligenceService` and `propertyIntelligenceService`, ensuring storage write failures abort extraction before authoritative Firestore writes.
+- **3. Production Initialization & Security Rules (`bootstrap.ts`, `storage.rules`)**:
+  - Connected Admin SDK storage bucket during application bootstrap (`setGlobalRawArtifactBucket(storage.bucket())`).
+  - Verified Storage security rules in `storage.rules` denying all client/unauthenticated/authenticated reads and writes to `/intelligence_raw/**`.
+- **4. Comprehensive Test Verification (`tests/unit/task16TierBStorage.test.ts`)**:
+  - Created emulator test suite covering test cases A-H (Job extraction, Property rollup, SHA-256 integrity, corruption detection, storage failure propagation, client security rule enforcement, 100 KiB Firestore safety budget, and deterministic idempotency).
+  - 100% test pass rate across all unit test suites. Clean TypeScript typecheck (`tsc --noEmit`) and clean production build.
+
 ## 🛡️ AnyTrader V8.1 — Task 15R-V2 Fix 3 & Fix 4: Test Double Sanitization & Server Admin Ignore Undefined Settings (September 18, 2026)
 - **1. Test Double Nested Object Deep-Sanitization (Fix 3)**:
   - Updated the test double `update` and transaction `update` wrappers in `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` and `tests/unit/task15RVIntegration.test.ts` to recursively sanitize nested objects with `cleanUndefinedFields`.

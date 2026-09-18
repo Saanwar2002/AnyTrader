@@ -26,6 +26,7 @@ import {
 import { TaskType } from "./intelligence/types.ts";
 import { evidenceRegistry } from "./intelligence/evidenceRegistry.ts";
 import { setGlobalIntelligenceDb } from "./intelligence/immutableStore.ts";
+import { setGlobalRawArtifactBucket } from "./intelligence/rawArtifactStore.ts";
 
 export const REQUIRED_INTELLIGENCE_HANDLERS: TaskType[] = [
   "job_extraction",
@@ -139,6 +140,14 @@ export async function runBootstrapSequence(
   hooks.queue.setFirestoreDb(db);
   evidenceRegistry.setDb(db);
   setGlobalIntelligenceDb(db);
+  try {
+    const storage = typeof (app as any).storage === "function" ? (app as any).storage() : null;
+    if (storage && typeof storage.bucket === "function") {
+      setGlobalRawArtifactBucket(storage.bucket());
+    }
+  } catch (err) {
+    console.warn("[Bootstrap] Storage bucket initialization notice:", err);
+  }
 
   if (hooks.startSyncWorkers) {
     console.log("[Bootstrap] Step 4: Starting background projection & sync workers...");

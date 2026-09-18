@@ -17,6 +17,7 @@ import { evidenceRegistry } from './evidenceRegistry';
 import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiProvider';
 import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
+import { persistRawArtifact } from './rawArtifactStore';
 import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence } from './types';
 
 export interface JobSourceInput {
@@ -221,8 +222,9 @@ export class JobIntelligenceService {
     );
 
     // 4. Tier B: Store Raw Model Output Gzip-Compressed
-    const storagePath = `intelligence_raw/job/${job.jobId}/extraction_${versionId}_${Date.now()}.json.gz`;
-    const { manifest } = compressPayload(extractionResult.rawResponseText, storagePath);
+    const storagePath = `intelligence_raw/job/${job.jobId}/extraction_${versionId}.json.gz`;
+    const { compressedBuffer, manifest: rawManifestDraft } = compressPayload(extractionResult.rawResponseText, storagePath);
+    const manifest = await persistRawArtifact({ compressedBuffer, manifest: rawManifestDraft });
 
     // 5. Calculate Multidimensional Confidence
     const hasMedia = evidenceItems.some((e) => e.evidenceType === 'image' || e.evidenceType === 'video');
