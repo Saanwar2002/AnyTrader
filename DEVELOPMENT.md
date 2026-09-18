@@ -1,5 +1,17 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 15R-V2: Real Firebase Emulator Provider to AI Security Boundary Verification (September 18, 2026)
+- **1. Real Firebase Firestore Emulator Verification**:
+  - Migrated and expanded the AI Provider-to-Security-Boundary runtime path verification to execute directly against the live Firebase Firestore Emulator infrastructure using `@firebase/rules-unit-testing` and `RulesTestEnvironment`.
+  - Added Section 19 to `tests/unit/firebaseEmulatorIntelligenceV81.test.ts` and updated `tests/unit/task15RVIntegration.test.ts` to utilize the live emulator harness.
+- **2. Full Real-Path Lifecycle Proved Against Authoritative Firestore**:
+  - *Task Queue to Provider*: Real `job_extraction` tasks claimed via transactional locks and executed by the production handler.
+  - *Provider to Boundary*: Model provider output reaches `processAICandidateToCanonical()` with mandatory structural validation, server-owned metadata enforcement, and authoritative evidence lineage verification.
+  - *Boundary to Firestore*: Valid outputs create immutable records in `intelligence_extractions`, `intelligence_events`, and `intelligence_jobs` projections in the Firestore Emulator.
+  - *Hostile Defense Verification*: Fabricated evidence IDs, cross-aggregate evidence references, and spoofed server-owned metadata fail closed with zero authoritative documents written and task status set to `dead_letter`.
+- **3. Test Suite Pass Rate**:
+  - 100% test pass rate across all 36 unit test suites (554/554 tests passing). Clean TypeScript lint (`tsc --noEmit`) and clean production compilation.
+
 ## 🛡️ AnyTrader V8.1 — Task 15R-V: Production AI Provider to Security Boundary Runtime Path Verification (September 18, 2026)
 - **1. Zero Direct rawCandidate Injection**:
   - Implemented and verified that all production `job_extraction` tasks flow exclusively through `jobIntelligenceService.deriveJobIntelligence()` using the production `IntelligenceModelProvider` interface without injecting `rawCandidate` or bypassing the security boundary.

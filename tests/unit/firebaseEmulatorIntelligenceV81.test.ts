@@ -90,6 +90,17 @@ import {
   buildQualityReviewId,
 } from '../../src/server/intelligence/qualityReview';
 import { QualityReview, CanonicalIntelligenceEvent } from '../../src/server/intelligence/types';
+import { jobIntelligenceService } from '../../src/server/intelligence/jobIntelligence';
+import { registerIntelligenceTaskHandlers } from '../../server';
+import {
+  IntelligenceModelProvider,
+  ModelExtractionResult,
+} from '../../src/server/intelligence/geminiProvider';
+import {
+  INTELLIGENCE_PIPELINE_VERSION,
+  INTELLIGENCE_SCHEMA_VERSION,
+} from '../../src/server/intelligence/provenance';
+import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
 
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
@@ -5949,6 +5960,441 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       await assertFails(
         deleteDoc(doc(userDb, 'intelligence_events', 'ie_client_delete_1'))
       );
+    });
+  });
+
+  // ==========================================================
+  // 19. TASK 15R-V2: REAL FIREBASE EMULATOR PROVIDER TO AI SECURITY BOUNDARY
+  // ==========================================================
+  describe('19. Task 15R-V2: Real Firebase Emulator Provider to AI Security Boundary Verification', () => {
+    class ControlledTestIntelligenceProvider implements IntelligenceModelProvider {
+      public lastJobId?: string;
+      public lastUntrustedEvidence?: Array<{ id: string; type: string; content: string }>;
+      public invocationCount: number = 0;
+
+      constructor(
+        private candidateOverride?: any,
+        private metricsOverride?: any
+      ) {}
+
+      public setCandidate(candidate: any): void {
+        this.candidateOverride = candidate;
+      }
+
+      async extractJobCandidate(
+        jobId: string,
+        untrustedEvidence: Array<{ id: string; type: string; content: string }>
+      ): Promise<ModelExtractionResult<any>> {
+        this.invocationCount++;
+        this.lastJobId = jobId;
+        this.lastUntrustedEvidence = untrustedEvidence;
+
+        const candidate = this.candidateOverride !== undefined
+          ? this.candidateOverride
+          : {
+              category: 'Roofing',
+              buildingComponent: 'Slate Tile',
+              observedProblem: 'Cracked slate tile near gutter flashing with active ingress',
+              extractedScope: [
+                'Source matching Welsh slate',
+                'Secure with copper rivets',
+                'Re-bed lead flashing',
+              ],
+              identifiedEvidenceReferences: untrustedEvidence.map((e) => e.id),
+              candidateConfidence: 0.92,
+            };
+
+        return {
+          candidate,
+          metrics: this.metricsOverride || {
+            model: 'controlled-test-model-v1',
+            inputTokens: 150,
+            outputTokens: 90,
+            totalTokens: 240,
+            estimatedCostUsd: 0.000038,
+            processingDurationMs: 42,
+          },
+          rawResponseText: JSON.stringify(candidate),
+        };
+      }
+
+      async rollupPropertyCandidate(
+        _propertyId: string,
+        _jobHistories: any[],
+        untrustedEvidence: Array<{ id: string; type: string; content: string }>
+      ): Promise<ModelExtractionResult<any>> {
+        return {
+          candidate: {
+            summary: 'Controlled property rollup',
+            criticalIssues: [],
+            preventativeMaintenance: [],
+            maintenanceScore: 88,
+            identifiedEvidenceReferences: untrustedEvidence.map((e) => e.id),
+            candidateConfidence: 0.91,
+          },
+          metrics: {
+            model: 'controlled-test-model-v1',
+            inputTokens: 210,
+            outputTokens: 95,
+            totalTokens: 305,
+            estimatedCostUsd: 0.000045,
+            processingDurationMs: 55,
+          },
+          rawResponseText: '{}',
+        };
+      }
+    }
+
+    const seedAuthoritativeEvidence = async (
+      adminDb: any,
+      evidenceId: string,
+      aggregateId: string,
+      aggregateType: 'job' | 'property' = 'job',
+      sourceId: string = 'usr_homeowner_42'
+    ) => {
+      await setDoc(doc(adminDb, 'intelligence_evidence', evidenceId), {
+        evidenceId,
+        aggregateType,
+        aggregateId,
+        sourceId,
+        sourceType: 'user_upload',
+        evidenceType: 'image',
+        storageUri: `gs://anytrader/evidence/${evidenceId}.jpg`,
+        sourceRef: `photos/${evidenceId}.jpg`,
+        contentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        byteSize: 20480,
+        integrityStatus: 'verified',
+        verified: true,
+        capturedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+    };
+
+    it('1. POSITIVE (Emulator): Full production pipeline executes via real provider path without direct rawCandidate injection', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_pos_001';
+        const evidenceId = 'ev_emu_sec19_pos_001';
+
+        await seedAuthoritativeEvidence(adminDb, evidenceId, jobId);
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case1_${jobId}`,
+          {
+            job: {
+              jobId,
+              title: 'Roof leak repair',
+              description: 'Cracked slate tile near gutter flashing with active ingress',
+              sourceVersion: '1',
+              modelVersion: 'controlled-test-model-v1',
+            },
+          }
+        );
+
+        expect(task.taskId).toBeDefined();
+        expect((task.payload as any).rawCandidate).toBeUndefined();
+
+        const executionResult = await intelligenceTaskQueue.executeTask(task.taskId);
+
+        expect(controlledProvider.invocationCount).toBe(1);
+        expect(controlledProvider.lastJobId).toBe(jobId);
+        expect(controlledProvider.lastUntrustedEvidence?.some((e) => e.id === evidenceId)).toBe(true);
+        expect(executionResult.status).toBe('succeeded');
+
+        const extractionsSnap = await getDocs(collection(adminDb, 'intelligence_extractions'));
+        expect(extractionsSnap.docs.length).toBe(1);
+        const extraction = extractionsSnap.docs[0].data();
+        expect(extraction.aggregateId).toBe(jobId);
+
+        const eventsSnap = await getDocs(collection(adminDb, 'intelligence_events'));
+        expect(eventsSnap.docs.length).toBe(1);
+        const event = eventsSnap.docs[0].data();
+        expect(event.aggregateId).toBe(jobId);
+        expect(event.evidenceIds).toContain(evidenceId);
+
+        const summarySnap = await getDoc(doc(adminDb, 'intelligence_jobs', jobId));
+        expect(summarySnap.exists()).toBe(true);
+        expect(summarySnap.data()?.domain).toBe('roofing');
+      });
+    });
+
+    it('2. NEGATIVE (Invalid Structure / Emulator): Provider returning invalid confidence rejected by boundary', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_inv_002';
+        const evidenceId = 'ev_emu_sec19_inv_002';
+        await seedAuthoritativeEvidence(adminDb, evidenceId, jobId);
+
+        controlledProvider.setCandidate({
+          category: 'Roofing',
+          buildingComponent: 'Slate Tile',
+          observedProblem: 'Cracked tile',
+          extractedScope: ['Fix tile'],
+          identifiedEvidenceReferences: [evidenceId],
+          candidateConfidence: 1.85, // INVALID: > 1.0
+        });
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case2_${jobId}`,
+          {
+            job: { jobId, title: 'Roof repair', description: 'Cracked tile' },
+          }
+        );
+
+        const executionResult = await intelligenceTaskQueue.executeTask(task.taskId);
+
+        expect(controlledProvider.invocationCount).toBe(1);
+        expect(executionResult.status).toBe('dead_letter');
+        expect(executionResult.lastError).toMatch(/Structural schema validation failed|candidateConfidence/i);
+
+        const extractionsSnap = await getDocs(collection(adminDb, 'intelligence_extractions'));
+        expect(extractionsSnap.empty).toBe(true);
+      });
+    });
+
+    it('3. NEGATIVE (Non-existent Evidence / Emulator): Provider returning ungrounded evidenceId fails closed', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_ghost_003';
+
+        controlledProvider.setCandidate({
+          category: 'Roofing',
+          buildingComponent: 'Slate Tile',
+          observedProblem: 'Fabricated ghost evidence test',
+          extractedScope: ['Repair slate'],
+          identifiedEvidenceReferences: ['ev_ghost_fabricated_999'],
+          candidateConfidence: 0.95,
+        });
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case3_${jobId}`,
+          {
+            job: { jobId, title: 'Ghost repair', description: 'Test' },
+          }
+        );
+
+        const executionResult = await intelligenceTaskQueue.executeTask(task.taskId);
+
+        expect(controlledProvider.invocationCount).toBe(1);
+        expect(executionResult.status).toBe('dead_letter');
+        expect(executionResult.lastError).toMatch(/Evidence lineage validation failed|does not exist in authoritative Firestore/i);
+
+        const extractionsSnap = await getDocs(collection(adminDb, 'intelligence_extractions'));
+        expect(extractionsSnap.empty).toBe(true);
+      });
+    });
+
+    it('4. SERVER-OWNED METADATA (Emulator): Security boundary strictly overwrites model-supplied metadata with trusted context', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_spoof_004';
+        const evidenceId = 'ev_emu_sec19_spoof_004';
+        await seedAuthoritativeEvidence(adminDb, evidenceId, jobId);
+
+        controlledProvider.setCandidate({
+          category: 'Roofing',
+          buildingComponent: 'Slate Tile',
+          observedProblem: 'Cracked tile with metadata tampering payload',
+          extractedScope: ['Replace slate tile'],
+          identifiedEvidenceReferences: [evidenceId],
+          candidateConfidence: 0.90,
+          aggregateId: 'hacked_target_job_999',
+          aggregateType: 'super_admin_system',
+          sourceId: 'forged_user_999',
+          pipelineVersion: 'v999.0.0-unauthorized',
+          modelVersion: 'unauthorized-model-999',
+          generatedAt: '1970-01-01T00:00:00.000Z',
+        });
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case4_${jobId}`,
+          {
+            job: {
+              jobId,
+              title: 'Roof repair',
+              description: 'Valid job',
+              sourceVersion: '1',
+              modelVersion: 'controlled-test-model-v1',
+            },
+          }
+        );
+
+        const executionResult = await intelligenceTaskQueue.executeTask(task.taskId);
+        expect(executionResult.status).toBe('succeeded');
+
+        const eventsSnap = await getDocs(collection(adminDb, 'intelligence_events'));
+        expect(eventsSnap.docs.length).toBe(1);
+        const event = eventsSnap.docs[0].data();
+        expect(event.aggregateId).toBe(jobId);
+        expect(event.aggregateType).toBe('job');
+        expect(event.pipelineVersion).toBe(INTELLIGENCE_PIPELINE_VERSION);
+        expect(event.modelVersion).toBe('controlled-test-model-v1');
+
+        const hackedSummary = await getDoc(doc(adminDb, 'intelligence_jobs', 'hacked_target_job_999'));
+        expect(hackedSummary.exists()).toBe(false);
+      });
+    });
+
+    it('5. RAW OUTPUT PERSISTENCE (Emulator): Raw provider output stored in rawManifest but does NOT become authoritative directly', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_raw_005';
+        const evidenceId = 'ev_emu_sec19_raw_005';
+        await seedAuthoritativeEvidence(adminDb, evidenceId, jobId);
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case5_${jobId}`,
+          {
+            job: { jobId, title: 'Roof repair', description: 'Raw manifest test' },
+          }
+        );
+
+        await intelligenceTaskQueue.executeTask(task.taskId);
+
+        const extractionsSnap = await getDocs(collection(adminDb, 'intelligence_extractions'));
+        expect(extractionsSnap.docs.length).toBe(1);
+        const extraction = extractionsSnap.docs[0].data();
+        expect(extraction.rawManifest).toBeDefined();
+        expect(extraction.rawManifest.storagePath).toMatch(/^(intelligence_raw|canonical_extractions)\/job\//);
+        expect(extraction.rawManifest.sha256).toBeDefined();
+      });
+    });
+
+    it('6. OBSERVABILITY (Emulator): Security failure propagates to task status and records failure in processingRunStore', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_obs_006';
+
+        controlledProvider.setCandidate({
+          category: 'Roofing',
+          buildingComponent: 'Slate Tile',
+          observedProblem: 'Testing failure propagation',
+          extractedScope: ['Inspect'],
+          identifiedEvidenceReferences: ['ev_unregistered_006'],
+          candidateConfidence: 0.90,
+        });
+
+        const task = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case6_${jobId}`,
+          {
+            job: { jobId, title: 'Unregistered test', description: 'Test' },
+          }
+        );
+
+        const executionResult = await intelligenceTaskQueue.executeTask(task.taskId);
+        expect(executionResult.status).toBe('dead_letter');
+
+        const runs = await processingRunStore.listRunsForAggregate('job', jobId, storeDb as any);
+        expect(runs.length).toBeGreaterThanOrEqual(1);
+        const failedRun = runs.find((r) => r.status === 'failed' || r.status === 'dead_letter');
+        expect(failedRun).toBeDefined();
+        expect(failedRun!.status).toBe('dead_letter');
+      });
+    });
+
+    it('7. IDEMPOTENCY & CONCURRENCY (Emulator): Duplicate delivery and worker race handled safely', async () => {
+      await withAdminDb(async (adminDb) => {
+        const storeDb = createRealFirestoreTaskDb(adminDb);
+        setGlobalIntelligenceDb(storeDb as any);
+        intelligenceTaskQueue.setFirestoreDb(storeDb as any);
+        registerIntelligenceTaskHandlers(storeDb as any);
+
+        const controlledProvider = new ControlledTestIntelligenceProvider();
+        jobIntelligenceService.setProvider(controlledProvider);
+
+        const jobId = 'job_emu_sec19_idem_007';
+        const evidenceId = 'ev_emu_sec19_idem_007';
+        await seedAuthoritativeEvidence(adminDb, evidenceId, jobId);
+
+        const task1 = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case7_a_${jobId}`,
+          {
+            job: { jobId, title: 'Idempotency test', description: 'Test', sourceVersion: '1' },
+          }
+        );
+
+        const result1 = await intelligenceTaskQueue.executeTask(task1.taskId);
+        expect(result1.status).toBe('succeeded');
+
+        const task2 = await intelligenceTaskQueue.enqueueTaskAsync(
+          'job_extraction',
+          'job',
+          jobId,
+          `idem_sec19_case7_b_${jobId}`,
+          {
+            job: { jobId, title: 'Idempotency test', description: 'Test', sourceVersion: '1' },
+          }
+        );
+
+        const result2 = await intelligenceTaskQueue.executeTask(task2.taskId);
+        expect(result2.status).toBe('succeeded');
+
+        const extractionsSnap = await getDocs(collection(adminDb, 'intelligence_extractions'));
+        expect(extractionsSnap.docs.length).toBe(1);
+      });
     });
   });
 });
