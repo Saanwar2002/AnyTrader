@@ -104,3 +104,29 @@ Build       compile_applet passed cleanly
 3. **Deterministic Idempotency**: Cryptographic content hashes prevent duplicate records across retries.
 4. **Lease Exclusivity**: Transactional claiming ensures single-worker task execution.
 5. **No Scope Creep**: Confined strictly to Task 15R remediation; no unrequested features or premature V8.2 capabilities introduced.
+
+---
+
+### 6. Task 15R-V Final Provider-to-Boundary Verification Suite (`tests/unit/task15RVIntegration.test.ts`)
+
+#### A. Elimination of Direct `rawCandidate` Injection
+In Task 15R-V, the test suite `tests/unit/task15RVIntegration.test.ts` was implemented to completely replace direct `rawCandidate` injection in task queue payloads with an injected deterministic `IntelligenceModelProvider` (`ControlledTestIntelligenceProvider`) registered via `jobIntelligenceService.setProvider()`.
+
+#### B. Verified End-to-End Runtime Path
+When `intelligenceTaskQueue.executeTask()` executes the real `job_extraction` handler from `server.ts`:
+1. `jobIntelligenceService.deriveJobIntelligence()` invokes `controlledProvider.extractJobCandidate()`.
+2. Provider sets observable telemetry (`invocationCount === 1`, `lastJobId`, `lastUntrustedEvidence`).
+3. Raw candidate output from the provider is passed directly to `processAICandidateToCanonical()`.
+4. Structural schema validation (`AIExtractionCandidateSchema.strict()`) is enforced.
+5. Server-owned metadata strictly overrides model-supplied values (`aggregateId`, `aggregateType`, `pipelineVersion`, `modelVersion`, `generatedAt`).
+6. Evidence lineage is validated against authoritative Firestore records in `intelligence_evidence`.
+7. Canonicalization (`canonicalizeIntelligence()`) produces deterministic SHA-256 `contentHash` and calibrated confidence.
+8. Tier A immutable persistence writes to `intelligence_extractions`, `intelligence_events`, and projection `intelligence_jobs`.
+9. Raw provider output is archived under compressed `rawManifest` in Tier B.
+
+#### C. Verification Results
+- **Focused Suite (`tests/unit/task15RVIntegration.test.ts`)**: 10/10 tests passing (100%).
+- **Full Unit Test Suite (`npm test`)**: 564/564 tests passing across 37 test files (100%).
+- **TypeScript & Build**: Clean compilation with 0 diagnostics.
+- **Task 15R-V Status**: **VERIFIED** (Test-only verification; production security boundary enforced).
+
