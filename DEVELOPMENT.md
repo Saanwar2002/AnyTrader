@@ -1,5 +1,23 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 15R-V: Production AI Provider to Security Boundary Runtime Path Verification (September 18, 2026)
+- **1. Zero Direct rawCandidate Injection**:
+  - Implemented and verified that all production `job_extraction` tasks flow exclusively through `jobIntelligenceService.deriveJobIntelligence()` using the production `IntelligenceModelProvider` interface without injecting `rawCandidate` or bypassing the security boundary.
+- **2. End-to-End Boundary Enforcement**:
+  - Validated that the production task queue handler (`registerIntelligenceTaskHandlers`) invokes provider extraction, passes candidates to `processAICandidateToCanonical()`, validates lineage against authoritative Firestore evidence, canonicalizes domain models with computed SHA-256 hashes, and records authoritative extractions in Tier A immutable stores (`intelligence_extractions`, `intelligence_events`, and projection `intelligence_jobs`).
+- **3. Complete Threat & Invariant Test Suite (`tests/unit/task15RVIntegration.test.ts`)**:
+  - *Positive E2E Path*: Enqueues task with job metadata only, calls model provider, validates lineage, persists canonical events and job summary projection (100% pass).
+  - *Invalid Structure / Confidence Violation*: Fails closed on confidence bounds (> 1.0) and schema violations (100% pass).
+  - *Malformed Observations*: Rejects empty observed problems and malformed observation structures (100% pass).
+  - *Non-existent / Ghost Evidence*: Fails closed when candidate references ungrounded evidence IDs (100% pass).
+  - *Cross-Aggregate Evidence Theft*: Fails closed with same-type aggregate mismatch error when candidate references evidence belonging to another job (100% pass).
+  - *Server-Owned Metadata Tampering*: Strictly overwrites spoofed/injected metadata (`aggregateId`, `aggregateType`, `pipelineVersion`, `modelVersion`, `generatedAt`) with trusted server context (100% pass).
+  - *Tier B Raw Manifest Separation*: Compresses and stores raw provider response in `rawManifest` without directly granting authoritative status (100% pass).
+  - *Observability & Failure Propagation*: Accurately records failed runs with sanitized diagnostic error classifications in `intelligence_processing_runs` (100% pass).
+  - *Deterministic Idempotency*: Duplicate task delivery produces deterministic single canonical version without duplicating records (100% pass).
+  - *Transactional Concurrency Lock*: Concurrent worker race claims task lease atomically; lost lease prevents duplicate execution (100% pass).
+- **4. Test Suite Pass Rate**: 10/10 tests passing in `task15RVIntegration.test.ts`. 100% passing across all 37 non-emulator unit test files (564/564 tests). Clean TypeScript lint and build compilation.
+
 ## 🛡️ AnyTrader V8.1 — Security Remediation H3A: Fix Cross-User Notification Authorization Bypass (September 17, 2026)
 - **1. Total Removal of User Document Existence Authorization Bypass**:
   - Removed the material authorization vulnerability in `server.ts` where `recipientDoc.exists` was treated as sufficient authorization to dispatch notifications for `type === "quote" | "job_lead" | "status"`. A user's existence in Firestore NEVER constitutes authorization to notify them.

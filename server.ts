@@ -155,7 +155,14 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
 
     if (rawCandidate === undefined) {
       // Derive candidate through model extraction
-      const derived = await jobIntelligenceService.deriveJobIntelligence(job, undefined, { firestoreDb: activeDb });
+      const derived = await jobIntelligenceService.deriveJobIntelligence(
+        job,
+        undefined,
+        {
+          firestoreDb: activeDb,
+          provider: payload.provider || job.provider,
+        }
+      );
       rawCandidate = (derived as any).rawCandidate || (derived as any).extraction?.structuredCandidate;
       if (!rawCandidate) {
         const evIds = derived.jobIntelligence.evidenceIds || [];

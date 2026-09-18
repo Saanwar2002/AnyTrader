@@ -114,6 +114,13 @@ export function validateAndSanitizeAICandidate(
     delete (parsedObj as any).homeownerId;
     delete (parsedObj as any).userId;
     delete (parsedObj as any).tenantId;
+    delete (parsedObj as any).pipelineVersion;
+    delete (parsedObj as any).modelVersion;
+    delete (parsedObj as any).promptVersion;
+    delete (parsedObj as any).schemaVersion;
+    delete (parsedObj as any).generatedAt;
+    delete (parsedObj as any).storagePath;
+    delete (parsedObj as any).storageUri;
   }
 
   // 3. Strict Zod Schema Validation (rejects unknown/malicious fields, invalid confidence, oversize arrays)

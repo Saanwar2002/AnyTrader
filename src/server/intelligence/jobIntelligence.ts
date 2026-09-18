@@ -54,6 +54,14 @@ export interface JobSourceInput {
 export class JobIntelligenceService {
   constructor(private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider()) {}
 
+  public setProvider(provider: IntelligenceModelProvider): void {
+    this.provider = provider;
+  }
+
+  public getProvider(): IntelligenceModelProvider {
+    return this.provider;
+  }
+
   /**
    * Derives structured job intelligence from authoritative job data and supporting evidence,
    * producing an immutable extraction record with deterministic version identity.
@@ -61,7 +69,7 @@ export class JobIntelligenceService {
   public async deriveJobIntelligence(
     job: JobSourceInput,
     overrideEvidenceIds?: string[],
-    options?: { firestoreDb?: any }
+    options?: { firestoreDb?: any; provider?: IntelligenceModelProvider }
   ): Promise<{
     jobIntelligence: JobIntelligence;
     extraction: IntelligenceExtraction;
@@ -69,8 +77,12 @@ export class JobIntelligenceService {
     versionId: string;
     rawCandidate?: any;
   }> {
+    if (options?.firestoreDb) {
+      evidenceRegistry.setDb(options.firestoreDb);
+    }
+
     // 1. Gather & verify evidence
-    let evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId);
+    let evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId, options?.firestoreDb);
 
     // If not yet registered in registry, register the baseline text & media
     if (evidenceItems.length === 0) {
@@ -184,7 +196,10 @@ export class JobIntelligenceService {
       }));
 
     // 3. Asynchronous Model Extraction
-    const extractionResult = await this.provider.extractJobCandidate(job.jobId, untrustedSources);
+    const effectiveProvider = (options?.provider && typeof (options.provider as any).extractJobCandidate === 'function')
+      ? options.provider
+      : this.provider;
+    const extractionResult = await effectiveProvider.extractJobCandidate(job.jobId, untrustedSources);
     const candidate = extractionResult.candidate;
 
     // Determine version identifiers
@@ -324,33 +339,52 @@ export class JobIntelligenceService {
       },
     };
 
-    const rawCandidateObj = {
-      domain: (candidate.category || 'general').toLowerCase(),
+    const candidateEvidence = (candidate as any).evidenceIds ||
+      (candidate.identifiedEvidenceReferences && candidate.identifiedEvidenceReferences.length > 0
+        ? candidate.identifiedEvidenceReferences
+        : targetEvidenceIds);
+
+    const rawCandidateObj: any = {
+      domain: ((candidate as any).domain || candidate.category || 'general').toLowerCase(),
       category: candidate.category,
-      component: candidate.buildingComponent,
-      observations: [
+      component: (candidate as any).component || candidate.buildingComponent,
+      observations: (candidate as any).observations || [
         {
           description: candidate.observedProblem || 'Observed problem',
           component: candidate.buildingComponent,
-          evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+          evidenceIds: candidateEvidence,
         },
       ],
-      inferences: [
+      inferences: (candidate as any).inferences || [
         {
-          hypothesis: candidate.recommendedIntervention || 'Recommended intervention',
+          hypothesis: candidate.recommendedIntervention || (Array.isArray(candidate.extractedScope) ? candidate.extractedScope.join('; ') : 'Recommended intervention'),
           confidence: candidate.candidateConfidence,
-          supportingEvidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+          supportingEvidenceIds: candidateEvidence,
           targetComponent: candidate.buildingComponent,
         },
       ],
-      interventions: candidate.extractedScope?.map((scope) => ({
+      interventions: (candidate as any).interventions || candidate.extractedScope?.map((scope: string) => ({
         description: scope,
         component: candidate.buildingComponent,
-        evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+        evidenceIds: candidateEvidence,
       })),
-      evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+      evidenceIds: candidateEvidence,
       candidateConfidence: candidate.candidateConfidence,
     };
+
+    if ((candidate as any).problems) rawCandidateObj.problems = (candidate as any).problems;
+    if ((candidate as any).outcomes) rawCandidateObj.outcomes = (candidate as any).outcomes;
+    if ((candidate as any).conditions) rawCandidateObj.conditions = (candidate as any).conditions;
+
+    // Forward model-supplied metadata attempts so the security boundary can explicitly strip and enforce server context
+    if ((candidate as any).aggregateId) rawCandidateObj.aggregateId = (candidate as any).aggregateId;
+    if ((candidate as any).aggregateType) rawCandidateObj.aggregateType = (candidate as any).aggregateType;
+    if ((candidate as any).sourceId) rawCandidateObj.sourceId = (candidate as any).sourceId;
+    if ((candidate as any).pipelineVersion) rawCandidateObj.pipelineVersion = (candidate as any).pipelineVersion;
+    if ((candidate as any).modelVersion) rawCandidateObj.modelVersion = (candidate as any).modelVersion;
+    if ((candidate as any).promptVersion) rawCandidateObj.promptVersion = (candidate as any).promptVersion;
+    if ((candidate as any).schemaVersion) rawCandidateObj.schemaVersion = (candidate as any).schemaVersion;
+    if ((candidate as any).generatedAt) rawCandidateObj.generatedAt = (candidate as any).generatedAt;
 
     return {
       jobIntelligence,
