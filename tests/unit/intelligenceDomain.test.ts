@@ -45,6 +45,65 @@ import { createInMemoryTestDb, createInMemoryTestBucket } from '../../src/server
 import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
 import { setGlobalRawArtifactBucket } from '../../src/server/intelligence/rawArtifactStore';
 
+class DomainTestControlledProvider {
+  async extractJobCandidate(jobId: string, untrustedEvidence: Array<{ id: string; type: string; content: string }>) {
+    const candidate = {
+      category: 'Heating',
+      buildingComponent: 'Radiator',
+      observedProblem: 'Fixed radiator thermostat in bedroom.',
+      extractedScope: ['Fix thermostat'],
+      identifiedEvidenceReferences: untrustedEvidence.map((e) => e.id),
+      candidateConfidence: 0.92,
+    };
+    return {
+      candidate,
+      metrics: {
+        model: 'domain-test-controlled-v1',
+        inputTokens: 100,
+        outputTokens: 50,
+        totalTokens: 150,
+        estimatedCostUsd: 0.00001,
+        processingDurationMs: 10,
+      },
+      rawResponseText: JSON.stringify(candidate),
+    };
+  }
+
+  async rollupPropertyCandidate(
+    _propertyId: string,
+    _jobHistories: any[],
+    untrustedEvidence: Array<{ id: string; type: string; content: string }>
+  ) {
+    const rawRollup = JSON.stringify({
+      overallHealthScore: 88,
+      buildingComponents: [
+        {
+          component: 'Roof / Slate Tile',
+          condition: 'Roof tiles cracked and leaking damp.',
+          lastObservedAt: new Date().toISOString(),
+          confidence: 0.92,
+          evidenceIds: untrustedEvidence.map((e) => e.id),
+        },
+      ],
+      observedConditions: [],
+      recommendedInterventions: [],
+      candidateConfidence: 0.92,
+    });
+    return {
+      candidate: JSON.parse(rawRollup),
+      metrics: {
+        model: 'domain-test-controlled-v1',
+        inputTokens: 120,
+        outputTokens: 60,
+        totalTokens: 180,
+        estimatedCostUsd: 0.00002,
+        processingDurationMs: 15,
+      },
+      rawResponseText: rawRollup,
+    };
+  }
+}
+
 describe('V8.1 Structured Intelligence Foundation', () => {
   let testDb = createInMemoryTestDb();
   let testBucket = createInMemoryTestBucket();
@@ -54,6 +113,9 @@ describe('V8.1 Structured Intelligence Foundation', () => {
     testBucket = createInMemoryTestBucket();
     setGlobalIntelligenceDb(testDb);
     setGlobalRawArtifactBucket(testBucket);
+    const testProvider = new DomainTestControlledProvider() as any;
+    jobIntelligenceService.setProvider(testProvider);
+    propertyIntelligenceService.setProvider(testProvider);
     evidenceRegistry.setDb(testDb);
     evidenceRegistry.clear();
     intelligenceTaskQueue.clear();

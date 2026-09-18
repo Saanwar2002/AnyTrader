@@ -101,6 +101,7 @@ export async function initializeFirebaseAdminAsync(): Promise<{ app: admin.app.A
   } else {
     app = admin.initializeApp({
       projectId: firebaseConfig.projectId,
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
     });
     console.log("Firebase Admin initialized for project:", firebaseConfig.projectId);
   }

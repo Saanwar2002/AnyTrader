@@ -307,6 +307,24 @@ export function classifyAndSanitizeProcessingError(err: unknown): ClassifiedProc
     };
   }
 
+  // Tier-B durable storage errors
+  if (name === 'RawArtifactPersistenceError' || messageLower.includes('[tierb]')) {
+    return {
+      errorCode: 'storage_persistence_error',
+      errorClass: name || 'RawArtifactPersistenceError',
+      retryable: true,
+      sanitizedDiagnostic,
+    };
+  }
+  if (name === 'RawArtifactIntegrityError' || messageLower.includes('[tierb integrity]')) {
+    return {
+      errorCode: 'storage_integrity_error',
+      errorClass: name || 'RawArtifactIntegrityError',
+      retryable: false,
+      sanitizedDiagnostic,
+    };
+  }
+
   // 12. Default Unknown Error (Retryable with bounded retries)
   return {
     errorCode: 'unknown_error',

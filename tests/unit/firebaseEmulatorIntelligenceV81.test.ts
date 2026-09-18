@@ -24,8 +24,16 @@
  *    - Reference-only pointers do not fabricate hashes
  */
 
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
 import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { createHash } from 'node:crypto';
+import * as admin from 'firebase-admin';
+import {
+  setGlobalRawArtifactBucket,
+  RawArtifactBucketLike,
+} from '../../src/server/intelligence/rawArtifactStore';
 import {
   initializeTestEnvironment,
   assertFails,
@@ -105,6 +113,8 @@ import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutable
 describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   let testEnv: RulesTestEnvironment | null = null;
   const PROJECT_ID = 'demo-anytrader';
+  const BUCKET_NAME = 'demo-anytrader.appspot.com';
+  let adminBucket: RawArtifactBucketLike;
 
   beforeAll(async () => {
     try {
@@ -124,6 +134,13 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
           port: 9199,
         },
       });
+
+      const adminApp =
+        admin.apps.length > 0
+          ? admin.apps[0]!
+          : admin.initializeApp({ projectId: PROJECT_ID, storageBucket: BUCKET_NAME });
+      adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
+      setGlobalRawArtifactBucket(adminBucket);
     } catch (err) {
       console.error('FATAL ERROR: Failed to initialize Firebase Emulator test environment for V8.1 suite!', err);
       throw new Error(
@@ -133,6 +150,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
   });
 
   afterAll(async () => {
+    setGlobalRawArtifactBucket(null);
     if (testEnv) {
       await testEnv.cleanup();
     }
@@ -158,6 +176,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
     await testEnv.clearFirestore();
     await testEnv.clearStorage();
     evidenceRegistry.clear();
+    setGlobalRawArtifactBucket(adminBucket);
   });
 
   function createRealFirestoreTaskDb(modularDb: any) {

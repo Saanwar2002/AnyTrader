@@ -526,6 +526,8 @@ export type ControlledErrorCode =
   | 'timeout'
   | 'network_error'
   | 'storage_error'
+  | 'storage_persistence_error'
+  | 'storage_integrity_error'
   | 'firestore_error'
   | 'configuration_error'
   | 'payload_too_large'

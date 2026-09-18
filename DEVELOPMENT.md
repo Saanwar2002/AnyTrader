@@ -1,5 +1,16 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 16 Test Harness Alignment & Storage Bucket Fix (September 18, 2026)
+- **1. Emulator Test Harness Storage Bucket Arming (`firebaseEmulatorIntelligenceV81.test.ts`)**:
+  - Initialized `adminBucket` from the Storage emulator in `beforeAll` / `beforeEach` and hooked `setGlobalRawArtifactBucket(adminBucket)`.
+  - Fixes the root cause of the 7 failing tests in Section 19 where `persistRawArtifact()` was failing closed due to un-configured bucket context in the emulator test harness.
+- **2. Production Firebase Storage Bucket Configuration (`server.ts`, `bootstrap.ts`)**:
+  - Updated `initializeFirebaseAdminAsync()` in `server.ts` to explicitly configure `storageBucket` from environment/config (`process.env.FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket`).
+  - Added explicit bucket name logging in `bootstrap.ts` upon configuring Tier-B storage.
+- **3. Error Classification & Script Alignment (`processingErrorClassifier.ts`, `types.ts`, `package.json`)**:
+  - Added `storage_persistence_error` and `storage_integrity_error` to `ControlledErrorCode` union and error classification rules.
+  - Included `task16TierBStorage.test.ts` in `test:security-rules` npm script.
+
 ## 🛡️ AnyTrader V8.1 — Task 16: Durable Tier-B Raw Intelligence Storage (September 18, 2026)
 - **1. Durable Tier-B Raw Artifact Persistence (`src/server/intelligence/rawArtifactStore.ts`)**:
   - Implemented gzip payload compression, SHA-256 checksum verification, and fail-closed persistence for raw provider responses in Firebase Storage under `intelligence_raw/job/{jobId}/extraction_{versionId}.json.gz` and `intelligence_raw/property/{propertyId}/rollup_{versionId}.json.gz`.

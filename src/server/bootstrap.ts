@@ -143,7 +143,11 @@ export async function runBootstrapSequence(
   try {
     const storage = typeof (app as any).storage === "function" ? (app as any).storage() : null;
     if (storage && typeof storage.bucket === "function") {
-      setGlobalRawArtifactBucket(storage.bucket());
+      const bucket = storage.bucket();
+      setGlobalRawArtifactBucket(bucket);
+      console.log(`[Bootstrap] Tier-B raw artifact bucket configured: ${bucket.name || 'default'}`);
+    } else {
+      console.warn("[Bootstrap] Storage bucket unavailable on Admin app context.");
     }
   } catch (err) {
     console.warn("[Bootstrap] Storage bucket initialization notice:", err);
