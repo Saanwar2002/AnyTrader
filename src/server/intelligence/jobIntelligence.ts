@@ -60,12 +60,14 @@ export class JobIntelligenceService {
    */
   public async deriveJobIntelligence(
     job: JobSourceInput,
-    overrideEvidenceIds?: string[]
+    overrideEvidenceIds?: string[],
+    options?: { firestoreDb?: any }
   ): Promise<{
     jobIntelligence: JobIntelligence;
     extraction: IntelligenceExtraction;
     event: CanonicalIntelligenceEvent;
     versionId: string;
+    rawCandidate?: any;
   }> {
     // 1. Gather & verify evidence
     let evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId);
@@ -322,11 +324,40 @@ export class JobIntelligenceService {
       },
     };
 
+    const rawCandidateObj = {
+      domain: (candidate.category || 'general').toLowerCase(),
+      category: candidate.category,
+      component: candidate.buildingComponent,
+      observations: [
+        {
+          description: candidate.observedProblem || 'Observed problem',
+          component: candidate.buildingComponent,
+          evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+        },
+      ],
+      inferences: [
+        {
+          hypothesis: candidate.recommendedIntervention || 'Recommended intervention',
+          confidence: candidate.candidateConfidence,
+          supportingEvidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+          targetComponent: candidate.buildingComponent,
+        },
+      ],
+      interventions: candidate.extractedScope?.map((scope) => ({
+        description: scope,
+        component: candidate.buildingComponent,
+        evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+      })),
+      evidenceIds: targetEvidenceIds.length > 0 ? targetEvidenceIds : candidate.identifiedEvidenceReferences,
+      candidateConfidence: candidate.candidateConfidence,
+    };
+
     return {
       jobIntelligence,
       extraction,
       event,
       versionId,
+      rawCandidate: rawCandidateObj,
     };
   }
 }

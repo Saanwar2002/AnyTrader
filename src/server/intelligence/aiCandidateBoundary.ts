@@ -105,6 +105,15 @@ export function validateAndSanitizeAICandidate(
     if ('evidenceRegistryRecord' in parsedObj || 'createEvidence' in parsedObj || 'rawEvidence' in parsedObj) {
       throw new AICandidateSecurityError('AI model output is strictly forbidden from creating raw evidence records');
     }
+    // Strip untrusted model-spoofed identity fields so server-owned context unconditionally wins
+    delete (parsedObj as any).aggregateId;
+    delete (parsedObj as any).aggregateType;
+    delete (parsedObj as any).sourceId;
+    delete (parsedObj as any).sourceType;
+    delete (parsedObj as any).ownerId;
+    delete (parsedObj as any).homeownerId;
+    delete (parsedObj as any).userId;
+    delete (parsedObj as any).tenantId;
   }
 
   // 3. Strict Zod Schema Validation (rejects unknown/malicious fields, invalid confidence, oversize arrays)

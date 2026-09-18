@@ -44,7 +44,18 @@ export function createInMemoryTestDb(): FirestoreDbLike {
               if (!col.has(docId)) throw new Error(`Document ${colName}/${docId} not found`);
               col.set(docId, { ...col.get(docId), ...JSON.parse(JSON.stringify(data)) });
             },
+            delete: async () => {
+              col.delete(docId);
+            },
           };
+        },
+        get: async () => {
+          const docs = Array.from(col.entries()).map(([id, val]) => ({
+            id,
+            exists: true,
+            data: () => JSON.parse(JSON.stringify(val)),
+          }));
+          return { docs, empty: docs.length === 0, size: docs.length };
         },
         where(field: string, op: string, value: any) {
           const conditions: Array<{ field: string; op: string; value: any }> = [{ field, op, value }];

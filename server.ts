@@ -40,7 +40,12 @@ import {
   evidenceRegistry,
   intelligenceTaskQueue,
   immutableIntelligenceStore,
-  buildIdempotencyKey
+  buildIdempotencyKey,
+  processAICandidateToCanonical,
+  AICandidateSecurityError,
+  TrustedServerContext,
+  INTELLIGENCE_PIPELINE_VERSION,
+  INTELLIGENCE_SCHEMA_VERSION
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -117,36 +122,113 @@ export async function initializeFirebaseAdminAsync(): Promise<{ app: admin.app.A
   return { app, db: firestoreDb };
 }
 
-export function registerIntelligenceTaskHandlers(): void {
-  if (intelligenceTaskQueue.hasHandler("job_extraction") && intelligenceTaskQueue.hasHandler("property_rollup")) {
+export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
+  if (!overrideDb && intelligenceTaskQueue.hasHandler("job_extraction") && intelligenceTaskQueue.hasHandler("property_rollup")) {
     return;
   }
 
   intelligenceTaskQueue.registerHandler("job_extraction", async (task) => {
-    const { job } = task.payload as { job: any };
+    const payload = (task.payload || {}) as any;
+    const job = payload.job;
     if (!job) throw new Error("Missing job payload for extraction");
-    const result = await jobIntelligenceService.deriveJobIntelligence(job);
-    if (db) {
-      await immutableIntelligenceStore.persistOutput({
-        db,
-        aggregateType: "job",
-        aggregateId: job.jobId,
-        versionId: result.versionId,
-        extraction: result.extraction,
-        event: result.event,
-        summaryProjection: result.jobIntelligence,
-      });
+
+    const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    if (!activeDb) {
+      throw new AICandidateSecurityError("Firestore DB reference is required to validate evidence lineage and persist intelligence");
     }
-    return { jobIntelligence: result.jobIntelligence, eventId: result.event.eventId, versionId: result.versionId };
+
+    // Server-owned trusted context (MUST override any model claims)
+    const serverContext: TrustedServerContext = {
+      aggregateType: 'job',
+      aggregateId: job.jobId,
+      sourceId: job.homeownerId || job.userId || `usr_${job.jobId}`,
+      sourceVersion: String(job.sourceVersion || '1'),
+      pipelineVersion: job.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION,
+      modelVersion: job.modelVersion || 'gemini-2.5-flash',
+      promptVersion: job.promptVersion || 'job_extraction_v8.1',
+      schemaVersion: job.schemaVersion || INTELLIGENCE_SCHEMA_VERSION,
+      generatedAt: new Date().toISOString(),
+    };
+
+    // Obtain untrusted AI candidate
+    let rawCandidate = payload.rawCandidate ?? payload.rawAICandidate ?? job.rawCandidate ?? job.rawAICandidate;
+
+    if (rawCandidate === undefined) {
+      // Derive candidate through model extraction
+      const derived = await jobIntelligenceService.deriveJobIntelligence(job, undefined, { firestoreDb: activeDb });
+      rawCandidate = (derived as any).rawCandidate || (derived as any).extraction?.structuredCandidate;
+      if (!rawCandidate) {
+        const evIds = derived.jobIntelligence.evidenceIds || [];
+        rawCandidate = {
+          domain: (derived.jobIntelligence.category || 'general').toLowerCase(),
+          category: derived.jobIntelligence.category,
+          component: derived.jobIntelligence.buildingComponent,
+          observations: [
+            {
+              description: derived.jobIntelligence.observedProblem || 'Observed problem',
+              component: derived.jobIntelligence.buildingComponent,
+              evidenceIds: evIds.length > 0 ? evIds : ['ev_placeholder'],
+            },
+          ],
+          inferences: [
+            {
+              hypothesis: derived.jobIntelligence.recommendedIntervention || 'Recommended intervention',
+              confidence: derived.jobIntelligence.confidence?.overall ?? 0.85,
+              supportingEvidenceIds: evIds.length > 0 ? evIds : ['ev_placeholder'],
+              targetComponent: derived.jobIntelligence.buildingComponent,
+            },
+          ],
+          evidenceIds: evIds,
+          candidateConfidence: derived.jobIntelligence.confidence?.overall,
+        };
+      }
+    }
+
+    // MANDATORY AI CANDIDATE SECURITY BOUNDARY INVOCATION:
+    // Untrusted AI Candidate -> Structural Validation -> Server Metadata -> Evidence Lineage -> Canonicalization -> Immutable Store
+    const { canonical, persisted } = await processAICandidateToCanonical(
+      rawCandidate,
+      serverContext,
+      {
+        firestoreDb: activeDb,
+        persistToStore: true,
+      }
+    );
+
+    const summaryProjection = {
+      jobId: canonical.aggregateId,
+      currentVersionId: canonical.canonicalId,
+      domain: canonical.domain,
+      category: canonical.category || canonical.domain,
+      buildingComponent: canonical.component || canonical.observations[0]?.component || '',
+      observedProblem: canonical.problems?.[0]?.description || canonical.observations[0]?.description || '',
+      extractedScope: canonical.interventions?.map((i) => i.description) || [],
+      recommendedIntervention: canonical.interventions?.[0]?.description || '',
+      evidenceIds: canonical.evidenceIds,
+      confidence: canonical.confidence,
+      provenance: canonical.provenance,
+      pipelineVersion: canonical.pipelineVersion,
+      updatedAt: canonical.generatedAt,
+    };
+
+    return {
+      jobIntelligence: summaryProjection,
+      canonical,
+      eventId: `event_${canonical.canonicalId}`,
+      versionId: canonical.canonicalId,
+      persisted,
+    };
   });
 
   intelligenceTaskQueue.registerHandler("property_rollup", async (task) => {
-    const { property, historicalJobs } = task.payload as { property: any; historicalJobs: any[] };
+    const payload = (task.payload || {}) as any;
+    const { property, historicalJobs } = payload;
     if (!property) throw new Error("Missing property payload for rollup");
     const result = await propertyIntelligenceService.aggregatePropertyIntelligence(property, historicalJobs || []);
-    if (db) {
+    const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    if (activeDb) {
       await immutableIntelligenceStore.persistOutput({
-        db,
+        db: activeDb,
         aggregateType: "property",
         aggregateId: property.propertyId,
         versionId: result.versionId,

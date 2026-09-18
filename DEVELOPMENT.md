@@ -186,6 +186,23 @@
     - Clean TypeScript diagnostics (`npm run lint`).
     - Verified build via `compile_applet`.
 
+## 🧠 AnyTrader V8.1 — Task 15R: AI Pipeline Security Boundary Remediation (September 18, 2026)
+- **Production AI Candidate Security Boundary Enforcement (`server.ts`, `src/server/intelligence/jobIntelligence.ts`, `src/server/intelligence/aiCandidateBoundary.ts`)**:
+  - **Mandatory Invocation in Production Execution Path**: Resolved critical integration gap identified during Task 15 verification where `job_extraction` tasks bypassed the AI candidate security boundary. Production worker handlers in `registerIntelligenceTaskHandlers` now mandatorily route all model extractions through `processAICandidateToCanonical()` before invoking `immutableIntelligenceStore.persistOutput()`.
+  - **Complete 5-Stage Boundary Pipeline**:
+    1. Untrusted AI candidate payload byte budget cap (`MAX_AI_PAYLOAD_BYTES = 512 KiB`).
+    2. Strict Zod structural schema validation (`AIExtractionCandidateSchema.strict()`), stripping model-spoofed identity metadata (`aggregateId`, `sourceId`, `ownerId`, `role`, etc.).
+    3. Server-owned trusted context override (`TrustedServerContext`).
+    4. Pre-canonicalization Evidence Lineage validation against authoritative Firestore Evidence Registry.
+    5. Canonicalization (`canonicalizeIntelligence`): deterministic sorting, 64-char hex content hashing (`contentHash`), confidence score calibration.
+  - **Fail-Closed Security Posture**: Any validation, size budget, schema, or evidence lineage failure cleanly aborts processing and marks task `failed` / `dead_letter` without creating partial or corrupt extraction records.
+  - **Comprehensive End-to-End Test Suite (`tests/unit/task15EndToEnd.test.ts`)**:
+    - 10/10 tests passing covering valid end-to-end extraction, invalid structural candidate rejection, oversized payload rejection, missing evidence rejection, model metadata manipulation defense, deterministic canonicalization & hashing, security failure propagation to task queue, idempotent reprocessing without duplicate records, concurrent task queue lease protection, and fail-closed state cleanliness.
+  - **Full Regression Pass Rate**:
+    - 554/554 tests passing across 36 unit test suites in `npx vitest run`.
+    - Zero TypeScript errors (`npm run lint` / `tsc --noEmit`).
+    - Verified production build via `compile_applet`.
+
 ## 🛠️ Server Bootstrap & Container Environment Readiness (September 15, 2026)
 - **Container Environment Firestore Readiness & Worker Error Handling (`server.ts`, `instantMatchWorker.ts`, `src/server/intelligence/intelligenceTaskQueue.ts`)**:
   - **Graceful Background Worker & Scheduled Tasks Loop Execution**: Enhanced the background worker loops and cron tasks (`IntelligenceTaskQueue.workerTick`, `instantMatchWorker`, `acquireCronLock`, `runMatchingCycle`, `processSmsQueue`, `runDriverPayoutOrchestration`, `runDailyAggregation`, `runConsultancyRecurringSessionCreator`, `runConsultancyScoreRecalculator`, `runComplianceGuardianAudit`, `runSentinelAnomalyScan`, `getCachedConfig`) to gracefully handle environments where Google Cloud IAM Admin service account credentials are not present, preventing noisy `PERMISSION_DENIED` console error spam while preserving full functionality for authenticated client and server operations.
