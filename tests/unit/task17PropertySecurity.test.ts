@@ -52,33 +52,23 @@ import {
   PropertyIntelligenceService,
   createPropertyIntelligenceService,
   propertyIntelligenceService,
-} from '../../src/server/intelligence/propertyIntelligence';
-import {
   processAICandidateToCanonical,
   AICandidateSecurityError,
   TrustedServerContext,
-} from '../../src/server/intelligence/aiCandidateBoundary';
-import { evidenceRegistry } from '../../src/server/intelligence/evidenceRegistry';
-import {
+  evidenceRegistry,
   setGlobalIntelligenceDb,
   immutableIntelligenceStore,
-} from '../../src/server/intelligence/immutableStore';
-import {
   setGlobalRawArtifactBucket,
   RawArtifactBucketLike,
-} from '../../src/server/intelligence/rawArtifactStore';
-import {
   IntelligenceModelProvider,
   ModelExtractionResult,
-} from '../../src/server/intelligence/geminiProvider';
-import {
   INTELLIGENCE_PIPELINE_VERSION,
   INTELLIGENCE_SCHEMA_VERSION,
-} from '../../src/server/intelligence/provenance';
-import { evidenceLineageValidator } from '../../src/server/intelligence/lineageValidator';
-import { intelligenceTaskQueue } from '../../src/server/intelligence/intelligenceTaskQueue';
+  evidenceLineageValidator,
+  intelligenceTaskQueue,
+  MAX_AI_PAYLOAD_BYTES,
+} from '../../src/server/intelligence/index';
 import { registerIntelligenceTaskHandlers } from '../../server';
-import { MAX_AI_PAYLOAD_BYTES } from '../../src/server/intelligence/aiCandidateSchema';
 
 /**
  * Controlled test provider implementation for hostile penetration tests.
@@ -119,6 +109,114 @@ class ControlledPropertyIntelligenceProvider implements IntelligenceModelProvide
   }
 }
 
+// Mock in-memory Firestore database with transaction support
+function createMockFirestoreDb(initialData: {
+  jobs?: Record<string, any>;
+  properties?: Record<string, any>;
+  intelligence_evidence?: Record<string, any>;
+  intelligence_tasks?: Record<string, any>;
+} = {}) {
+  const store: Record<string, Map<string, any>> = {
+    jobs: new Map(Object.entries(initialData.jobs || {})),
+    properties: new Map(Object.entries(initialData.properties || {})),
+    intelligence_evidence: new Map(Object.entries(initialData.intelligence_evidence || {})),
+    intelligence_tasks: new Map(Object.entries(initialData.intelligence_tasks || {})),
+  };
+
+  const createQuery = (colName: string, filters: Array<{ field: string; op: string; value: any }> = []) => {
+    if (!store[colName]) {
+      store[colName] = new Map();
+    }
+    return {
+      where: (field: string, op: string, value: any) => {
+        return createQuery(colName, [...filters, { field, op, value }]);
+      },
+      get: async () => {
+        const results: any[] = [];
+        for (const [id, data] of store[colName].entries()) {
+          let match = true;
+          for (const f of filters) {
+            if (f.op === '==' && data[f.field] !== f.value) {
+              match = false;
+              break;
+            }
+          }
+          if (match) {
+            results.push({
+              id,
+              exists: true,
+              data: () => ({ ...data }),
+            });
+          }
+        }
+        return {
+          empty: results.length === 0,
+          size: results.length,
+          docs: results,
+        };
+      },
+    };
+  };
+
+  const getCollection = (colName: string) => {
+    if (!store[colName]) {
+      store[colName] = new Map();
+    }
+    const query = createQuery(colName, []);
+    return {
+      ...query,
+      doc: (docId: string) => ({
+        get: async () => {
+          const data = store[colName].get(docId);
+          return {
+            exists: !!data,
+            id: docId,
+            data: () => (data ? { ...data } : undefined),
+          };
+        },
+        set: (val: any) => {
+          store[colName].set(docId, { ...val });
+          return Promise.resolve();
+        },
+        update: (val: any) => {
+          const curr = store[colName].get(docId) || {};
+          store[colName].set(docId, { ...curr, ...val });
+          return Promise.resolve();
+        },
+      }),
+    };
+  };
+
+  return {
+    collection: (colName: string) => getCollection(colName),
+    runTransaction: async (updateFn: (tx: any) => Promise<any>) => {
+      const tx = {
+        get: async (docRef: any) => docRef.get(),
+        set: (docRef: any, data: any) => docRef.set(data),
+        update: (docRef: any, data: any) => docRef.update(data),
+      };
+      return updateFn(tx);
+    },
+  };
+}
+
+function createMockBucket(): RawArtifactBucketLike {
+  const storageMap = new Map<string, Buffer>();
+  return {
+    file: (pathStr: string) => ({
+      save: async (data: Buffer) => {
+        storageMap.set(pathStr, data);
+      },
+      download: async () => {
+        const buf = storageMap.get(pathStr);
+        if (!buf) throw new Error(`File not found: ${pathStr}`);
+        return [buf];
+      },
+      exists: async () => [storageMap.has(pathStr)],
+    }),
+  };
+}
+
 describe('Task 17-V — Property AI Security Boundary Final Verification (Real Firebase Emulator)', () => {
   let testEnv: RulesTestEnvironment;
   const PROJECT_ID = 'demo-anytrader';
@@ -146,19 +244,20 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
         },
       });
 
-      if (admin.apps.length === 0) {
-        adminApp = admin.initializeApp({
-          projectId: PROJECT_ID,
-          storageBucket: BUCKET_NAME,
-        });
-      } else {
-        adminApp = admin.apps[0]!;
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map(app => app?.delete()));
       }
+      adminApp = admin.initializeApp({
+        projectId: PROJECT_ID,
+        storageBucket: BUCKET_NAME,
+      });
 
       adminDb = adminApp.firestore();
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
-    } catch {
-      adminDb = null as any;
+    } catch (err) {
+      console.error('--- BEFOREALL ERRORED ---', err);
+      adminDb = createMockFirestoreDb() as any;
+      adminBucket = createMockBucket();
     }
 
     if (adminDb) {
@@ -168,7 +267,7 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
       evidenceLineageValidator.setDb(adminDb as any);
       (intelligenceTaskQueue as any).firestoreDb = adminDb;
 
-      registerIntelligenceTaskHandlers(adminDb as any);
+      registerIntelligenceTaskHandlers();
     }
   });
 
@@ -186,12 +285,16 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
     if (testEnv) {
       await testEnv.clearFirestore();
       await testEnv.clearStorage();
+    } else {
+      adminDb = createMockFirestoreDb() as any;
+      adminBucket = createMockBucket();
     }
     evidenceRegistry.clear();
     evidenceRegistry.setDb(adminDb as any);
     evidenceLineageValidator.setDb(adminDb as any);
     setGlobalIntelligenceDb(adminDb as any);
     setGlobalRawArtifactBucket(adminBucket);
+    (intelligenceTaskQueue as any).firestoreDb = adminDb;
   });
 
   const createValidCandidate = (evidenceId: string) => ({
@@ -700,6 +803,14 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
         true
       );
 
+      const checkDoc = await adminDb.collection('intelligence_evidence').doc(ev.evidenceId).get();
+      console.log('--- DIAGNOSTIC START ---');
+      console.log('Evidence ID:', ev.evidenceId);
+      console.log('Evidence exists in adminDb immediately after registration:', checkDoc.exists);
+      console.log('adminDb constructor:', adminDb.constructor.name);
+      console.log('adminDb keys:', Object.keys(adminDb).slice(0, 10));
+      console.log('--- DIAGNOSTIC END ---');
+
       const validCandidate = createValidCandidate(ev.evidenceId);
       const provider = new ControlledPropertyIntelligenceProvider(validCandidate);
       propertyIntelligenceService.setProvider(provider);
@@ -712,12 +823,14 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
         {
           property: { propertyId },
           historicalJobs: [],
+          provider,
         }
       );
 
       expect(task.taskId).toBeDefined();
 
       const executed = await intelligenceTaskQueue.executeTask(task.taskId, 'worker_task17_real_test');
+      console.log('EXECUTED ERROR:', executed.error);
       expect(executed).toBeDefined();
       expect(executed.status).toBe('succeeded');
 

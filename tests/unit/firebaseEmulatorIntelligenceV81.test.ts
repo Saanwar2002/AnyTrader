@@ -135,10 +135,10 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         },
       });
 
-      const adminApp =
-        admin.apps.length > 0
-          ? admin.apps[0]!
-          : admin.initializeApp({ projectId: PROJECT_ID, storageBucket: BUCKET_NAME });
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map(app => app?.delete()));
+      }
+      const adminApp = admin.initializeApp({ projectId: PROJECT_ID, storageBucket: BUCKET_NAME });
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
       setGlobalRawArtifactBucket(adminBucket);
     } catch (err) {

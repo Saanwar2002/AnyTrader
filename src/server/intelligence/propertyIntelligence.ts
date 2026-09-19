@@ -79,7 +79,7 @@ export class PropertyIntelligenceService {
     property: string | PropertySourceInput,
     historicalJobs: JobIntelligence[] = [],
     overrideEvidenceIds?: string[],
-    options?: { firestoreDb?: any; persist?: boolean }
+    options?: { firestoreDb?: any; persist?: boolean; provider?: IntelligenceModelProvider }
   ): Promise<{
     propertyIntelligence: PropertyIntelligence;
     extraction: IntelligenceExtraction;
@@ -122,7 +122,7 @@ export class PropertyIntelligenceService {
     }
 
     // 1. Gather property-level evidence
-    let propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId);
+    let propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId, activeDb);
 
     if (propertyEvidence.length === 0) {
       // Register property baseline spec evidence via canonical structured hashing
@@ -140,7 +140,8 @@ export class PropertyIntelligenceService {
         `properties/${propInput.propertyId}`,
         specPayload,
         { propertyType: propInput.propertyType, epcRating: propInput.epcRating },
-        { documentId: propInput.propertyId, sourceField: 'spec' }
+        { documentId: propInput.propertyId, sourceField: 'spec' },
+        activeDb
       );
 
       // Handle document objects with real binary bytes or reference-only
@@ -156,7 +157,8 @@ export class PropertyIntelligenceService {
               docObj.bytes,
               { mimeType: docObj.mimeType || 'application/pdf', byteSize: docObj.byteSize, index: idx },
               true,
-              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` },
+              activeDb
             );
           } else {
             await evidenceRegistry.registerReferenceOnly(
@@ -165,7 +167,9 @@ export class PropertyIntelligenceService {
               'document',
               sourceRef,
               { mimeType: docObj.mimeType, index: idx },
-              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` }
+              { uri: docObj.uri, storagePath: docObj.storagePath, sourceField: `documents[${idx}]` },
+              undefined,
+              activeDb
             );
           }
         }
@@ -177,12 +181,14 @@ export class PropertyIntelligenceService {
             'document',
             docUrl,
             { docUrl, index: idx },
-            { uri: docUrl, storagePath: docUrl.startsWith('properties/') ? docUrl : undefined, sourceField: `documents[${idx}]` }
+            { uri: docUrl, storagePath: docUrl.startsWith('properties/') ? docUrl : undefined, sourceField: `documents[${idx}]` },
+            undefined,
+            activeDb
           );
         }
       }
 
-      propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId);
+      propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId, activeDb);
     }
 
     // Property-level evidence IDs supporting the property aggregate extraction
@@ -228,7 +234,8 @@ export class PropertyIntelligenceService {
     }));
 
     // 3. Model Rollup
-    const rollupResult = await this.provider.rollupPropertyCandidate(
+    const activeProvider = options?.provider || this.provider;
+    const rollupResult = await activeProvider.rollupPropertyCandidate(
       propInput.propertyId,
       jobHistories,
       untrustedEvidence
@@ -382,7 +389,19 @@ export class PropertyIntelligenceService {
       throw new Error(`[PropertyIntelligence Budget Error] Exceeded 100 KiB: ${budgetCheck.actualBytes} bytes`);
     }
 
-    // 9.5. Property Component Ontology Registration
+    // 10. Authoritative Persistence to Immutable Intelligence Store
+    if (options?.persist !== false) {
+      await persistCanonicalIntelligence({
+        db: activeDb,
+        canonical,
+        rawManifest: manifest,
+        summaryProjection: propertyIntelligence as unknown as Record<string, unknown>,
+      });
+    }
+
+    // 10.5. Property Component Ontology Registration
+    // Runs only after the canonical record is durably persisted, so ontology evidence
+    // can never exist for a rollup that was not authoritatively accepted.
     if (activeDb && options?.persist !== false) {
       for (const comp of propertyIntelligence.buildingComponents) {
         if (comp.component) {
@@ -412,16 +431,6 @@ export class PropertyIntelligenceService {
           );
         }
       }
-    }
-
-    // 10. Authoritative Persistence to Immutable Intelligence Store
-    if (options?.persist !== false) {
-      await persistCanonicalIntelligence({
-        db: activeDb,
-        canonical,
-        rawManifest: manifest,
-        summaryProjection: propertyIntelligence as unknown as Record<string, unknown>,
-      });
     }
 
     // 11. Immutable Historical Extraction Record (for backward compatibility)

@@ -166,14 +166,13 @@ describe('Task 16 — Durable Tier-B Raw Intelligence Storage Verification Suite
         },
       });
 
-      if (admin.apps.length === 0) {
-        adminApp = admin.initializeApp({
-          projectId: PROJECT_ID,
-          storageBucket: BUCKET_NAME,
-        });
-      } else {
-        adminApp = admin.apps[0]!;
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map(app => app?.delete()));
       }
+      adminApp = admin.initializeApp({
+        projectId: PROJECT_ID,
+        storageBucket: BUCKET_NAME,
+      });
 
       adminDb = adminApp.firestore();
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;

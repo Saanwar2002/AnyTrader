@@ -188,7 +188,7 @@ export function cleanUndefinedFields<T extends Record<string, any>>(
   if (seen.has(obj)) return obj;
 
   const proto = Object.getPrototypeOf(obj);
-  const isPlain = proto === null || proto === Object.prototype || Array.isArray(obj);
+  const isPlain = proto === null || proto === Object.prototype || proto?.constructor?.name === 'Object' || Array.isArray(obj);
   if (!isPlain) {
     return obj;
   }

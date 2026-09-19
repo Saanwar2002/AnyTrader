@@ -14,6 +14,7 @@ import { COMPONENT_ALIASES, normalizeComponentCode, sanitizeTerm } from './canon
 import { resolveAuthoritativeJobPropertyId } from './jobIntelligence';
 import { computeSha256 } from './provenance';
 import { getGlobalIntelligenceDb } from './immutableStore';
+import { cleanUndefinedFields } from './evidence';
 
 // ----------------------------------------------------
 // 1. Property Component Types & Vocabulary
@@ -324,30 +325,39 @@ export class PropertyOntologyService {
     const evidenceId = `ev_comp_${input.propertyId}_${componentType}_${contentHash.slice(0, 12)}`;
     const now = new Date().toISOString();
 
-    const record: PropertyComponentEvidence = {
+    // Build the record WITHOUT undefined fields. Optional fields are only present when supplied.
+    // (Real Firestore admin SDK rejects `undefined`; the deterministic identity is unaffected
+    //  because computeComponentEvidenceHash already normalises a missing sourceJobId to ''.)
+    const record: PropertyComponentEvidence = cleanUndefinedFields({
       evidenceId,
       propertyId: input.propertyId,
       componentType,
       sourceType: input.sourceType,
-      sourceJobId: input.sourceJobId,
-      provenance: input.provenance,
+      ...(input.sourceJobId ? { sourceJobId: input.sourceJobId } : {}),
+      provenance: cleanUndefinedFields({ ...input.provenance }),
       status: finalStatus,
       observedAt: input.observedAt || now,
       createdAt: now,
-      confidence,
+      ...(confidence !== undefined ? { confidence } : {}),
       contentHash,
-      metadata: input.metadata || {},
-    };
+      metadata: cleanUndefinedFields({ ...(input.metadata || {}) }),
+    }) as PropertyComponentEvidence;
 
-    // 6. Persistence to Immutable Evidence Store
+    // 6. Persistence to Immutable Evidence Store (immutable: never overwrite an existing record)
     if (activeDb) {
-      await activeDb.collection('intelligence_evidence').doc(evidenceId).set({
-        ...record,
-        aggregateType: 'property',
-        aggregateId: input.propertyId,
-        verified: record.status === 'verified',
-        updatedAt: now,
-      });
+      const docRef = activeDb.collection('intelligence_evidence').doc(evidenceId);
+      const existing = await docRef.get();
+      if (!existing || !existing.exists) {
+        await docRef.set(
+          cleanUndefinedFields({
+            ...record,
+            aggregateType: 'property',
+            aggregateId: input.propertyId,
+            verified: record.status === 'verified',
+            updatedAt: now,
+          })
+        );
+      }
     }
 
     return record;
