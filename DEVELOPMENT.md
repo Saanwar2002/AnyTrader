@@ -1,5 +1,25 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 19: Property Evidence & Component Ontology (September 19, 2026)
+- **1. Property Component Ontology (`src/server/intelligence/propertyOntology.ts`)**:
+  - Implemented type-safe, normalized component ontology covering all canonical building blocks (`roof`, `roofing_material`, `roof_structure`, `gutters`, `hvac`, `electrical`, `plumbing`, `windows`, `doors`, `exterior`, `interior`, `foundation`, `drainage`, `other`, `boiler`, `electrical_panel`, `pipe`, `radiator`, `wall`, `floor`, `chimney`).
+  - Added `isPropertyComponentType`, `normalizeComponentType` (mapping raw synonyms like `'shingles'`, `'double glazing'` to canonical codes), and fail-closed `validateComponentType`.
+- **2. Component Evidence Model & Provenance (`PropertyComponentEvidence`)**:
+  - Defined structured component evidence model with deterministic SHA-256 derived `evidenceId`, `propertyId`, `componentType`, `sourceType`, `sourceJobId`, `provenance` (origin, versioning, `tenantId`), `status` (`'derived'`, `'unverified'`, `'verified'`, `'rejected'`), `confidence`, and `contentHash`.
+- **3. Server-Authoritative Lineage Validation (`Job -> Property -> Component -> Evidence`)**:
+  - In `registerComponentEvidence`, job-linked evidence (`sourceJobId`) authoritatively resolves the job's transactional property ID via `resolveAuthoritativeJobPropertyId`.
+  - Rejects cross-property evidence attachment attempts with `[PropertyLineage Violation]` if `job.propertyId !== targetPropertyId`.
+  - Fails closed with `[Lineage Resolution Error]` if source job doc is missing or invalid.
+- **4. AI Security Boundary & Non-Promotion Invariant**:
+  - AI proposals or copilot recommendations attempting to self-promote to `status: 'verified'` without explicit server authorization are rejected fail-closed with `[AIPrivilegeEscalation Violation]`.
+  - Coerces/constrains AI outputs to `'derived'` or `'unverified'` until verified by server-authorized workflows.
+- **5. Cross-Tenant Isolation & Confidence Validation**:
+  - Validates `provenance.tenantId` against property owner/landlord records, rejecting tenant mismatches with `[CrossTenantContamination Violation]`.
+  - Validates confidence scores in range `[0.0, 1.0]`, rejecting invalid or out-of-bounds numeric inputs.
+- **6. Verification (`tests/unit/task19PropertyEvidenceOntology.test.ts`)**:
+  - Created 14-test unit suite verifying ontology normalization, confidence bounds, job lineage validation, AI non-promotion enforcement, cross-tenant isolation, and evidence retrieval (14/14 passing).
+  - Passed 111/111 intelligence unit tests; `npm run lint` (`tsc --noEmit`) clean with 0 errors; `compile_applet` build succeeded.
+
 ## 🛡️ AnyTrader V8.2 — Task 18: Authoritative Property ↔ Job Lineage (September 19, 2026)
 - **1. Transactional Property Lineage Resolver (`src/server/intelligence/jobIntelligence.ts`)**:
   - Implemented `resolveAuthoritativeJobPropertyId(db, jobId)` to query the transactional `jobs` collection in Firestore for authoritative property relationships.

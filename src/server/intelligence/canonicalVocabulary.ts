@@ -11,7 +11,7 @@
 // Pre-defined Canonical Vocabulary Registries
 // ----------------------------------------------------
 
-const COMPONENT_ALIASES: Map<string, string> = new Map([
+export const COMPONENT_ALIASES: Map<string, string> = new Map([
   ['roof', 'roof'],
   ['roofing', 'roof'],
   ['tiles', 'roof'],

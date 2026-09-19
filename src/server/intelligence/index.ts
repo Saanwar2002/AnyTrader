@@ -41,4 +41,5 @@ export * from './aiCandidateBoundary';
 export * from './processingErrorClassifier';
 export * from './costModel';
 export * from './processingRunStore';
+export * from './propertyOntology';
 
