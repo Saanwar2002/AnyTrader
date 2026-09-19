@@ -139,6 +139,7 @@ export interface Provenance {
   promptVersion: string;
   generatedAt: string;
   sourceContentHash: string; // SHA-256
+  contentHash?: string;
 }
 
 export interface StorageManifest {

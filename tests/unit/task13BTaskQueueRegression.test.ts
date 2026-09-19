@@ -61,7 +61,16 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
                 id,
                 get: async () => ({ exists: mockDocs.has(id), data: () => mockDocs.get(id) }),
                 update: async (data: any) => {
-                  mockDocs.set(id, { ...mockDocs.get(id), ...data });
+                  const existing = mockDocs.get(id) || {};
+                  const merged = { ...existing };
+                  for (const [k, v] of Object.entries(data)) {
+                    if (v === undefined || (v && typeof v === 'object' && (v.constructor?.name === 'DeleteTransform' || (v as any)._methodName === 'FieldValue.delete'))) {
+                      delete merged[k];
+                    } else {
+                      merged[k] = v;
+                    }
+                  }
+                  mockDocs.set(id, merged);
                 },
               };
             },
@@ -859,7 +868,18 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
                   const existing = mockDocs.get(id) || {};
                   mockDocs.set(id, options?.merge ? { ...existing, ...data } : data);
                 },
-                update: async (data: any) => mockDocs.set(id, { ...mockDocs.get(id), ...data }),
+                update: async (data: any) => {
+                  const existing = mockDocs.get(id) || {};
+                  const merged = { ...existing };
+                  for (const [k, v] of Object.entries(data)) {
+                    if (v === undefined || (v && typeof v === 'object' && (v.constructor?.name === 'DeleteTransform' || (v as any)._methodName === 'FieldValue.delete'))) {
+                      delete merged[k];
+                    } else {
+                      merged[k] = v;
+                    }
+                  }
+                  mockDocs.set(id, merged);
+                },
               };
             },
           };

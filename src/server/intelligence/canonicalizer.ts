@@ -356,6 +356,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       promptVersion,
       generatedAt: input.provenance.generatedAt || generatedAt,
       sourceContentHash: input.provenance.sourceContentHash || computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
+      contentHash: input.provenance.contentHash || input.provenance.sourceContentHash || computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
     };
   } else {
     provenance = {
@@ -366,6 +367,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
       promptVersion,
       generatedAt,
       sourceContentHash: computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
+      contentHash: computeSha256(`${aggregateType}:${aggregateId}:${sourceVersion}`),
     };
   }
 

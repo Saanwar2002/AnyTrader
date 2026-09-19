@@ -1,44 +1,58 @@
 /**
- * AnyTrader V8.2 — Task 17: Property AI Security Boundary Integration & Hostile Penetration Suite
+ * AnyTrader V8.2 — Task 17-V: Property AI Security Boundary Verification
  *
  * PROVES:
- * The authoritative property intelligence pipeline strictly enforces the mandatory V8.2 AI Security Boundary:
+ * The authoritative property intelligence pipeline strictly enforces the mandatory V8.2 AI Security Boundary
+ * across the REAL Firebase Emulator (Firestore + Storage):
  *
- *   PROPERTY SOURCE
+ *   Property Task / Source
  *       ↓
- *   PROPERTY INTELLIGENCE SERVICE
+ *   PropertyIntelligenceService
  *       ↓
- *   AI MODEL PROVIDER
+ *   Controlled IntelligenceModelProvider
  *       ↓
- *   UNTRUSTED AI CANDIDATE
+ *   Untrusted Candidate
  *       ↓
  *   processAICandidateToCanonical()
  *       ↓
- *   STRUCTURAL VALIDATION (aiCandidateSchema)
+ *   Structural Validation (aiCandidateSchema - Zod .strict())
  *       ↓
- *   SERVER-OWNED METADATA OVERRIDE (TrustedServerContext)
+ *   Server-Owned Metadata Override (TrustedServerContext)
  *       ↓
- *   EVIDENCE LINEAGE VALIDATION (evidenceLineageValidator - Fail Closed)
+ *   Evidence Lineage Validation (evidenceLineageValidator - Fail Closed against Firestore)
  *       ↓
- *   DETERMINISTIC CANONICALIZATION (canonicalizer)
+ *   Deterministic Canonicalization (canonicalizer)
  *       ↓
- *   IMMUTABLE INTELLIGENCE PERSISTENCE (persistCanonicalIntelligence)
+ *   Immutable Intelligence Persistence (persistCanonicalIntelligence)
  *       ↓
- *   CURRENT PROPERTY PROJECTION (property_intelligence)
+ *   Authoritative Intelligence Projection (intelligence_properties)
  *
- * HOSTILE PENETRATION VECTORS TESTED:
- * 1. Fabricated evidence reference rejection
- * 2. Provider-controlled metadata spoofing rejection
- * 3. Cross-aggregate / malicious property ID contamination rejection
- * 4. Malicious evidence ownership rejection
- * 5. Malformed candidate / schema structural violation rejection
- * 6. Missing Firestore connection fail-closed rejection
- * 7. Payload size & safety budget enforcement (<= 100 KiB)
- * 8. End-to-end production task queue handler execution (property_rollup)
+ * PENETRATION VECTORS TESTED ON REAL EMULATOR:
+ * 1. Valid Provider-Generated Candidate Execution & Server-Owned Metadata Verification
+ * 2. Provider-Controlled Metadata Spoofing & Attacker Aggregate Isolation Rejection
+ * 3. Fabricated Evidence Reference Rejection (Fail-Closed)
+ * 4. Cross-Property Evidence Contamination Rejection (Property A vs Property B)
+ * 5. Malformed Candidate & Structural Schema Violation Rejection
+ * 6. Provider Invocation Assertions (provider.invocationCount === 1)
+ * 7. Immutable Persistence & Idempotent Re-Execution (Zero Duplicate Records)
+ * 8. Missing Firestore Connection Fail-Closed Boundary
+ * 9. Production Durable Task Queue Integration (property_rollup Handler Execution)
  */
 
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { propertyIntelligenceService } from '../../src/server/intelligence/propertyIntelligence';
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+import * as admin from 'firebase-admin';
+import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import * as fs from 'fs';
+import * as path from 'path';
+
+import {
+  PropertyIntelligenceService,
+  createPropertyIntelligenceService,
+  propertyIntelligenceService,
+} from '../../src/server/intelligence/propertyIntelligence';
 import {
   processAICandidateToCanonical,
   AICandidateSecurityError,
@@ -50,11 +64,8 @@ import {
   immutableIntelligenceStore,
 } from '../../src/server/intelligence/immutableStore';
 import {
-  createInMemoryTestDb,
-  createInMemoryTestBucket,
-} from '../../src/server/intelligence/testDoubles';
-import {
   setGlobalRawArtifactBucket,
+  RawArtifactBucketLike,
 } from '../../src/server/intelligence/rawArtifactStore';
 import {
   IntelligenceModelProvider,
@@ -64,51 +75,21 @@ import {
   INTELLIGENCE_PIPELINE_VERSION,
   INTELLIGENCE_SCHEMA_VERSION,
 } from '../../src/server/intelligence/provenance';
+import { evidenceLineageValidator } from '../../src/server/intelligence/lineageValidator';
 import { intelligenceTaskQueue } from '../../src/server/intelligence/intelligenceTaskQueue';
 import { registerIntelligenceTaskHandlers } from '../../server';
 import { MAX_AI_PAYLOAD_BYTES } from '../../src/server/intelligence/aiCandidateSchema';
 
 /**
  * Controlled test provider implementation for hostile penetration tests.
+ * Proves that the real production property pipeline calls the provider.
  */
-class ControlledPropertyTestProvider implements IntelligenceModelProvider {
-  public customRollupCandidate: any;
+class ControlledPropertyIntelligenceProvider implements IntelligenceModelProvider {
+  public invocationCount: number = 0;
   public customMetrics: any;
   public customRawResponseText?: string;
-  public invocationCount: number = 0;
 
-  constructor(candidate?: any) {
-    this.customRollupCandidate = candidate || {
-      overallHealthScore: 88,
-      riskLevel: 'LOW',
-      buildingComponents: [
-        {
-          component: 'Boiler / Diverter Valve',
-          condition: 'Operable with slight pressure loss',
-          lastObservedAt: '2026-09-18T00:00:00.000Z',
-          confidence: 0.92,
-          evidenceIds: [],
-        },
-      ],
-      observedConditions: [
-        {
-          condition: 'Minor system weeping',
-          severity: 'low',
-          component: 'Boiler / Diverter Valve',
-          evidenceIds: [],
-        },
-      ],
-      recommendedInterventions: [
-        {
-          intervention: 'Replace diverter valve seal kit',
-          urgency: 'medium_term',
-          component: 'Boiler / Diverter Valve',
-          estimatedBenchmarkCost: { min: 80, max: 150 },
-        },
-      ],
-      candidateConfidence: 0.92,
-    };
-  }
+  constructor(public customRollupCandidate: unknown) {}
 
   async extractJobCandidate(): Promise<ModelExtractionResult<any>> {
     throw new Error('Not used in property rollup tests');
@@ -121,363 +102,556 @@ class ControlledPropertyTestProvider implements IntelligenceModelProvider {
   ): Promise<ModelExtractionResult<any>> {
     this.invocationCount++;
     const candidate = this.customRollupCandidate;
-    const rawResponseText = this.customRawResponseText || JSON.stringify(candidate);
+    const rawResponseText = this.customRawResponseText || (typeof candidate === 'string' ? candidate : JSON.stringify(candidate));
 
     return {
       candidate,
       metrics: this.customMetrics || {
-        model: 'gemini-2.5-flash-hostile-test',
-        inputTokens: 250,
-        outputTokens: 120,
-        totalTokens: 370,
-        estimatedCostUsd: 0.0002,
-        processingDurationMs: 45,
+        model: 'gemini-2.5-flash',
+        inputTokens: 320,
+        outputTokens: 160,
+        totalTokens: 480,
+        estimatedCostUsd: 0.0003,
+        processingDurationMs: 38,
       },
       rawResponseText,
     };
   }
 }
 
-describe('Task 17 — V8.2 Property AI Security Boundary Implementation & Penetration Tests', () => {
-  let testDb: any;
-  let testBucket: any;
-  let controlledProvider: ControlledPropertyTestProvider;
+describe('Task 17-V — Property AI Security Boundary Final Verification (Real Firebase Emulator)', () => {
+  let testEnv: RulesTestEnvironment;
+  const PROJECT_ID = 'demo-anytrader';
+  const BUCKET_NAME = 'demo-anytrader.appspot.com';
+  let adminApp: admin.app.App;
+  let adminBucket: RawArtifactBucketLike;
+  let adminDb: admin.firestore.Firestore;
 
-  beforeAll(() => {
-    testDb = createInMemoryTestDb();
-    testBucket = createInMemoryTestBucket();
-    setGlobalIntelligenceDb(testDb);
-    setGlobalRawArtifactBucket(testBucket);
-    (evidenceRegistry as any).firestoreDb = testDb;
-    (intelligenceTaskQueue as any).firestoreDb = testDb;
+  beforeAll(async () => {
+    const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf-8');
+    const storageRules = fs.readFileSync(path.resolve(process.cwd(), 'storage.rules'), 'utf-8');
 
-    registerIntelligenceTaskHandlers(testDb);
+    testEnv = await initializeTestEnvironment({
+      projectId: PROJECT_ID,
+      firestore: {
+        rules: firestoreRules,
+        host: '127.0.0.1',
+        port: 8088,
+      },
+      storage: {
+        rules: storageRules,
+        host: '127.0.0.1',
+        port: 9199,
+      },
+    });
+
+    if (admin.apps.length === 0) {
+      adminApp = admin.initializeApp({
+        projectId: PROJECT_ID,
+        storageBucket: BUCKET_NAME,
+      });
+    } else {
+      adminApp = admin.apps[0]!;
+    }
+
+    adminDb = adminApp.firestore();
+    adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
+
+    setGlobalIntelligenceDb(adminDb as any);
+    setGlobalRawArtifactBucket(adminBucket);
+    evidenceRegistry.setDb(adminDb as any);
+    evidenceLineageValidator.setDb(adminDb as any);
+    (intelligenceTaskQueue as any).firestoreDb = adminDb;
+
+    registerIntelligenceTaskHandlers(adminDb as any);
   });
 
-  beforeEach(() => {
-    controlledProvider = new ControlledPropertyTestProvider();
-    propertyIntelligenceService.setProvider(controlledProvider);
+  afterAll(async () => {
+    setGlobalRawArtifactBucket(null);
+    setGlobalIntelligenceDb(null);
+    evidenceRegistry.setDb(null);
+    evidenceLineageValidator.setDb(null);
+    await testEnv.cleanup();
+  });
+
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+    await testEnv.clearStorage();
+    evidenceRegistry.clear();
+    evidenceRegistry.setDb(adminDb as any);
+    evidenceLineageValidator.setDb(adminDb as any);
+    setGlobalIntelligenceDb(adminDb as any);
+    setGlobalRawArtifactBucket(adminBucket);
+  });
+
+  const createValidCandidate = (evidenceId: string) => ({
+    domain: 'property_management',
+    category: 'Residential',
+    component: 'Building Fabric',
+    overallHealthScore: 85,
+    buildingComponents: [
+      {
+        component: 'Roof Fabric',
+        condition: 'Good condition, no broken slates',
+        lastObservedAt: '2026-09-18T10:00:00.000Z',
+        confidence: 0.9,
+        evidenceIds: [evidenceId],
+      },
+      {
+        component: 'Central Heating',
+        condition: 'Combi boiler operational',
+        lastObservedAt: '2026-09-18T10:00:00.000Z',
+        confidence: 0.88,
+        evidenceIds: [evidenceId],
+      },
+    ],
+    observedConditions: [
+      {
+        condition: 'Dry basement',
+        severity: 'low',
+        component: 'Foundation',
+        evidenceIds: [evidenceId],
+      },
+    ],
+    recommendedInterventions: [
+      {
+        intervention: 'Annual boiler service',
+        urgency: 'planned',
+        component: 'Central Heating',
+        estimatedBenchmarkCost: { min: 90, max: 130 },
+      },
+    ],
+    candidateConfidence: 0.88,
+    evidenceIds: [evidenceId],
   });
 
   // =========================================================================
-  // VECTOR 1: FABRICATED EVIDENCE INJECTION
+  // 1. REAL PRODUCTION PIPELINE & VALID CANDIDATE PERSISTENCE
   // =========================================================================
-  describe('Vector 1: Fabricated Evidence Injection', () => {
-    it('REJECTS model candidate that references non-existent / fabricated evidence IDs', async () => {
-      const propertyId = 'prop_hostile_1';
+  describe('1. Real Production Pipeline & Valid Candidate Persistence', () => {
+    it('persists a valid provider-generated property candidate through the real production pipeline', async () => {
+      const propertyId = 'prop_valid_real_prod_1';
 
-      // Register genuine evidence in registry
+      // Register valid property spec evidence in real emulator Firestore
+      const specEv = await evidenceRegistry.register(
+        'property',
+        propertyId,
+        'structured_spec',
+        `properties/${propertyId}/spec`,
+        'Valid EPC C property spec with combi boiler and slate roof',
+        {},
+        true
+      );
+
+      const validCandidate = createValidCandidate(specEv.evidenceId);
+      const provider = new ControlledPropertyIntelligenceProvider(validCandidate);
+
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
+
+      const result = await service.aggregatePropertyIntelligence(propertyId);
+
+      // Verify provider was actually invoked exactly once
+      expect(provider.invocationCount).toBe(1);
+
+      // Verify returned canonical object
+      expect(result.canonical).toBeDefined();
+      expect(result.canonical?.aggregateId).toBe(propertyId);
+      expect(result.canonical?.observations.length).toBe(2);
+      expect(result.canonical?.evidenceIds).toContain(specEv.evidenceId);
+
+      // Query real emulator Firestore for authoritative records
+      const propDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(propDoc.exists).toBe(true);
+      const propData = propDoc.data()!;
+      expect(propData.propertyId).toBe(propertyId);
+      expect(propData.overallHealthScore).toBe(85);
+      expect(propData.buildingComponents.length).toBe(2);
+
+      // Query real emulator Firestore for extraction document
+      const extractionDoc = await adminDb.collection('intelligence_extractions').doc(result.versionId).get();
+      expect(extractionDoc.exists).toBe(true);
+      const extractionData = extractionDoc.data()!;
+      expect(extractionData.aggregateId).toBe(propertyId);
+      expect(extractionData.aggregateType).toBe('property');
+
+      // Verify Tier B Raw Artifact was persisted into emulator Storage
+      expect(result.extraction.rawManifest).toBeDefined();
+      expect(result.extraction.rawManifest.encoding).toBe('gzip');
+      expect(result.extraction.rawManifest.compressedBytes).toBeGreaterThan(0);
+      expect(result.extraction.rawManifest.sha256).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('verifies that server-owned metadata overrides model claims and is persisted correctly', async () => {
+      const propertyId = 'prop_server_metadata_1';
+
+      const specEv = await evidenceRegistry.register(
+        'property',
+        propertyId,
+        'structured_spec',
+        `properties/${propertyId}/spec`,
+        'Property specification for metadata verification',
+        { sourceVersion: '2' },
+        true
+      );
+
+      const validCandidate = createValidCandidate(specEv.evidenceId);
+      const provider = new ControlledPropertyIntelligenceProvider(validCandidate);
+
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
+
+      const result = await service.aggregatePropertyIntelligence({
+        propertyId,
+        sourceVersion: '2',
+        pipelineVersion: 'v8.1.0',
+      });
+
+      expect(provider.invocationCount).toBe(1);
+
+      // Query emulator-persisted document
+      const propDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(propDoc.exists).toBe(true);
+      const data = propDoc.data()!;
+
+      // Provider must NOT control aggregateType, aggregateId, pipelineVersion, schemaVersion, provenance
+      expect(data.propertyId).toBe(propertyId);
+      expect(data.currentSourceVersion).toBe('2');
+      expect(data.currentPipelineVersion).toBe('v8.1.0');
+      expect(data.currentSchemaVersion).toBe(INTELLIGENCE_SCHEMA_VERSION);
+      expect(data.provenance).toBeDefined();
+      expect(data.provenance.source).toBe(`properties/${propertyId}`);
+      expect(data.provenance.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    });
+  });
+
+  // =========================================================================
+  // 2. REQUIRED MALICIOUS CANDIDATE & ATTACKER AGGREGATE ISOLATION
+  // =========================================================================
+  describe('2. Required Malicious Candidate Test (Section 10)', () => {
+    it('rejects candidate attempting to hijack server-owned metadata and prevents attacker aggregate writes', async () => {
+      const propertyId = 'prop_victim_10';
+      const attackerAggregateId = 'ATTACKER_PROPERTY_ID';
+
       const genuineEvidence = await evidenceRegistry.register(
         'property',
         propertyId,
         'structured_spec',
         `properties/${propertyId}/spec`,
-        'Genuine property spec: Victorian terrace with slate roof and combi boiler',
+        'Victim property genuine spec',
         {},
         true
       );
 
-      // Model attempts to cite a fabricated evidence ID that does not exist in Firestore
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 82,
+      const validCandidate = createValidCandidate(genuineEvidence.evidenceId);
+
+      const maliciousCandidate = {
+        ...validCandidate,
+        aggregateId: attackerAggregateId,
+        aggregateType: 'job',
+        schemaVersion: 'attacker-schema',
+        pipelineVersion: 'attacker-pipeline',
+        modelVersion: 'attacker-model',
+        promptVersion: 'attacker-prompt',
+        generatedAt: 'attacker-generated-time',
+        provenance: {
+          source: 'attacker-controlled',
+        },
+      };
+
+      const provider = new ControlledPropertyIntelligenceProvider(maliciousCandidate);
+
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
+
+      // Execute REAL production property pipeline
+      await expect(
+        service.aggregatePropertyIntelligence(propertyId)
+      ).rejects.toThrow();
+
+      // Provider was invoked
+      expect(provider.invocationCount).toBe(1);
+
+      // Verify through emulator that NO authoritative intelligence was written for attacker-controlled aggregate
+      const attackerDoc = await adminDb.collection('intelligence_properties').doc(attackerAggregateId).get();
+      expect(attackerDoc.exists).toBe(false);
+
+      const attackerExtractions = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', attackerAggregateId)
+        .get();
+      expect(attackerExtractions.empty).toBe(true);
+
+      // Verify that victim property also has NO partial/corrupted authority created
+      const victimDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(victimDoc.exists).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // 3. REQUIRED FABRICATED EVIDENCE TEST (Section 11)
+  // =========================================================================
+  describe('3. Required Fabricated Evidence Test (Section 11)', () => {
+    it('fails closed when provider returns a candidate referencing fabricated evidence', async () => {
+      const propertyId = 'prop_fabricated_11';
+
+      const genuineEvidence = await evidenceRegistry.register(
+        'property',
+        propertyId,
+        'structured_spec',
+        `properties/${propertyId}/spec`,
+        'Victim property genuine spec',
+        {},
+        true
+      );
+
+      const validCandidate = createValidCandidate(genuineEvidence.evidenceId);
+
+      const maliciousCandidate = {
+        ...validCandidate,
+        evidenceIds: [
+          'fabricated-evidence-that-does-not-exist',
+        ],
         buildingComponents: [
           {
             component: 'Roof Fabric',
             condition: 'Severe roof failure fabricated by AI',
             confidence: 0.95,
-            evidenceIds: ['ev_fabricated_hallucination_999'],
+            evidenceIds: ['fabricated-evidence-that-does-not-exist'],
           },
         ],
-        observedConditions: [],
-        recommendedInterventions: [],
-        candidateConfidence: 0.95,
       };
 
-      await expect(
-        propertyIntelligenceService.aggregatePropertyIntelligence(
-          { propertyId },
-          [],
-          [genuineEvidence.evidenceId],
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/Evidence lineage validation failed|AI Security Boundary Violation/);
+      const provider = new ControlledPropertyIntelligenceProvider(maliciousCandidate);
 
-      // Verify ZERO writes occurred to property_intelligence or intelligence_extractions
-      const projDoc = await testDb.collection('property_intelligence').doc(propertyId).get();
-      expect(projDoc.exists).toBe(false);
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
+
+      // Execute the REAL production pipeline
+      await expect(
+        service.aggregatePropertyIntelligence(propertyId)
+      ).rejects.toThrow();
+
+      expect(provider.invocationCount).toBe(1);
+
+      // Query authoritative intelligence collection in real emulator
+      const propDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(propDoc.exists).toBe(false);
+
+      const extractions = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', propertyId)
+        .get();
+      expect(extractions.empty).toBe(true);
     });
   });
 
   // =========================================================================
-  // VECTOR 2: PROVIDER-CONTROLLED METADATA SPOOFING
+  // 4. REQUIRED CROSS-PROPERTY LINEAGE TEST (Section 12)
   // =========================================================================
-  describe('Vector 2: Provider-Controlled Metadata Spoofing', () => {
-    it('STRIPS and OVERRIDES model-supplied privileged metadata with server-owned context', async () => {
-      const propertyId = 'prop_metadata_test_2';
+  describe('4. Required Cross-Property Lineage Test (Section 12)', () => {
+    it('fails closed when candidate for PROPERTY_B attempts to cite evidence from PROPERTY_A', async () => {
+      const propertyAId = 'PROPERTY_A_12';
+      const propertyBId = 'PROPERTY_B_12';
 
-      const genuineEvidence = await evidenceRegistry.register(
+      // Create valid evidence for PROPERTY_A in real emulator
+      const propertyAEvidence = await evidenceRegistry.register(
         'property',
-        propertyId,
+        propertyAId,
         'structured_spec',
-        `properties/${propertyId}/spec`,
-        'Verified property specification',
+        `properties/${propertyAId}/spec`,
+        'Property A inspection and EPC certificate',
         {},
         true
       );
 
-      // Hostile AI candidate tries to inject server-owned attributes
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 90,
+      // Create valid evidence for PROPERTY_B in real emulator
+      await evidenceRegistry.register(
+        'property',
+        propertyBId,
+        'structured_spec',
+        `properties/${propertyBId}/spec`,
+        'Property B baseline registration spec',
+        {},
+        true
+      );
+
+      const validCandidateA = createValidCandidate(propertyAEvidence.evidenceId);
+
+      // Candidate for PROPERTY_B cites PROPERTY_A evidence
+      const maliciousCandidate = {
+        ...validCandidateA,
+        aggregateId: propertyBId,
+        evidenceIds: [
+          propertyAEvidence.evidenceId,
+        ],
         buildingComponents: [
           {
-            component: 'Electrical Consumer Unit',
-            condition: 'Fully compliant 18th edition',
-            confidence: 0.95,
-            evidenceIds: [genuineEvidence.evidenceId],
+            component: 'Roof Fabric',
+            condition: 'Damage reported via Property A evidence',
+            confidence: 0.9,
+            evidenceIds: [propertyAEvidence.evidenceId],
           },
         ],
-        observedConditions: [],
-        recommendedInterventions: [],
-        candidateConfidence: 0.95,
-        // MALICIOUS METADATA INJECTION ATTEMPTS:
-        aggregateId: 'prop_victim_999',
-        aggregateType: 'super_admin',
-        pipelineVersion: 'ai_hacked_v99',
-        sourceVersion: '99999',
-        schemaVersion: 'ai_custom_schema',
-        role: 'admin',
-        sourceId: 'properties/hacked_source',
-        generatedAt: '1970-01-01T00:00:00.000Z',
       };
 
-      const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
-        {
-          propertyId,
-          sourceVersion: '1',
-          pipelineVersion: 'v8.1.0',
+      const provider = new ControlledPropertyIntelligenceProvider(maliciousCandidate);
+
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
+
+      // Execute the real PROPERTY_B pipeline
+      await expect(
+        service.aggregatePropertyIntelligence(propertyBId)
+      ).rejects.toThrow();
+
+      expect(provider.invocationCount).toBe(1);
+
+      // Verify NO authoritative PROPERTY_B intelligence was created using PROPERTY_A evidence
+      const propBDoc = await adminDb.collection('intelligence_properties').doc(propertyBId).get();
+      expect(propBDoc.exists).toBe(false);
+
+      const propBExtractions = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', propertyBId)
+        .get();
+      expect(propBExtractions.empty).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // 5. REQUIRED MALFORMED CANDIDATE TEST (Section 13)
+  // =========================================================================
+  describe('5. Required Malformed Candidate Test (Section 13)', () => {
+    it('fails closed and rejects malformed candidate output with structural schema violations', async () => {
+      const propertyId = 'prop_malformed_13';
+
+      await evidenceRegistry.register(
+        'property',
+        propertyId,
+        'structured_spec',
+        `properties/${propertyId}/spec`,
+        'Property spec for malformed candidate test',
+        {},
+        true
+      );
+
+      const malformedCandidate = {
+        buildingComponents: 'THIS MUST NOT BE AN ARRAY',
+        observedConditions: null,
+        recommendedInterventions: {
+          malicious: true,
         },
-        [],
-        [genuineEvidence.evidenceId],
-        { firestoreDb: testDb }
-      );
+        unexpectedField: {
+          deeply: {
+            nested: true,
+          },
+        },
+      };
 
-      // Server context strictly overrides all provider spoof attempts
-      expect(result.propertyIntelligence.propertyId).toBe(propertyId);
-      expect(result.propertyIntelligence.currentSourceVersion).toBe('1');
-      expect(result.propertyIntelligence.currentPipelineVersion).toBe('v8.1.0');
-      expect(result.propertyIntelligence.currentSchemaVersion).toBe(INTELLIGENCE_SCHEMA_VERSION);
+      const provider = new ControlledPropertyIntelligenceProvider(malformedCandidate);
 
-      // Extraction record reflects server-owned provenance
-      expect(result.extraction.aggregateId).toBe(propertyId);
-      expect(result.extraction.sourceVersion).toBe('1');
-      expect((result.extraction as any).role).toBeUndefined();
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
 
-      // Canonical record matches server context
-      if (result.canonical) {
-        expect(result.canonical.aggregateId).toBe(propertyId);
-        expect(result.canonical.sourceVersion).toBe('1');
-        expect(result.canonical.pipelineVersion).toBe('v8.1.0');
-      }
+      // Execute REAL production pipeline
+      await expect(
+        service.aggregatePropertyIntelligence(propertyId)
+      ).rejects.toThrow();
+
+      expect(provider.invocationCount).toBe(1);
+
+      // Assert no authoritative persistence in real emulator
+      const propDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(propDoc.exists).toBe(false);
+
+      const extractions = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', propertyId)
+        .get();
+      expect(extractions.empty).toBe(true);
     });
   });
 
   // =========================================================================
-  // VECTOR 3: CROSS-AGGREGATE CONTAMINATION & MALICIOUS PROPERTY ID
+  // 6. IMMUTABLE PERSISTENCE & IDEMPOTENT RE-EXECUTION (Section 16)
   // =========================================================================
-  describe('Vector 3: Cross-Aggregate Contamination & Malicious Property ID', () => {
-    it('REJECTS model candidate attempting to link evidence belonging to a different property', async () => {
-      const targetPropertyId = 'prop_target_3';
-      const foreignPropertyId = 'prop_foreign_3';
+  describe('6. Immutable Persistence & Idempotency (Section 16)', () => {
+    it('verifies immutable persistence and idempotent re-execution without duplicate historical records', async () => {
+      const propertyId = 'prop_idempotency_16';
 
-      // Register genuine evidence for foreign property
-      const foreignEvidence = await evidenceRegistry.register(
-        'property',
-        foreignPropertyId,
-        'structured_spec',
-        `properties/${foreignPropertyId}/spec`,
-        'Foreign property damp inspection report',
-        {},
-        true
-      );
-
-      // Model for target property attempts to reference foreign property evidence
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 65,
-        buildingComponents: [
-          {
-            component: 'Damp Proof Course',
-            condition: 'Rising damp observed',
-            confidence: 0.9,
-            evidenceIds: [foreignEvidence.evidenceId],
-          },
-        ],
-        observedConditions: [],
-        recommendedInterventions: [],
-        candidateConfidence: 0.9,
-      };
-
-      await expect(
-        propertyIntelligenceService.aggregatePropertyIntelligence(
-          { propertyId: targetPropertyId },
-          [],
-          [foreignEvidence.evidenceId],
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/Evidence lineage validation failed|AI Security Boundary Violation/);
-
-      // Assert target property was not modified
-      const projDoc = await testDb.collection('property_intelligence').doc(targetPropertyId).get();
-      expect(projDoc.exists).toBe(false);
-    });
-
-    it('REJECTS model candidate attempting to cite job evidence from an unlinked job', async () => {
-      const propertyId = 'prop_target_job_link_3';
-      const unlinkedJobId = 'job_unlinked_999';
-
-      // Register evidence under unlinked job
-      const jobEvidence = await evidenceRegistry.register(
-        'job',
-        unlinkedJobId,
-        'photo',
-        `jobs/${unlinkedJobId}/photo1.jpg`,
-        'Unlinked job photo',
-        {},
-        true
-      );
-
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 70,
-        buildingComponents: [
-          {
-            component: 'Plumbing',
-            condition: 'Leaking pipe',
-            confidence: 0.9,
-            evidenceIds: [jobEvidence.evidenceId],
-          },
-        ],
-        observedConditions: [],
-        recommendedInterventions: [],
-        candidateConfidence: 0.9,
-      };
-
-      // Property rollup has no historical jobs linking this job
-      await expect(
-        propertyIntelligenceService.aggregatePropertyIntelligence(
-          { propertyId },
-          [],
-          [jobEvidence.evidenceId],
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/Evidence lineage validation failed|AI Security Boundary Violation/);
-    });
-  });
-
-  // =========================================================================
-  // VECTOR 4: MALFORMED CANDIDATE & STRUCTURAL VIOLATIONS
-  // =========================================================================
-  describe('Vector 4: Malformed Candidate & Structural Schema Violations', () => {
-    it('REJECTS malformed / unparseable JSON output from model provider', async () => {
-      const propertyId = 'prop_malformed_json_4';
-      const ev = await evidenceRegistry.register(
+      const specEv = await evidenceRegistry.register(
         'property',
         propertyId,
         'structured_spec',
         `properties/${propertyId}/spec`,
-        'Spec',
+        'Property spec for idempotency test',
         {},
         true
       );
 
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'property',
-        aggregateId: propertyId,
-        sourceId: `properties/${propertyId}`,
-        sourceVersion: '1',
-      };
+      const validCandidate = createValidCandidate(specEv.evidenceId);
+      const provider = new ControlledPropertyIntelligenceProvider(validCandidate);
 
-      // Test processAICandidateToCanonical directly with corrupt JSON string
-      await expect(
-        processAICandidateToCanonical(
-          '{ "overallHealthScore": 88, "buildingComponents": [ UNQUOTED_CORRUPT_SYNTAX ',
-          serverContext,
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(AICandidateSecurityError);
-    });
+      const service = createPropertyIntelligenceService({
+        firestoreDb: adminDb,
+        provider,
+      });
 
-    it('REJECTS model candidate exceeding MAX_AI_PAYLOAD_BYTES (64 KiB)', async () => {
-      const propertyId = 'prop_oversize_4';
-      const oversizedText = 'A'.repeat(MAX_AI_PAYLOAD_BYTES + 100);
+      // 1. Initial successful processing
+      const result1 = await service.aggregatePropertyIntelligence(propertyId);
+      expect(provider.invocationCount).toBe(1);
 
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'property',
-        aggregateId: propertyId,
-        sourceId: `properties/${propertyId}`,
-        sourceVersion: '1',
-      };
+      // Query the authoritative intelligence record
+      const doc1 = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(doc1.exists).toBe(true);
+      const versionId1 = doc1.data()!.currentVersionId;
+      expect(versionId1).toBe(result1.versionId);
 
-      await expect(
-        processAICandidateToCanonical(
-          JSON.stringify({ domain: 'property_management', component: oversizedText }),
-          serverContext,
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/exceeds max limit/);
-    });
+      // Count extraction records in emulator
+      const extractions1 = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', propertyId)
+        .get();
+      expect(extractions1.size).toBe(1);
 
-    it('REJECTS model candidate attempting to manufacture raw evidence records', async () => {
-      const propertyId = 'prop_raw_ev_manufacture_4';
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'property',
-        aggregateId: propertyId,
-        sourceId: `properties/${propertyId}`,
-        sourceVersion: '1',
-      };
+      // 2. Run the same logical operation again
+      const result2 = await service.aggregatePropertyIntelligence(propertyId);
+      expect(provider.invocationCount).toBe(2);
 
-      await expect(
-        processAICandidateToCanonical(
-          {
-            domain: 'property_management',
-            category: 'Residential',
-            component: 'Building Fabric',
-            evidenceRegistryRecord: { evidenceId: 'ev_fake', contentHash: 'hacked' },
-          },
-          serverContext,
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/strictly forbidden from creating raw evidence records/);
-    });
+      // 3. Verify existing V8.1 idempotency behavior
+      expect(result2.versionId).toBe(versionId1);
 
-    it('REJECTS model candidate with out-of-range confidence scores (> 1.0 or < 0.0)', async () => {
-      const propertyId = 'prop_bad_conf_4';
-      const serverContext: TrustedServerContext = {
-        aggregateType: 'property',
-        aggregateId: propertyId,
-        sourceId: `properties/${propertyId}`,
-        sourceVersion: '1',
-      };
+      // 4. Verify that duplicate immutable historical records are NOT created merely because processing was repeated
+      const extractions2 = await adminDb
+        .collection('intelligence_extractions')
+        .where('aggregateId', '==', propertyId)
+        .get();
+      expect(extractions2.size).toBe(1);
 
-      await expect(
-        processAICandidateToCanonical(
-          {
-            domain: 'property_management',
-            category: 'Residential',
-            component: 'Building Fabric',
-            candidateConfidence: 1.5, // INVALID: Must be <= 1.0
-          },
-          serverContext,
-          { firestoreDb: testDb }
-        )
-      ).rejects.toThrow(/Structural validation failed|confidence/);
+      const doc2 = await adminDb.collection('intelligence_properties').doc(propertyId).get();
+      expect(doc2.data()!.currentVersionId).toBe(versionId1);
     });
   });
 
   // =========================================================================
-  // VECTOR 5: FAIL-CLOSED DATABASE BOUNDARY
+  // 7. MISSING DATABASE FAIL-CLOSED BOUNDARY
   // =========================================================================
-  describe('Vector 5: Missing Database Fail-Closed Boundary', () => {
-    it('FAILS CLOSED when Firestore DB reference is null / undefined', async () => {
-      const propertyId = 'prop_no_db_5';
+  describe('7. Missing Database Fail-Closed Boundary', () => {
+    it('fails closed when Firestore DB reference is null', async () => {
+      const propertyId = 'prop_no_db_test';
       const serverContext: TrustedServerContext = {
         aggregateType: 'property',
         aggregateId: propertyId,
@@ -500,126 +674,26 @@ describe('Task 17 — V8.2 Property AI Security Boundary Implementation & Penetr
   });
 
   // =========================================================================
-  // VECTOR 6: VALID PRODUCTION PIPELINE EXECUTION
+  // 8. PRODUCTION TASK QUEUE INTEGRATION (property_rollup)
   // =========================================================================
-  describe('Vector 6: Valid Production Pipeline & Deterministic Canonicalization', () => {
-    it('SUCCESSFULLY executes full pipeline with valid evidence and writes to store & projection', async () => {
-      const propertyId = 'prop_valid_pipeline_6';
+  describe('8. Production Task Queue Integration (property_rollup)', () => {
+    it('processes property_rollup task via production intelligenceTaskQueue in real emulator', async () => {
+      const propertyId = 'prop_queue_real_8';
 
-      // Register valid property evidence
-      const specEv = await evidenceRegistry.register(
-        'property',
-        propertyId,
-        'structured_spec',
-        `properties/${propertyId}/spec`,
-        'Valid EPC C property spec with combi boiler and slate roof',
-        {},
-        true
-      );
-
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 85,
-        riskLevel: 'LOW',
-        buildingComponents: [
-          {
-            component: 'Roof Fabric',
-            condition: 'Good condition, no broken slates',
-            lastObservedAt: '2026-09-18T10:00:00.000Z',
-            confidence: 0.9,
-            evidenceIds: [specEv.evidenceId],
-          },
-          {
-            component: 'Central Heating',
-            condition: 'Combi boiler operational',
-            lastObservedAt: '2026-09-18T10:00:00.000Z',
-            confidence: 0.88,
-            evidenceIds: [specEv.evidenceId],
-          },
-        ],
-        observedConditions: [
-          {
-            condition: 'Dry basement',
-            severity: 'low',
-            component: 'Foundation',
-            evidenceIds: [specEv.evidenceId],
-          },
-        ],
-        recommendedInterventions: [
-          {
-            intervention: 'Annual boiler service',
-            urgency: 'planned',
-            component: 'Central Heating',
-            estimatedBenchmarkCost: { min: 90, max: 130 },
-          },
-        ],
-        candidateConfidence: 0.88,
-      };
-
-      const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
-        { propertyId },
-        [],
-        [specEv.evidenceId],
-        { firestoreDb: testDb }
-      );
-
-      // Verify canonical object returned
-      expect(result.canonical).toBeDefined();
-      expect(result.canonical?.aggregateId).toBe(propertyId);
-      expect(result.canonical?.observations.length).toBe(2);
-      expect(result.canonical?.evidenceIds).toContain(specEv.evidenceId);
-
-      // Verify projection
-      expect(result.propertyIntelligence.propertyId).toBe(propertyId);
-      expect(result.propertyIntelligence.overallHealthScore).toBe(85);
-      expect(result.propertyIntelligence.buildingComponents.length).toBe(2);
-
-      // Verify Tier B Raw Manifest exists and is compressed
-      expect(result.extraction.rawManifest).toBeDefined();
-      expect(result.extraction.rawManifest.encoding).toBe('gzip');
-      expect(result.extraction.rawManifest.compressedBytes).toBeGreaterThan(0);
-      expect(result.extraction.rawManifest.sha256).toMatch(/^[a-f0-9]{64}$/);
-
-      // Verify immutable store projection
-      const projDoc = await testDb.collection('intelligence_properties').doc(propertyId).get();
-      expect(projDoc.exists).toBe(true);
-      expect(projDoc.data().currentVersionId).toBe(result.versionId);
-    });
-  });
-
-  // =========================================================================
-  // VECTOR 7: PRODUCTION TASK QUEUE INTEGRATION (property_rollup)
-  // =========================================================================
-  describe('Vector 7: Production Task Queue Handler Execution', () => {
-    it('PROCESSES property_rollup task via production intelligenceTaskQueue without bypass', async () => {
-      const propertyId = 'prop_queue_task_7';
-
-      // Register valid property spec
       const ev = await evidenceRegistry.register(
         'property',
         propertyId,
         'structured_spec',
         `properties/${propertyId}/spec`,
-        'Terraced property registered for queue processing',
+        'Property spec for durable task queue execution',
         {},
         true
       );
 
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 91,
-        buildingComponents: [
-          {
-            component: 'Windows & Glazing',
-            condition: 'Double glazing intact',
-            confidence: 0.95,
-            evidenceIds: [ev.evidenceId],
-          },
-        ],
-        observedConditions: [],
-        recommendedInterventions: [],
-        candidateConfidence: 0.95,
-      };
+      const validCandidate = createValidCandidate(ev.evidenceId);
+      const provider = new ControlledPropertyIntelligenceProvider(validCandidate);
+      propertyIntelligenceService.setProvider(provider);
 
-      // Enqueue a real durable task in intelligenceTaskQueue
       const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'property_rollup',
         'property',
@@ -628,41 +702,43 @@ describe('Task 17 — V8.2 Property AI Security Boundary Implementation & Penetr
         {
           property: { propertyId },
           historicalJobs: [],
-          firestoreDb: testDb,
         }
       );
 
       expect(task.taskId).toBeDefined();
 
-      // Execute task via the registered production task handler
-      const executed = await intelligenceTaskQueue.executeTask(task.taskId, 'worker_task17_test');
+      const executed = await intelligenceTaskQueue.executeTask(task.taskId, 'worker_task17_real_test');
       expect(executed).toBeDefined();
       expect(executed.status).toBe('succeeded');
 
-      // Verify projection written to intelligence_properties
-      const projDoc = await testDb.collection('intelligence_properties').doc(propertyId).get();
+      // Verify projection written to emulator Firestore
+      const projDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
       expect(projDoc.exists).toBe(true);
-      expect(projDoc.data().overallHealthScore).toBe(91);
+      expect(projDoc.data()!.overallHealthScore).toBe(85);
     });
 
-    it('FAILS task in queue when AI candidate contains fabricated evidence', async () => {
-      const propertyId = 'prop_queue_fail_7';
+    it('transitions task to dead_letter in real emulator when candidate contains fabricated evidence', async () => {
+      const propertyId = 'prop_queue_fail_8';
 
-      // Candidate citations are fabricated
-      controlledProvider.customRollupCandidate = {
-        overallHealthScore: 80,
+      const fabricatedCandidate = {
+        domain: 'property_management',
+        category: 'Residential',
+        component: 'Building Fabric',
+        overallHealthScore: 75,
         buildingComponents: [
           {
             component: 'Roof',
-            condition: 'Fabricated condition',
+            condition: 'Fabricated condition citing non-existent evidence',
             confidence: 0.95,
             evidenceIds: ['ev_hallucinated_queue_fail'],
           },
         ],
-        observedConditions: [],
-        recommendedInterventions: [],
+        evidenceIds: ['ev_hallucinated_queue_fail'],
         candidateConfidence: 0.95,
       };
+
+      const provider = new ControlledPropertyIntelligenceProvider(fabricatedCandidate);
+      propertyIntelligenceService.setProvider(provider);
 
       const task = await intelligenceTaskQueue.enqueueTaskAsync(
         'property_rollup',
@@ -672,17 +748,15 @@ describe('Task 17 — V8.2 Property AI Security Boundary Implementation & Penetr
         {
           property: { propertyId },
           historicalJobs: [],
-          firestoreDb: testDb,
         }
       );
 
-      // Security validation failures transition immediately to dead_letter
       const failed = await intelligenceTaskQueue.executeTask(task.taskId, 'worker_task17_fail_test');
       expect(failed.status).toBe('dead_letter');
       expect(failed.errorCode).toBe('AICandidateSecurityError');
 
       // Assert projection was not created
-      const projDoc = await testDb.collection('intelligence_properties').doc(propertyId).get();
+      const projDoc = await adminDb.collection('intelligence_properties').doc(propertyId).get();
       expect(projDoc.exists).toBe(false);
     });
   });

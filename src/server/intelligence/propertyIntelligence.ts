@@ -46,7 +46,20 @@ export interface PropertySourceInput {
 }
 
 export class PropertyIntelligenceService {
-  constructor(private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider()) {}
+  private defaultDb?: any;
+
+  constructor(
+    private provider: IntelligenceModelProvider = new GeminiIntelligenceProvider(),
+    options?: { firestoreDb?: any }
+  ) {
+    if (options?.firestoreDb) {
+      this.defaultDb = options.firestoreDb;
+    }
+  }
+
+  public setFirestoreDb(db: any): void {
+    this.defaultDb = db;
+  }
 
   public setProvider(provider: IntelligenceModelProvider): void {
     this.provider = provider;
@@ -61,8 +74,8 @@ export class PropertyIntelligenceService {
    * producing an immutable extraction record with deterministic version identity.
    */
   public async aggregatePropertyIntelligence(
-    property: PropertySourceInput,
-    historicalJobs: JobIntelligence[],
+    property: string | PropertySourceInput,
+    historicalJobs: JobIntelligence[] = [],
     overrideEvidenceIds?: string[],
     options?: { firestoreDb?: any; persist?: boolean }
   ): Promise<{
@@ -73,36 +86,38 @@ export class PropertyIntelligenceService {
     canonical?: CanonicalIntelligence;
     rawCandidate?: unknown;
   }> {
+    const propInput: PropertySourceInput = typeof property === 'string' ? { propertyId: property } : property;
+
     // 1. Gather property-level evidence
-    let propertyEvidence = await evidenceRegistry.getForAggregate('property', property.propertyId);
+    let propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId);
 
     if (propertyEvidence.length === 0) {
       // Register property baseline spec evidence via canonical structured hashing
       const specPayload = {
-        propertyId: property.propertyId,
-        propertyType: property.propertyType || 'Residential',
-        epcRating: property.epcRating || 'Unrated',
-        constructionYear: property.constructionYear || null,
+        propertyId: propInput.propertyId,
+        propertyType: propInput.propertyType || 'Residential',
+        epcRating: propInput.epcRating || 'Unrated',
+        constructionYear: propInput.constructionYear || null,
       };
 
       await evidenceRegistry.registerStructuredData(
         'property',
-        property.propertyId,
+        propInput.propertyId,
         'structured_spec',
-        `properties/${property.propertyId}`,
+        `properties/${propInput.propertyId}`,
         specPayload,
-        { propertyType: property.propertyType, epcRating: property.epcRating },
-        { documentId: property.propertyId, sourceField: 'spec' }
+        { propertyType: propInput.propertyType, epcRating: propInput.epcRating },
+        { documentId: propInput.propertyId, sourceField: 'spec' }
       );
 
       // Handle document objects with real binary bytes or reference-only
-      if (property.documentObjects && property.documentObjects.length > 0) {
-        for (const [idx, docObj] of property.documentObjects.entries()) {
+      if (propInput.documentObjects && propInput.documentObjects.length > 0) {
+        for (const [idx, docObj] of propInput.documentObjects.entries()) {
           const sourceRef = docObj.storagePath || docObj.uri || `documents/${idx}`;
           if (docObj.bytes) {
             await evidenceRegistry.register(
               'property',
-              property.propertyId,
+              propInput.propertyId,
               'document',
               sourceRef,
               docObj.bytes,
@@ -113,7 +128,7 @@ export class PropertyIntelligenceService {
           } else {
             await evidenceRegistry.registerReferenceOnly(
               'property',
-              property.propertyId,
+              propInput.propertyId,
               'document',
               sourceRef,
               { mimeType: docObj.mimeType, index: idx },
@@ -121,11 +136,11 @@ export class PropertyIntelligenceService {
             );
           }
         }
-      } else if (property.documents && property.documents.length > 0) {
-        for (const [idx, docUrl] of property.documents.entries()) {
+      } else if (propInput.documents && propInput.documents.length > 0) {
+        for (const [idx, docUrl] of propInput.documents.entries()) {
           await evidenceRegistry.registerReferenceOnly(
             'property',
-            property.propertyId,
+            propInput.propertyId,
             'document',
             docUrl,
             { docUrl, index: idx },
@@ -134,7 +149,7 @@ export class PropertyIntelligenceService {
         }
       }
 
-      propertyEvidence = await evidenceRegistry.getForAggregate('property', property.propertyId);
+      propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId);
     }
 
     // Property-level evidence IDs supporting the property aggregate extraction
@@ -161,23 +176,23 @@ export class PropertyIntelligenceService {
 
     // 3. Model Rollup
     const rollupResult = await this.provider.rollupPropertyCandidate(
-      property.propertyId,
+      propInput.propertyId,
       jobHistories,
       untrustedEvidence
     );
     const candidate = rollupResult.candidate;
 
     // Determine version identifiers
-    const sourceVersion = property.sourceVersion || '1';
-    const pipelineVersion = property.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION;
-    const modelVersion = property.modelVersion || rollupResult.metrics.model;
-    const promptVersion = property.promptVersion || 'property_rollup_v8.1';
-    const schemaVersion = property.schemaVersion || INTELLIGENCE_SCHEMA_VERSION;
-    const providerName = property.provider || 'google_genai';
+    const sourceVersion = propInput.sourceVersion || '1';
+    const pipelineVersion = propInput.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION;
+    const modelVersion = propInput.modelVersion || rollupResult.metrics.model || 'gemini-2.5-flash';
+    const promptVersion = propInput.promptVersion || 'property_rollup_v8.1';
+    const schemaVersion = propInput.schemaVersion || INTELLIGENCE_SCHEMA_VERSION;
+    const providerName = propInput.provider || 'google_genai';
 
     const versionId = buildVersionId(
       'property',
-      property.propertyId,
+      propInput.propertyId,
       sourceVersion,
       pipelineVersion,
       modelVersion,
@@ -186,50 +201,61 @@ export class PropertyIntelligenceService {
     );
 
     // 4. Tier B: Store Raw Model Output Gzip-Compressed
-    const storagePath = `intelligence_raw/property/${property.propertyId}/rollup_${versionId}.json.gz`;
+    const storagePath = `intelligence_raw/property/${propInput.propertyId}/rollup_${versionId}.json.gz`;
     const { compressedBuffer, manifest: rawManifestDraft } = compressPayload(rollupResult.rawResponseText, storagePath);
     const manifest = await persistRawArtifact({ compressedBuffer, manifest: rawManifestDraft });
 
     // 5. Construct Untrusted AI Candidate for Security Boundary Processing
+    const candidateEvidenceIds = Array.isArray((candidate as any)?.evidenceIds) && (candidate as any).evidenceIds.length > 0
+      ? (candidate as any).evidenceIds
+      : targetEvidenceIds;
+
     const rawCandidateObj = {
-      domain: 'property_management',
-      category: property.propertyType || 'Residential',
-      component: 'Building Fabric',
-      buildingComponents: (candidate.buildingComponents || []).map((bc: any) => ({
-        component: bc.component,
-        condition: bc.condition,
-        confidence: bc.confidence,
-        lastObservedAt: bc.lastObservedAt || new Date().toISOString(),
-        evidenceIds: bc.evidenceIds && bc.evidenceIds.length > 0 ? bc.evidenceIds : targetEvidenceIds.slice(0, 1),
-      })),
-      observedConditions: (candidate.observedConditions || []).map((oc: any) => ({
-        condition: oc.condition,
-        severity: oc.severity,
-        component: oc.component,
-        evidenceIds: oc.evidenceIds && oc.evidenceIds.length > 0 ? oc.evidenceIds : targetEvidenceIds.slice(0, 1),
-      })),
-      recommendedInterventions: (candidate.recommendedInterventions || []).map((ri: any) => ({
-        intervention: ri.intervention,
-        urgency: ri.urgency,
-        component: ri.component,
-        evidenceIds: targetEvidenceIds.slice(0, 1),
-        estimatedBenchmarkCost: ri.estimatedBenchmarkCost ? {
-          min: ri.estimatedBenchmarkCost.min ?? 0,
-          max: ri.estimatedBenchmarkCost.max ?? 0,
-        } : undefined,
-      })),
-      overallHealthScore: candidate.overallHealthScore,
-      evidenceIds: targetEvidenceIds,
-      candidateConfidence: typeof (candidate as any).candidateConfidence === 'number'
+      ...(typeof candidate === 'object' && candidate !== null ? candidate : {}),
+      domain: (candidate as any)?.domain || 'property_management',
+      category: (candidate as any)?.category || propInput.propertyType || 'Residential',
+      component: (candidate as any)?.component || 'Building Fabric',
+      buildingComponents: Array.isArray((candidate as any)?.buildingComponents)
+        ? (candidate as any).buildingComponents.map((bc: any) => ({
+            component: bc?.component,
+            condition: bc?.condition,
+            confidence: bc?.confidence,
+            lastObservedAt: bc?.lastObservedAt || new Date().toISOString(),
+            evidenceIds: Array.isArray(bc?.evidenceIds) && bc.evidenceIds.length > 0 ? bc.evidenceIds : candidateEvidenceIds.slice(0, 1),
+          }))
+        : (candidate as any)?.buildingComponents,
+      observedConditions: Array.isArray((candidate as any)?.observedConditions)
+        ? (candidate as any).observedConditions.map((oc: any) => ({
+            condition: oc?.condition,
+            severity: oc?.severity,
+            component: oc?.component,
+            evidenceIds: Array.isArray(oc?.evidenceIds) && oc.evidenceIds.length > 0 ? oc.evidenceIds : candidateEvidenceIds.slice(0, 1),
+          }))
+        : (candidate as any)?.observedConditions,
+      recommendedInterventions: Array.isArray((candidate as any)?.recommendedInterventions)
+        ? (candidate as any).recommendedInterventions.map((ri: any) => ({
+            intervention: ri?.intervention,
+            urgency: ri?.urgency,
+            component: ri?.component,
+            evidenceIds: Array.isArray(ri?.evidenceIds) && ri.evidenceIds.length > 0 ? ri.evidenceIds : candidateEvidenceIds.slice(0, 1),
+            estimatedBenchmarkCost: ri?.estimatedBenchmarkCost ? {
+              min: ri.estimatedBenchmarkCost.min ?? 0,
+              max: ri.estimatedBenchmarkCost.max ?? 0,
+            } : undefined,
+          }))
+        : (candidate as any)?.recommendedInterventions,
+      overallHealthScore: (candidate as any)?.overallHealthScore,
+      evidenceIds: candidateEvidenceIds,
+      candidateConfidence: typeof (candidate as any)?.candidateConfidence === 'number'
         ? (candidate as any).candidateConfidence
-        : (candidate.overallHealthScore ? candidate.overallHealthScore / 100 : 0.85),
+        : ((candidate as any)?.overallHealthScore ? (candidate as any).overallHealthScore / 100 : 0.85),
     };
 
     // 6. Trusted Server Context (SERVER-OWNED METADATA)
     const serverContext: TrustedServerContext = {
       aggregateType: 'property',
-      aggregateId: property.propertyId,
-      sourceId: `properties/${property.propertyId}`,
+      aggregateId: propInput.propertyId,
+      sourceId: `properties/${propInput.propertyId}`,
       sourceVersion: String(sourceVersion),
       schemaVersion,
       pipelineVersion,
@@ -239,7 +265,7 @@ export class PropertyIntelligenceService {
     };
 
     // 7. Establish Authoritative Firestore Reference (Fails closed if unavailable)
-    const activeDb = options?.firestoreDb || getGlobalIntelligenceDb() || (evidenceRegistry as any).firestoreDb;
+    const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb() || (evidenceRegistry as any).firestoreDb;
     if (!activeDb) {
       throw new Error('[PropertyIntelligence Error] Firestore database reference is required to validate evidence lineage (Fail Closed)');
     }
@@ -318,7 +344,7 @@ export class PropertyIntelligenceService {
     const extraction: IntelligenceExtraction = {
       extractionId: canonical.canonicalId,
       versionId: canonical.canonicalId,
-      taskId: property.taskId,
+      taskId: propInput.taskId,
       aggregateId: canonical.aggregateId,
       aggregateType: 'property',
       sourceAggregateId: canonical.aggregateId,
@@ -346,16 +372,16 @@ export class PropertyIntelligenceService {
 
     // 12. Canonical Intelligence Event (for backward compatibility)
     const event: CanonicalIntelligenceEvent = {
-      eventId: `ie_prop_${property.propertyId}_${canonical.canonicalId.slice(4, 16)}_${computeSha256(now).slice(0, 6)}`,
+      eventId: `ie_prop_${propInput.propertyId}_${canonical.canonicalId.slice(4, 16)}_${computeSha256(now).slice(0, 6)}`,
       aggregateType: 'property',
-      aggregateId: property.propertyId,
+      aggregateId: propInput.propertyId,
       eventType: 'PROPERTY_ROLLUP_COMPLETED',
       schemaVersion: canonical.schemaVersion,
       pipelineVersion: canonical.pipelineVersion,
       modelVersion: canonical.modelVersion,
       promptVersion: canonical.promptVersion,
       createdAt: now,
-      source: `properties/${property.propertyId}`,
+      source: `properties/${propInput.propertyId}`,
       evidenceIds: canonical.evidenceIds,
       confidence: canonical.confidence,
       provenance: canonical.provenance,
@@ -383,3 +409,10 @@ export class PropertyIntelligenceService {
 }
 
 export const propertyIntelligenceService = new PropertyIntelligenceService();
+
+export function createPropertyIntelligenceService(options?: {
+  provider?: IntelligenceModelProvider;
+  firestoreDb?: any;
+}): PropertyIntelligenceService {
+  return new PropertyIntelligenceService(options?.provider, { firestoreDb: options?.firestoreDb });
+}

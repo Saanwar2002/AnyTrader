@@ -67,7 +67,16 @@ export function createInMemoryTestDb(): FirestoreDbLike {
             },
             update: async (data: any) => {
               if (!col.has(docId)) throw new Error(`Document ${colName}/${docId} not found`);
-              col.set(docId, { ...col.get(docId), ...JSON.parse(JSON.stringify(data)) });
+              const current = col.get(docId) || {};
+              const merged = { ...current };
+              for (const [k, v] of Object.entries(data)) {
+                if (v === undefined || (v && typeof v === 'object' && (v.constructor?.name === 'DeleteTransform' || (v as any)._methodName === 'FieldValue.delete'))) {
+                  delete merged[k];
+                } else {
+                  merged[k] = JSON.parse(JSON.stringify(v));
+                }
+              }
+              col.set(docId, merged);
             },
             delete: async () => {
               col.delete(docId);

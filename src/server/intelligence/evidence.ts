@@ -178,13 +178,35 @@ export function buildEvidenceStoragePath(evidenceId: string, filename?: string):
   return `intelligence_evidence/${evidenceId}/${filename || 'content'}`;
 }
 
-export function cleanUndefinedFields<T extends Record<string, any>>(obj: T): T {
-  const result: any = Array.isArray(obj) ? [] : {};
+export function cleanUndefinedFields<T extends Record<string, any>>(
+  obj: T,
+  seen: WeakSet<object> = new WeakSet()
+): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  if (obj instanceof Date || Buffer.isBuffer(obj)) return obj;
+  if (seen.has(obj)) return obj;
+
+  const proto = Object.getPrototypeOf(obj);
+  const isPlain = proto === null || proto === Object.prototype || Array.isArray(obj);
+  if (!isPlain) {
+    return obj;
+  }
+
+  seen.add(obj);
+
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => (typeof item === 'object' && item !== null ? cleanUndefinedFields(item, seen) : item)) as any;
+  }
+
+  const result: any = {};
   for (const key of Object.keys(obj)) {
     const val = obj[key];
     if (val !== undefined) {
       if (val !== null && typeof val === 'object' && !(val instanceof Date) && !Buffer.isBuffer(val)) {
-        result[key] = cleanUndefinedFields(val);
+        result[key] = cleanUndefinedFields(val, seen);
       } else {
         result[key] = val;
       }

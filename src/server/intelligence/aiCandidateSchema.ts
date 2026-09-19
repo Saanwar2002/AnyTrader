@@ -125,6 +125,7 @@ export const AIExtractionCandidateSchema = z.object({
   observedConditions: z.array(CandidateObservedConditionSchema).max(50).optional(),
   recommendedInterventions: z.array(CandidateRecommendedInterventionSchema).max(50).optional(),
   overallHealthScore: z.number().min(0, 'Health score must be >= 0').max(100, 'Health score must be <= 100').optional(),
+  riskLevel: z.enum(['low', 'medium', 'high', 'critical', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).or(z.string().max(50)).optional(),
   evidenceIds: z.array(z.string().min(1).max(100)).max(100).optional(),
   candidateConfidence: z.number().min(0, 'Candidate confidence must be >= 0').max(1, 'Candidate confidence must be <= 1').optional(),
 }).strict().superRefine((candidate, ctx) => {

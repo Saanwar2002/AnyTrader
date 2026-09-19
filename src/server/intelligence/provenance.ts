@@ -109,6 +109,7 @@ export function buildProvenance(
     promptVersion,
     generatedAt: new Date().toISOString(),
     sourceContentHash: computeSha256(sourceContent),
+    contentHash: computeSha256(sourceContent),
   };
 }
 

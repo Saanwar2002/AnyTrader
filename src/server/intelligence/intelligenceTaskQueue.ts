@@ -16,6 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { FieldValue } from 'firebase-admin/firestore';
 import { IntelligenceTask, TaskStatus, TaskType, IntelligenceAggregateType } from './types';
 import { AICandidateSecurityError } from './aiCandidateBoundary';
 import { processingRunStore, buildProcessingRunId, setGlobalProcessingRunDb } from './processingRunStore';
@@ -363,8 +364,9 @@ export class IntelligenceTaskQueue {
           payload,
         };
 
-        transaction.set(taskRef, newTask);
-        return newTask;
+        const sanitizedTask = cleanUndefinedFields(newTask);
+        transaction.set(taskRef, sanitizedTask);
+        return sanitizedTask;
       });
 
       this.tasks.set(task.taskId, task);
@@ -439,7 +441,22 @@ export class IntelligenceTaskQueue {
         }
 
         const newAttempts = (data.attempts || 0) + 1;
-        transaction.update(taskRef, {
+        const isRealAdminFirestore = Boolean(
+          taskRef &&
+          taskRef.firestore &&
+          typeof taskRef.firestore.collectionGroup === 'function' &&
+          typeof taskRef.firestore.listCollections === 'function'
+        );
+        let deleteSentinel: any = undefined;
+        if (isRealAdminFirestore) {
+          try {
+            deleteSentinel = FieldValue.delete();
+          } catch {
+            deleteSentinel = undefined;
+          }
+        }
+
+        const updateData: Record<string, any> = {
           status: 'processing',
           attempts: newAttempts,
           startedAt: nowIso,
@@ -448,11 +465,13 @@ export class IntelligenceTaskQueue {
           leaseAcquiredAt: nowIso,
           leaseExpiresAt: leaseExpiresAt,
           updatedAt: nowIso,
-          errorCode: undefined,
-          lastError: undefined,
-          nextAttemptAt: undefined,
-          nextRetryAt: undefined,
-        });
+          errorCode: deleteSentinel,
+          lastError: deleteSentinel,
+          nextAttemptAt: deleteSentinel,
+          nextRetryAt: deleteSentinel,
+        };
+
+        transaction.update(taskRef, updateData);
 
         return true;
       });
