@@ -1,5 +1,27 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.1 — Task 17: Property Rollup AI Security Boundary Integration (September 19, 2026)
+- **1. End-to-End Boundary Integration (`src/server/intelligence/propertyIntelligence.ts`)**:
+  - Integrated `processAICandidateToCanonical` into `propertyIntelligenceService.aggregatePropertyIntelligence`, establishing a hard security boundary between raw AI model candidates and authoritative canonical property intelligence records.
+  - Replaced legacy mock extraction construction with strict candidate validation, structural enforcement, and byte-budget bounding (`MAX_AI_PAYLOAD_BYTES`).
+  - Server context parameters (`aggregateType: 'property'`, `aggregateId: propertyId`, `sourceVersion`, `pipelineVersion`, `activeDb`) strictly overwrite any AI provider-returned metadata or identity fields, preventing identity spoofing and privilege escalation.
+- **2. Hard Evidence Lineage & Integrity Enforcement (`lineageValidator.ts`, `evidence.ts`)**:
+  - Validated property intelligence assertions against authoritative Firestore `evidence_registry` records.
+  - Fabricated evidence IDs, missing evidence records, and cross-aggregate evidence contamination (e.g. referencing job evidence belonging to unrelated jobs/properties) are rejected fail-closed before canonicalization or persistence.
+- **3. Production Queue & Store Synchronization (`server.ts`, `immutableStore.ts`)**:
+  - Bound `property_rollup` queue worker to the unified AI security pipeline.
+  - Property intelligence projections atomically write to `intelligence_properties/{propertyId}` with strict `StorageManifest` metadata, audit trails, and immutable historical version records.
+- **4. Adversarial Penetration Suite Verification (`tests/unit/task17PropertySecurity.test.ts`)**:
+  - Created 12-test comprehensive adversarial security suite verifying:
+    - Vector 1: Fabricated evidence rejection (fail-closed before canonicalization)
+    - Vector 2: AI metadata spoofing defense (server context strictly overrides model output)
+    - Vector 3: Cross-aggregate evidence contamination defense
+    - Vector 4: Malformed AI candidate and size limit enforcement
+    - Vector 5: Missing database fail-closed rejection
+    - Vector 6: Valid pipeline execution with canonical conversion, hash computation, and projection persistence
+    - Vector 7: Production task queue handler execution (`property_rollup`) with successful completion and failure dead-letter routing.
+  - **Results**: 12/12 passing tests; 566/566 total unit tests passing across 37 test suites.
+
 ## 🛡️ AnyTrader V8.1 — Final Independent Audit & Closure Gate (September 18, 2026)
 - **1. Final Independent Audit Status**: **VERIFIED & CLOSED — 100% AUDIT PASS (GO FOR RELEASE)**.
 - **2. Documentation**: Complete audit report published in `/TASK_V81_FINAL_AUDIT_REPORT.md`.

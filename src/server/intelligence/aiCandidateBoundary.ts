@@ -28,6 +28,7 @@ import {
   CanonicalIntelligenceInput,
   CanonicalIntelligence,
   IntelligenceAggregateType,
+  StorageManifest,
 } from './types';
 import { canonicalizeIntelligence } from './canonicalizer';
 import { EvidenceLineageValidator, evidenceLineageValidator } from './lineageValidator';
@@ -55,6 +56,8 @@ export interface TrustedServerContext {
 export interface PipelineOptions {
   firestoreDb: any;
   persistToStore?: boolean;
+  rawManifest?: StorageManifest;
+  summaryProjection?: Record<string, unknown>;
 }
 
 /**
@@ -148,9 +151,96 @@ export function validateAndSanitizeAICandidate(
   candidate.interventions?.forEach((inv) => inv.evidenceIds.forEach((id) => collectedEvidenceIds.add(id)));
   candidate.outcomes?.forEach((o) => o.evidenceIds.forEach((id) => collectedEvidenceIds.add(id)));
   candidate.conditions?.forEach((c) => c.evidenceIds.forEach((id) => collectedEvidenceIds.add(id)));
+  candidate.buildingComponents?.forEach((bc) => bc.evidenceIds?.forEach((id) => collectedEvidenceIds.add(id)));
+  candidate.observedConditions?.forEach((oc) => oc.evidenceIds?.forEach((id) => collectedEvidenceIds.add(id)));
+  candidate.recommendedInterventions?.forEach((ri) => ri.evidenceIds?.forEach((id) => collectedEvidenceIds.add(id)));
 
   // 5. Construct Canonical Intelligence Input with SERVER-OWNED TRUST METADATA
   // Server-owned metadata MUST override any model-derived claims!
+  const observations = candidate.observations.length > 0
+    ? candidate.observations.map((obs, idx) => ({
+        observationId: obs.observationId || `obs_${idx + 1}`,
+        component: obs.component,
+        condition: obs.condition,
+        description: obs.description,
+        evidenceIds: obs.evidenceIds,
+        capturedAt: obs.capturedAt,
+        sourceField: obs.sourceField,
+      }))
+    : (candidate.buildingComponents || []).map((bc, idx) => ({
+        observationId: `obs_bc_${idx + 1}`,
+        component: bc.component,
+        condition: bc.condition,
+        description: `${bc.component}: ${bc.condition}`,
+        evidenceIds: bc.evidenceIds && bc.evidenceIds.length > 0 ? bc.evidenceIds : Array.from(collectedEvidenceIds),
+        capturedAt: bc.lastObservedAt,
+      }));
+
+  const inferences = candidate.inferences.length > 0
+    ? candidate.inferences.map((inf, idx) => ({
+        inferenceId: inf.inferenceId || `inf_${idx + 1}`,
+        type: inf.type || 'risk',
+        targetComponent: inf.targetComponent,
+        hypothesis: inf.hypothesis,
+        confidence: inf.confidence,
+        reasoning: inf.reasoning,
+        supportingEvidenceIds: inf.supportingEvidenceIds,
+        supportingObservationIds: inf.supportingObservationIds,
+        severity: inf.severity as any,
+        urgency: inf.urgency as any,
+      }))
+    : candidate.overallHealthScore !== undefined
+      ? [
+          {
+            inferenceId: 'inf_health_1',
+            type: 'property_health',
+            targetComponent: candidate.component || 'Building Fabric',
+            hypothesis: `Overall property health score: ${candidate.overallHealthScore}/100`,
+            confidence: candidate.candidateConfidence ?? (candidate.overallHealthScore / 100),
+            supportingEvidenceIds: Array.from(collectedEvidenceIds),
+            severity: candidate.overallHealthScore < 50 ? ('high' as const) : candidate.overallHealthScore < 75 ? ('medium' as const) : ('low' as const),
+          },
+        ]
+      : [];
+
+  const conditions = candidate.conditions
+    ? candidate.conditions.map((c) => ({
+        condition: c.condition,
+        severity: c.severity as any,
+        component: c.component,
+        evidenceIds: c.evidenceIds,
+      }))
+    : candidate.observedConditions?.map((oc) => ({
+        condition: oc.condition,
+        severity: oc.severity as any,
+        component: oc.component,
+        evidenceIds: oc.evidenceIds && oc.evidenceIds.length > 0 ? oc.evidenceIds : Array.from(collectedEvidenceIds),
+      }));
+
+  const interventions = candidate.interventions
+    ? candidate.interventions.map((inv) => ({
+        description: inv.description,
+        urgency: inv.urgency as any,
+        component: inv.component,
+        evidenceIds: inv.evidenceIds,
+        estimatedBenchmarkCost: inv.estimatedBenchmarkCost ? {
+          min: inv.estimatedBenchmarkCost.min ?? 0,
+          max: inv.estimatedBenchmarkCost.max ?? 0,
+          currency: inv.estimatedBenchmarkCost.currency,
+        } : undefined,
+      }))
+    : candidate.recommendedInterventions?.map((ri) => ({
+        description: ri.intervention,
+        urgency: ri.urgency as any,
+        component: ri.component,
+        evidenceIds: ri.evidenceIds && ri.evidenceIds.length > 0 ? ri.evidenceIds : Array.from(collectedEvidenceIds),
+        estimatedBenchmarkCost: ri.estimatedBenchmarkCost ? {
+          min: ri.estimatedBenchmarkCost.min ?? 0,
+          max: ri.estimatedBenchmarkCost.max ?? 0,
+          currency: ri.estimatedBenchmarkCost.currency,
+        } : undefined,
+      }));
+
   const canonicalInput: CanonicalIntelligenceInput = {
     // SERVER-OWNED AGGREGATE IDENTITY AND SOURCE
     aggregateType: serverContext.aggregateType,
@@ -160,56 +250,22 @@ export function validateAndSanitizeAICandidate(
     domain: candidate.domain,
     category: candidate.category,
     component: candidate.component,
-    observations: candidate.observations.map((obs, idx) => ({
-      observationId: obs.observationId || `obs_${idx + 1}`,
-      component: obs.component,
-      condition: obs.condition,
-      description: obs.description,
-      evidenceIds: obs.evidenceIds,
-      capturedAt: obs.capturedAt,
-      sourceField: obs.sourceField,
-    })),
-    inferences: candidate.inferences.map((inf, idx) => ({
-      inferenceId: inf.inferenceId || `inf_${idx + 1}`,
-      type: inf.type || 'risk',
-      targetComponent: inf.targetComponent,
-      hypothesis: inf.hypothesis,
-      confidence: inf.confidence,
-      reasoning: inf.reasoning,
-      supportingEvidenceIds: inf.supportingEvidenceIds,
-      supportingObservationIds: inf.supportingObservationIds,
-      severity: inf.severity as any,
-      urgency: inf.urgency as any,
-    })),
+    observations,
+    inferences,
     problems: candidate.problems?.map((p) => ({
       description: p.description,
       severity: p.severity as any,
       component: p.component,
       evidenceIds: p.evidenceIds,
     })),
-    interventions: candidate.interventions?.map((inv) => ({
-      description: inv.description,
-      urgency: inv.urgency as any,
-      component: inv.component,
-      evidenceIds: inv.evidenceIds,
-      estimatedBenchmarkCost: inv.estimatedBenchmarkCost ? {
-        min: inv.estimatedBenchmarkCost.min ?? 0,
-        max: inv.estimatedBenchmarkCost.max ?? 0,
-        currency: inv.estimatedBenchmarkCost.currency,
-      } : undefined,
-    })),
+    interventions,
     outcomes: candidate.outcomes?.map((o) => ({
       description: o.description,
       component: o.component,
       status: o.status,
       evidenceIds: o.evidenceIds,
     })),
-    conditions: candidate.conditions?.map((c) => ({
-      condition: c.condition,
-      severity: c.severity as any,
-      component: c.component,
-      evidenceIds: c.evidenceIds,
-    })),
+    conditions,
     evidenceIds: Array.from(collectedEvidenceIds),
 
     provenance: {
@@ -271,6 +327,8 @@ export async function processAICandidateToCanonical(
     await persistCanonicalIntelligence({
       db: options.firestoreDb,
       canonical,
+      rawManifest: options.rawManifest,
+      summaryProjection: options.summaryProjection,
     });
     persisted = true;
   }

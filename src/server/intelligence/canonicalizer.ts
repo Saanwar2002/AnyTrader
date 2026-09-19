@@ -46,6 +46,7 @@ import {
   ConfidenceScores,
   IntelligenceExtraction,
   Provenance,
+  StorageManifest,
 } from './types';
 import { FirestoreDbLike, immutableIntelligenceStore, PersistIntelligenceResult } from './immutableStore';
 
@@ -480,8 +481,9 @@ export async function persistCanonicalIntelligence(options: {
   db?: FirestoreDbLike | null;
   canonical: CanonicalIntelligence;
   summaryProjection?: Record<string, unknown>;
+  rawManifest?: StorageManifest;
 }): Promise<PersistIntelligenceResult> {
-  const { db, canonical, summaryProjection } = options;
+  const { db, canonical, summaryProjection, rawManifest } = options;
 
   // Re-verify canonical representation integrity
   const validated = canonicalizeIntelligence(canonical);
@@ -503,7 +505,7 @@ export async function persistCanonicalIntelligence(options: {
     schemaVersion: validated.schemaVersion,
     provider: 'canonical_pipeline',
     evidenceIds: validated.evidenceIds,
-    rawManifest: {
+    rawManifest: rawManifest || {
       encoding: 'gzip',
       originalBytes: 0,
       compressedBytes: 0,
