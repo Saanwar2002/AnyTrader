@@ -22,6 +22,7 @@ import { immutableIntelligenceStore, getGlobalIntelligenceDb } from './immutable
 import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence, PropertyIntelligence, CanonicalIntelligence } from './types';
 import { processAICandidateToCanonical, TrustedServerContext } from './aiCandidateBoundary';
 import { persistCanonicalIntelligence } from './canonicalizer';
+import { propertyOntologyService } from './propertyOntology';
 
 export interface PropertySourceInput {
   propertyId: string;
@@ -93,6 +94,21 @@ export class PropertyIntelligenceService {
     if (activeDb) {
       evidenceRegistry.setDb(activeDb);
       evidenceLineageValidator.setDb(activeDb);
+
+      try {
+        const propRef = activeDb.collection('properties').doc(propInput.propertyId);
+        const existingDoc = await propRef.get();
+        if (!existingDoc || !existingDoc.exists) {
+          await propRef.set({
+            propertyId: propInput.propertyId,
+            propertyType: propInput.propertyType || 'Residential',
+            address: propInput.address || '',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch {
+        // Ignore if error occurs during upsert attempt
+      }
     }
 
     // 0. Lineage Verification: All historical jobs provided MUST strictly belong to this target property
@@ -364,6 +380,38 @@ export class PropertyIntelligenceService {
     const budgetCheck = enforceFirestoreSafetyBudget(propertyIntelligence);
     if (!budgetCheck.valid) {
       throw new Error(`[PropertyIntelligence Budget Error] Exceeded 100 KiB: ${budgetCheck.actualBytes} bytes`);
+    }
+
+    // 9.5. Property Component Ontology Registration
+    if (activeDb && options?.persist !== false) {
+      for (const comp of propertyIntelligence.buildingComponents) {
+        if (comp.component) {
+          await propertyOntologyService.registerComponentEvidence(
+            {
+              propertyId: propInput.propertyId,
+              componentType: comp.component,
+              sourceType: 'property_rollup',
+              provenance: {
+                origin: 'property_rollup',
+                sourceId: `properties/${propInput.propertyId}`,
+                sourceVersion: String(sourceVersion),
+                pipelineVersion: canonical.pipelineVersion,
+                modelVersion: canonical.modelVersion,
+                promptVersion: canonical.promptVersion,
+                schemaVersion: canonical.schemaVersion,
+              },
+              status: 'derived',
+              observedAt: comp.lastObservedAt,
+              confidence: comp.confidence,
+              metadata: {
+                condition: comp.condition,
+                evidenceIds: comp.evidenceIds || [],
+              },
+            },
+            { firestoreDb: activeDb }
+          );
+        }
+      }
     }
 
     // 10. Authoritative Persistence to Immutable Intelligence Store

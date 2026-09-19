@@ -293,23 +293,21 @@ export class PropertyOntologyService {
       );
     }
 
-    // 4. Cross-Tenant Isolation Check
-    if (input.provenance.tenantId) {
-      if (activeDb) {
-        try {
-          const propDoc = await activeDb.collection('properties').doc(input.propertyId).get();
-          if (propDoc && propDoc.exists) {
-            const propData = typeof propDoc.data === 'function' ? propDoc.data() : propDoc.data;
-            const propTenant = propData?.tenantId || propData?.landlordId || propData?.ownerId;
-            if (propTenant && propTenant !== input.provenance.tenantId) {
-              throw new Error(
-                `[CrossTenantContamination Violation] Tenant '${input.provenance.tenantId}' does not match property owner/tenant '${propTenant}'.`
-              );
-            }
-          }
-        } catch (err: any) {
-          if (err.message.includes('CrossTenantContamination')) throw err;
-        }
+    // 4. Authoritative Property Existence & Cross-Tenant Isolation Check
+    if (activeDb) {
+      const propDoc = await activeDb.collection('properties').doc(input.propertyId).get();
+      if (!propDoc || !propDoc.exists) {
+        throw new Error(
+          `[PropertyLineage Violation] Property '${input.propertyId}' does not exist`
+        );
+      }
+      const propData = typeof propDoc.data === 'function' ? propDoc.data() : propDoc.data;
+      const authoritativeTenant = propData?.tenantId ?? propData?.landlordId ?? propData?.ownerId;
+
+      if (input.provenance.tenantId && authoritativeTenant && input.provenance.tenantId !== authoritativeTenant) {
+        throw new Error(
+          `[CrossTenantContamination Violation] Tenant '${input.provenance.tenantId}' does not match property owner/tenant '${authoritativeTenant}'.`
+        );
       }
     }
 

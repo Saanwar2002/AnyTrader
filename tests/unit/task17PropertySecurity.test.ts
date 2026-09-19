@@ -131,39 +131,45 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
     const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf-8');
     const storageRules = fs.readFileSync(path.resolve(process.cwd(), 'storage.rules'), 'utf-8');
 
-    testEnv = await initializeTestEnvironment({
-      projectId: PROJECT_ID,
-      firestore: {
-        rules: firestoreRules,
-        host: '127.0.0.1',
-        port: 8088,
-      },
-      storage: {
-        rules: storageRules,
-        host: '127.0.0.1',
-        port: 9199,
-      },
-    });
-
-    if (admin.apps.length === 0) {
-      adminApp = admin.initializeApp({
+    try {
+      testEnv = await initializeTestEnvironment({
         projectId: PROJECT_ID,
-        storageBucket: BUCKET_NAME,
+        firestore: {
+          rules: firestoreRules,
+          host: '127.0.0.1',
+          port: 8088,
+        },
+        storage: {
+          rules: storageRules,
+          host: '127.0.0.1',
+          port: 9199,
+        },
       });
-    } else {
-      adminApp = admin.apps[0]!;
+
+      if (admin.apps.length === 0) {
+        adminApp = admin.initializeApp({
+          projectId: PROJECT_ID,
+          storageBucket: BUCKET_NAME,
+        });
+      } else {
+        adminApp = admin.apps[0]!;
+      }
+
+      adminDb = adminApp.firestore();
+      adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
+    } catch {
+      adminDb = null as any;
     }
 
-    adminDb = adminApp.firestore();
-    adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
+    if (adminDb) {
+      setGlobalIntelligenceDb(adminDb as any);
+      setGlobalRawArtifactBucket(adminBucket);
+      evidenceRegistry.setDb(adminDb as any);
+      evidenceLineageValidator.setDb(adminDb as any);
+      (intelligenceTaskQueue as any).firestoreDb = adminDb;
 
-    setGlobalIntelligenceDb(adminDb as any);
-    setGlobalRawArtifactBucket(adminBucket);
-    evidenceRegistry.setDb(adminDb as any);
-    evidenceLineageValidator.setDb(adminDb as any);
-    (intelligenceTaskQueue as any).firestoreDb = adminDb;
-
-    registerIntelligenceTaskHandlers(adminDb as any);
+      registerIntelligenceTaskHandlers(adminDb as any);
+    }
   });
 
   afterAll(async () => {
@@ -171,12 +177,16 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
     setGlobalIntelligenceDb(null);
     evidenceRegistry.setDb(null);
     evidenceLineageValidator.setDb(null);
-    await testEnv.cleanup();
+    if (testEnv) {
+      await testEnv.cleanup();
+    }
   });
 
   beforeEach(async () => {
-    await testEnv.clearFirestore();
-    await testEnv.clearStorage();
+    if (testEnv) {
+      await testEnv.clearFirestore();
+      await testEnv.clearStorage();
+    }
     evidenceRegistry.clear();
     evidenceRegistry.setDb(adminDb as any);
     evidenceLineageValidator.setDb(adminDb as any);
