@@ -42,6 +42,7 @@ import {
   immutableIntelligenceStore,
   buildIdempotencyKey,
   processAICandidateToCanonical,
+  resolveAuthoritativeJobPropertyId,
   AICandidateSecurityError,
   TrustedServerContext,
   INTELLIGENCE_PIPELINE_VERSION,
@@ -146,10 +147,21 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
       throw new AICandidateSecurityError("Firestore DB reference is required to validate evidence lineage and persist intelligence");
     }
 
+    // Resolve authoritative propertyId from transactional jobs collection
+    let authoritativePropertyId = job.propertyId;
+    if (activeDb && job.jobId) {
+      try {
+        authoritativePropertyId = await resolveAuthoritativeJobPropertyId(activeDb, job.jobId);
+      } catch {
+        // Retain job.propertyId if present, or undefined
+      }
+    }
+
     // Server-owned trusted context (MUST override any model claims)
     const serverContext: TrustedServerContext = {
       aggregateType: 'job',
       aggregateId: job.jobId,
+      propertyId: authoritativePropertyId,
       sourceId: job.homeownerId || job.userId || `usr_${job.jobId}`,
       sourceVersion: String(job.sourceVersion || '1'),
       pipelineVersion: job.pipelineVersion || INTELLIGENCE_PIPELINE_VERSION,
@@ -220,6 +232,7 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
 
     const summaryProjection = {
       jobId: canonical.aggregateId,
+      propertyId: authoritativePropertyId || canonical.propertyId,
       currentVersionId: canonical.canonicalId,
       domain: canonical.domain,
       category: canonical.category || canonical.domain,
@@ -248,9 +261,20 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
     const { property, historicalJobs } = payload;
     if (!property) throw new Error("Missing property payload for rollup");
     const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    
+    const propId = typeof property === 'string' ? property : property.propertyId;
+    let jobsToRollup = historicalJobs;
+    if ((!jobsToRollup || jobsToRollup.length === 0) && activeDb) {
+      try {
+        jobsToRollup = await propertyIntelligenceService.getHistoricalJobsForProperty(propId, activeDb);
+      } catch {
+        jobsToRollup = [];
+      }
+    }
+
     const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
       property,
-      historicalJobs || [],
+      jobsToRollup || [],
       undefined,
       { firestoreDb: activeDb }
     );

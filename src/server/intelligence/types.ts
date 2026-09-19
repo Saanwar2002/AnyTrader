@@ -290,6 +290,7 @@ export interface IntelligenceTask {
 
 export interface JobIntelligence {
   jobId: string;
+  propertyId?: string;
   currentVersionId?: string;
   currentPipelineVersion?: string;
   currentModelVersion?: string;
@@ -469,6 +470,7 @@ export interface CanonicalIntelligence {
   canonicalId: string;
   aggregateType: IntelligenceAggregateType;
   aggregateId: string;
+  propertyId?: string;
   domain: string;
   category?: string;
   component?: string;

@@ -1,5 +1,23 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 18: Authoritative Property ↔ Job Lineage (September 19, 2026)
+- **1. Transactional Property Lineage Resolver (`src/server/intelligence/jobIntelligence.ts`)**:
+  - Implemented `resolveAuthoritativeJobPropertyId(db, jobId)` to query the transactional `jobs` collection in Firestore for authoritative property relationships.
+  - Fail-closed behavior: Throws `[Lineage Resolution Error]` if job document is missing or lacks a valid `propertyId`.
+- **2. AI Security Boundary Hardening (`aiCandidateBoundary.ts`)**:
+  - Model candidates attempting to spoof or inject `propertyId` or `derivedFromJobIds` have those fields strictly stripped before canonicalization.
+  - Injects authoritative `serverContext.propertyId` into the candidate and binds it into canonical intelligence representations.
+- **3. Cross-Property Contamination Defense (`propertyIntelligence.ts`)**:
+  - Enforced strict job-to-property lineage check in `aggregatePropertyIntelligence`: historical jobs MUST belong to the target property (`job.propertyId === propInput.propertyId`).
+  - Automatically registers historical job evidence pointers (`customEvidenceId: job_${jobId}`) with explicit `propertyId` metadata to validate cross-aggregate evidence lineage.
+- **4. Deterministic Canonicalization & Content Hashing (`canonicalSchema.ts`, `canonicalizer.ts`)**:
+  - Bound `propertyId` into `CanonicalIntelligenceSchema` and SHA-256 `contentHash` computation, ensuring distinct property IDs produce unique cryptographic digests.
+- **5. Server Endpoints & Task Queue Handlers (`server.ts`)**:
+  - Bound `job_extraction` and `property_rollup` HTTP endpoints to authoritatively resolve `propertyId` before invoking model derivation pipelines.
+- **6. Verification (`tests/unit/task18PropertyJobLineage.test.ts`)**:
+  - Created 11-test unit suite verifying resolution, fail-closed errors, model field stripping, cross-property rejection, and content hash binding (11/11 passing).
+  - All unit tests passing cleanly; `npm run lint` (`tsc --noEmit`) clean with 0 errors.
+
 ## 🛡️ AnyTrader V8.1 — Task 17: Property Rollup AI Security Boundary Integration (September 19, 2026)
 - **1. End-to-End Boundary Integration (`src/server/intelligence/propertyIntelligence.ts`)**:
   - Integrated `processAICandidateToCanonical` into `propertyIntelligenceService.aggregatePropertyIntelligence`, establishing a hard security boundary between raw AI model candidates and authoritative canonical property intelligence records.

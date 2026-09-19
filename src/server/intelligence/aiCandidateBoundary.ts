@@ -45,6 +45,7 @@ export interface TrustedServerContext {
   aggregateType: IntelligenceAggregateType;
   aggregateId: string;
   sourceId: string;
+  propertyId?: string;
   sourceVersion?: string;
   schemaVersion?: string;
   pipelineVersion?: string;
@@ -117,6 +118,8 @@ export function validateAndSanitizeAICandidate(
     delete (parsedObj as any).homeownerId;
     delete (parsedObj as any).userId;
     delete (parsedObj as any).tenantId;
+    delete (parsedObj as any).propertyId;
+    delete (parsedObj as any).derivedFromJobIds;
     delete (parsedObj as any).pipelineVersion;
     delete (parsedObj as any).modelVersion;
     delete (parsedObj as any).promptVersion;
@@ -245,6 +248,7 @@ export function validateAndSanitizeAICandidate(
     // SERVER-OWNED AGGREGATE IDENTITY AND SOURCE
     aggregateType: serverContext.aggregateType,
     aggregateId: serverContext.aggregateId,
+    propertyId: serverContext.propertyId,
 
     // MODEL-DERIVED CANDIDATE DATA (Validated)
     domain: candidate.domain,

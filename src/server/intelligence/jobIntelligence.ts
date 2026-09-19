@@ -23,6 +23,7 @@ import { CanonicalIntelligenceEvent, IntelligenceExtraction, JobIntelligence } f
 
 export interface JobSourceInput {
   jobId: string;
+  propertyId?: string;
   title: string;
   description: string;
   category?: string;
@@ -51,6 +52,35 @@ export interface JobSourceInput {
     mimeType?: string;
     byteSize?: number;
   }>;
+}
+
+/**
+ * Resolves the authoritative propertyId linked to a transactional job in Firestore.
+ * Fails closed if the database is unavailable or the job does not exist or lacks propertyId.
+ */
+export async function resolveAuthoritativeJobPropertyId(
+  db: any,
+  jobId: string
+): Promise<string> {
+  if (!db) {
+    throw new Error('[Lineage Resolution Error] Database reference is required to resolve job property lineage');
+  }
+  if (!jobId || typeof jobId !== 'string' || jobId.trim() === '') {
+    throw new Error('[Lineage Resolution Error] Valid jobId is required to resolve job property lineage');
+  }
+
+  const jobDoc = await db.collection('jobs').doc(jobId).get();
+  if (!jobDoc || !jobDoc.exists) {
+    throw new Error(`[Lineage Resolution Error] Transactional job '${jobId}' not found in 'jobs' collection`);
+  }
+
+  const data = typeof jobDoc.data === 'function' ? jobDoc.data() : jobDoc.data;
+  const propertyId = data?.propertyId || data?.property_id;
+  if (!propertyId || typeof propertyId !== 'string' || propertyId.trim() === '') {
+    throw new Error(`[Lineage Resolution Error] Transactional job '${jobId}' has no authoritative propertyId`);
+  }
+
+  return propertyId.trim();
 }
 
 export class JobIntelligenceService {
@@ -85,6 +115,18 @@ export class JobIntelligenceService {
   }> {
     if (options?.firestoreDb) {
       evidenceRegistry.setDb(options.firestoreDb);
+    }
+
+    // 0. Resolve authoritative property lineage if database is available
+    let authoritativePropertyId = job.propertyId;
+    const activeDb = options?.firestoreDb;
+    if (activeDb && job.jobId) {
+      try {
+        const resolved = await resolveAuthoritativeJobPropertyId(activeDb, job.jobId);
+        authoritativePropertyId = resolved;
+      } catch {
+        // Retain passed propertyId if available, or undefined
+      }
     }
 
     // 1. Gather & verify evidence
@@ -283,6 +325,7 @@ export class JobIntelligenceService {
         observedProblem: candidate.observedProblem,
         extractedScope: candidate.extractedScope,
         recommendedIntervention: candidate.recommendedIntervention,
+        propertyId: authoritativePropertyId,
         candidateConfidence: candidate.candidateConfidence,
         identifiedEvidenceReferences: candidate.identifiedEvidenceReferences,
       },
@@ -295,6 +338,7 @@ export class JobIntelligenceService {
     // 8. Compact Job Intelligence Projection (Current Active Pointer State)
     const jobIntelligence: JobIntelligence = {
       jobId: job.jobId,
+      propertyId: authoritativePropertyId,
       currentVersionId: versionId,
       currentPipelineVersion: pipelineVersion,
       currentModelVersion: modelVersion,

@@ -81,6 +81,9 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
 
   const aggregateType = input.aggregateType.trim().toLowerCase();
   const aggregateId = input.aggregateId.trim();
+  const propertyId = input.propertyId && typeof input.propertyId === 'string' && input.propertyId.trim().length > 0
+    ? input.propertyId.trim()
+    : undefined;
   const domain = normalizeDomainCode(input.domain);
   const category = input.category ? sanitizeTerm(input.category) : undefined;
   const component = normalizeComponentCode(input.component);
@@ -386,6 +389,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
   const canonicalPayloadForHashing = {
     aggregateType,
     aggregateId,
+    propertyId: propertyId || null,
     domain,
     category: category || null,
     component: component || null,
@@ -445,6 +449,7 @@ export function canonicalizeIntelligence(input: CanonicalIntelligenceInput): Can
     canonicalId,
     aggregateType,
     aggregateId,
+    propertyId,
     domain,
     category,
     component,
@@ -521,6 +526,7 @@ export async function persistCanonicalIntelligence(options: {
       domain: validated.domain,
       category: validated.category,
       component: validated.component,
+      propertyId: validated.propertyId,
       observations: validated.observations,
       inferences: validated.inferences,
       conditions: validated.conditions,
@@ -564,6 +570,7 @@ export async function persistCanonicalIntelligence(options: {
     aggregateId: validated.aggregateId,
     aggregateType: validated.aggregateType,
     currentVersionId: validated.canonicalId,
+    propertyId: validated.propertyId,
     domain: validated.domain,
     category: validated.category,
     component: validated.component,

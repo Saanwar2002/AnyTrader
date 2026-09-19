@@ -106,6 +106,7 @@ export const CanonicalIntelligenceSchema = z
     canonicalId: z.string().min(1, 'canonicalId is required'),
     aggregateType: z.string().min(1, 'aggregateType is required'),
     aggregateId: z.string().min(1, 'aggregateId is required'),
+    propertyId: z.string().min(1).optional(),
     domain: z.string().min(1, 'domain is required'),
     category: z.string().min(1).optional(),
     component: z.string().min(1).optional(),

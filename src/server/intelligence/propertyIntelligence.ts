@@ -13,6 +13,7 @@
 
 import { calculateConfidence } from './confidence';
 import { evidenceRegistry } from './evidenceRegistry';
+import { evidenceLineageValidator } from './lineageValidator';
 import { GeminiIntelligenceProvider, IntelligenceModelProvider } from './geminiProvider';
 import { buildProvenance, buildVersionId, computeSha256, INTELLIGENCE_PIPELINE_VERSION, INTELLIGENCE_SCHEMA_VERSION } from './provenance';
 import { compressPayload, enforceFirestoreSafetyBudget } from './storageTier';
@@ -88,6 +89,22 @@ export class PropertyIntelligenceService {
   }> {
     const propInput: PropertySourceInput = typeof property === 'string' ? { propertyId: property } : property;
 
+    const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb();
+    if (activeDb) {
+      evidenceRegistry.setDb(activeDb);
+      evidenceLineageValidator.setDb(activeDb);
+    }
+
+    // 0. Lineage Verification: All historical jobs provided MUST strictly belong to this target property
+    for (const job of historicalJobs) {
+      const jobPropId = job.propertyId;
+      if (jobPropId && jobPropId !== propInput.propertyId) {
+        throw new Error(
+          `[PropertyLineage Violation] Job '${job.jobId}' belongs to property '${jobPropId}', not target property '${propInput.propertyId}'. Cross-property contamination rejected.`
+        );
+      }
+    }
+
     // 1. Gather property-level evidence
     let propertyEvidence = await evidenceRegistry.getForAggregate('property', propInput.propertyId);
 
@@ -154,6 +171,26 @@ export class PropertyIntelligenceService {
 
     // Property-level evidence IDs supporting the property aggregate extraction
     const propertyEvidenceIds = propertyEvidence.map((e) => e.evidenceId);
+
+    // Register reference evidence for historical jobs if needed
+    for (const j of historicalJobs) {
+      if (j.jobId) {
+        try {
+          await evidenceRegistry.registerReferenceOnly(
+            'job',
+            j.jobId,
+            'structured_spec',
+            `jobs/${j.jobId}`,
+            { jobId: j.jobId, propertyId: propInput.propertyId },
+            { documentId: j.jobId, propertyId: propInput.propertyId },
+            { customEvidenceId: `job_${j.jobId}` },
+            activeDb
+          );
+        } catch {
+          // Evidence reference already registered or error handled
+        }
+      }
+    }
 
     const targetEvidenceIds = overrideEvidenceIds || propertyEvidenceIds;
 
@@ -265,7 +302,6 @@ export class PropertyIntelligenceService {
     };
 
     // 7. Establish Authoritative Firestore Reference (Fails closed if unavailable)
-    const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb() || (evidenceRegistry as any).firestoreDb;
     if (!activeDb) {
       throw new Error('[PropertyIntelligence Error] Firestore database reference is required to validate evidence lineage (Fail Closed)');
     }
@@ -405,6 +441,36 @@ export class PropertyIntelligenceService {
       canonical,
       rawCandidate: rawCandidateObj,
     };
+  }
+
+  /**
+   * Queries all authoritative historical jobs associated with a property from intelligence_jobs.
+   */
+  public async getHistoricalJobsForProperty(
+    propertyId: string,
+    db?: any
+  ): Promise<JobIntelligence[]> {
+    const activeDb = db || this.defaultDb || getGlobalIntelligenceDb();
+    if (!activeDb) {
+      throw new Error('[PropertyIntelligence Error] Database reference required to query property jobs');
+    }
+    const snap = await activeDb.collection('intelligence_jobs').where('propertyId', '==', propertyId).get();
+    if (!snap || snap.empty) {
+      return [];
+    }
+    const docs = typeof snap.docs !== 'undefined' ? snap.docs : [];
+    const jobs: JobIntelligence[] = [];
+    for (const doc of docs) {
+      const data = typeof doc.data === 'function' ? doc.data() : doc.data;
+      if (data) {
+        jobs.push({
+          jobId: doc.id || data.jobId,
+          ...data,
+          propertyId,
+        });
+      }
+    }
+    return jobs;
   }
 }
 
