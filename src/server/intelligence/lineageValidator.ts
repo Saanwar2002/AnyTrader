@@ -110,18 +110,6 @@ export class EvidenceLineageValidator {
         ? await transaction.get(docRef)
         : await docRef.get();
 
-      if (evidenceId === 'ev_property_prop_queue_real_8_0f506dbb451e552c') {
-        console.log('--- LINEAGE VALIDATOR DIAGNOSTIC ---');
-        console.log('Validating evidenceId:', evidenceId);
-        console.log('db is undefined/null:', db === undefined || db === null);
-        console.log('db constructor:', db ? db.constructor.name : 'N/A');
-        console.log('effectiveDb constructor:', effectiveDb ? effectiveDb.constructor.name : 'N/A');
-        console.log('effectiveDb keys:', effectiveDb ? Object.keys(effectiveDb).slice(0, 10) : []);
-        console.log('Snap exists:', !!snap?.exists);
-        console.log('Snap exists via direct get (outside transaction):', (await effectiveDb.collection('intelligence_evidence').doc(evidenceId).get()).exists);
-        console.log('--- LINEAGE VALIDATOR DIAGNOSTIC END ---');
-      }
-
       if (!snap || !snap.exists) {
         throw new Error(
           `[EvidenceLineage Violation] Referenced evidence '${evidenceId}' does not exist in authoritative Firestore store.`

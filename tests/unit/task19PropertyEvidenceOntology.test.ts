@@ -18,7 +18,6 @@ import {
   propertyIntelligenceService,
   JobIntelligence,
 } from '../../src/server/intelligence/index';
-import { setGlobalRawArtifactBucket, RawArtifactBucketLike } from '../../src/server/intelligence/rawArtifactStore';
 
 // Mock in-memory Firestore database with transaction support
 function createMockFirestoreDb(initialData: {
@@ -60,7 +59,6 @@ function createMockFirestoreDb(initialData: {
         }
         return {
           empty: results.length === 0,
-          size: results.length,
           docs: results,
         };
       },
@@ -83,9 +81,8 @@ function createMockFirestoreDb(initialData: {
             data: () => (data ? { ...data } : undefined),
           };
         },
-        set: (val: any) => {
+        set: async (val: any) => {
           store[colName].set(docId, { ...val });
-          return Promise.resolve();
         },
       }),
     };
@@ -93,30 +90,6 @@ function createMockFirestoreDb(initialData: {
 
   return {
     collection: (colName: string) => getCollection(colName),
-    runTransaction: async (updateFn: (tx: any) => Promise<any>) => {
-      const tx = {
-        get: async (docRef: any) => docRef.get(),
-        set: (docRef: any, data: any) => docRef.set(data),
-      };
-      return updateFn(tx);
-    },
-  };
-}
-
-function createMockBucket(): RawArtifactBucketLike {
-  const storageMap = new Map<string, Buffer>();
-  return {
-    file: (pathStr: string) => ({
-      save: async (data: Buffer) => {
-        storageMap.set(pathStr, data);
-      },
-      download: async () => {
-        const buf = storageMap.get(pathStr);
-        if (!buf) throw new Error(`File not found: ${pathStr}`);
-        return [buf];
-      },
-      exists: async () => [storageMap.has(pathStr)],
-    }),
   };
 }
 
@@ -423,7 +396,6 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
     const BUCKET_NAME = 'demo-anytrader.appspot.com';
     let adminApp: admin.app.App;
     let adminDb: admin.firestore.Firestore;
-    let adminBucket: RawArtifactBucketLike;
 
     beforeAll(async () => {
       process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
@@ -447,26 +419,22 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
           },
         });
 
-        if (admin.apps.length > 0) {
-          await Promise.all(admin.apps.map(app => app?.delete()));
+        if (admin.apps.length === 0) {
+          adminApp = admin.initializeApp({
+            projectId: PROJECT_ID,
+            storageBucket: BUCKET_NAME,
+          });
+        } else {
+          adminApp = admin.apps[0]!;
         }
-        adminApp = admin.initializeApp({
-          projectId: PROJECT_ID,
-          storageBucket: BUCKET_NAME,
-        });
 
         adminDb = adminApp.firestore();
-        adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
-        setGlobalRawArtifactBucket(adminBucket);
       } catch {
-        adminDb = createMockFirestoreDb() as any;
-        adminBucket = createMockBucket();
-        setGlobalRawArtifactBucket(adminBucket);
+        adminDb = mockDb as any;
       }
     });
 
     afterAll(async () => {
-      setGlobalRawArtifactBucket(null);
       if (testEnv) {
         await testEnv.cleanup();
       }
@@ -475,12 +443,7 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
     beforeEach(async () => {
       if (testEnv) {
         await testEnv.clearFirestore();
-        await testEnv.clearStorage();
-      } else {
-        adminDb = createMockFirestoreDb() as any;
-        adminBucket = createMockBucket();
       }
-      setGlobalRawArtifactBucket(adminBucket);
     });
 
     it('A. Valid component evidence: accepts and persists evidence for valid property', async () => {

@@ -276,7 +276,7 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
       property,
       jobsToRollup || [],
       undefined,
-      { firestoreDb: activeDb, provider: payload.provider }
+      { firestoreDb: activeDb }
     );
     return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId, versionId: result.versionId };
   });

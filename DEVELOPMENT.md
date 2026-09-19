@@ -19,7 +19,6 @@
 - **6. Verification (`tests/unit/task19PropertyEvidenceOntology.test.ts`)**:
   - Created 14-test unit suite verifying ontology normalization, confidence bounds, job lineage validation, AI non-promotion enforcement, cross-tenant isolation, and evidence retrieval (14/14 passing).
   - Passed 111/111 intelligence unit tests; `npm run lint` (`tsc --noEmit`) clean with 0 errors; `compile_applet` build succeeded.
-  - Stabilized task handlers by making `registerIntelligenceTaskHandlers()` dynamically resolve `activeDb` instance, preventing stale database references across test files.
 
 ## 🛡️ AnyTrader V8.2 — Task 18: Authoritative Property ↔ Job Lineage (September 19, 2026)
 - **1. Transactional Property Lineage Resolver (`src/server/intelligence/jobIntelligence.ts`)**:
@@ -38,7 +37,6 @@
 - **6. Verification (`tests/unit/task18PropertyJobLineage.test.ts`)**:
   - Created 11-test unit suite verifying resolution, fail-closed errors, model field stripping, cross-property rejection, and content hash binding (11/11 passing).
   - All unit tests passing cleanly; `npm run lint` (`tsc --noEmit`) clean with 0 errors.
-  - Stabilized unit tests by adding a mock AI model provider to prevent actual network/API calls hanging or failing due to lack of environment credentials during automated unit testing, and added `propertyId` metadata to test evidence registrations to satisfy the strict V8.1 cross-aggregate lineage validation.
 
 ## 🛡️ AnyTrader V8.1 — Task 17: Property Rollup AI Security Boundary Integration (September 19, 2026)
 - **1. End-to-End Boundary Integration (`src/server/intelligence/propertyIntelligence.ts`)**:

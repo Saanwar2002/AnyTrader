@@ -281,7 +281,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         'Roof repair',
         {},
         true,
-        { documentId: 'job_alpha', propertyId: 'prop_manor_101' }
+        { documentId: 'job_alpha' }
       );
 
       const evBeta = await evidenceRegistry.register(
@@ -292,7 +292,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         'Gutter replacement',
         {},
         true,
-        { documentId: 'job_beta', propertyId: 'prop_manor_101' }
+        { documentId: 'job_beta' }
       );
 
       const job1: JobIntelligence = {
@@ -325,59 +325,6 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         updatedAt: new Date().toISOString(),
       };
 
-      const mockProvider: any = {
-        rollupPropertyCandidate: async (
-          propertyId: string,
-          jobHistories: any[],
-          untrustedEvidence: any[]
-        ) => {
-          return {
-            candidate: {
-              domain: 'property_management',
-              category: 'Residential',
-              component: 'Building Fabric',
-              overallHealthScore: 85,
-              buildingComponents: [
-                {
-                  component: 'Roof Fabric',
-                  condition: 'Good condition, no broken slates',
-                  lastObservedAt: '2026-09-18T10:00:00.000Z',
-                  confidence: 0.9,
-                  evidenceIds: [evAlpha.evidenceId, evBeta.evidenceId],
-                }
-              ],
-              observedConditions: [
-                {
-                  condition: 'Dry basement',
-                  severity: 'low',
-                  component: 'Foundation',
-                  evidenceIds: [evAlpha.evidenceId, evBeta.evidenceId],
-                }
-              ],
-              recommendedInterventions: [
-                {
-                  intervention: 'Annual boiler service',
-                  urgency: 'planned',
-                  component: 'Central Heating',
-                  estimatedBenchmarkCost: { min: 90, max: 130 },
-                }
-              ],
-              candidateConfidence: 0.88,
-              evidenceIds: [evAlpha.evidenceId, evBeta.evidenceId],
-            },
-            metrics: {
-              model: 'gemini-2.5-flash',
-              inputTokens: 320,
-              outputTokens: 160,
-              totalTokens: 480,
-              estimatedCostUsd: 0.0003,
-              processingDurationMs: 38,
-            },
-            rawResponseText: '{}',
-          };
-        }
-      };
-
       const { propertyIntelligence } = await propertyIntelligenceService.aggregatePropertyIntelligence(
         {
           propertyId: 'prop_manor_101',
@@ -388,7 +335,6 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         {
           firestoreDb: mockDb,
           persist: false,
-          provider: mockProvider,
         }
       );
 
