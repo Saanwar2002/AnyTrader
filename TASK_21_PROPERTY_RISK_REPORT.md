@@ -38,13 +38,15 @@ The Property Risk Service (`src/server/intelligence/propertyRisk.ts`) operates s
    - AI attempts to self-certify with `status: 'verified'` are automatically coerced to `'derived'` unless explicitly authorized via a verified server action.
 
 5. **Append-Only Historical Trail & Retractions**:
-   - Historical records in `/property_risk_history/{riskId}` are immutable.
-   - Corrective retractions mark the status as `'retracted'` with a required reason without deleting historical entries.
-   - Current projections on `/properties/{propertyId}` (`intelligence.riskProjection`) dynamically reflect only active (non-retracted, non-rejected) assessments.
+   - Historical records in `/property_risk_history/{riskId}` are strictly immutable and never mutated or deleted during retractions.
+   - Corrective retractions create an immutable, append-only retraction record in `/property_risk_retractions/{retractionId}` with deterministic identity (`retract_${riskId}`), source `riskId`, `propertyId`, reason, SHA-256 `contentHash`, and `methodologyVersion`.
+   - Rejects cross-property retractions and conflicting retraction data.
+   - Idempotent repeated retractions with identical content.
+   - Current projections on `/properties/{propertyId}` (`intelligence.riskProjection`) dynamically query both `/property_risk_history` and `/property_risk_retractions` to exclude retracted risks.
 
 6. **Firestore Security Rules**:
-   - `/property_risk_history/{riskId}` requires authentication and property owner/landlord/manager authorization for reads.
-   - All direct client writes (`create`, `update`, `delete`) are strictly set to `if false;` (Admin SDK server writes only).
+   - Both `/property_risk_history/{riskId}` and `/property_risk_retractions/{retractionId}` require authentication and property owner/landlord/manager authorization for reads.
+   - All direct client writes (`create`, `update`, `delete`) on both collections are strictly set to `allow create, update, delete: if false;` (Admin SDK server writes only).
 
 ---
 
@@ -53,7 +55,7 @@ The Property Risk Service (`src/server/intelligence/propertyRisk.ts`) operates s
 ### 1. Unit Test Suite Execution
 - **Command**: `npm test`
 - **Result**: **598/598 tests passing across 39 test suites**.
-- **Task 21 Test Suite (`tests/unit/task21PropertyRisk.test.ts`)**: 14/14 unit test vectors passed (with 5 emulator-dependent tests skipped when emulator background service is unattached).
+- **Task 21 Test Suite (`tests/unit/task21PropertyRisk.test.ts`)**: 19/19 unit test vectors passed (with 6 emulator-dependent tests skipped when emulator background service is unattached).
 
 ### 2. Typecheck & Lint Verification
 - **Command**: `npm run lint` (`tsc --noEmit`)
@@ -80,7 +82,10 @@ The Property Risk Service (`src/server/intelligence/propertyRisk.ts`) operates s
 | **Vector J** | Idempotency hit via content hash matching | **PASSED** |
 | **Vector K** | Conflicting same-ID mutation rejection | **PASSED** |
 | **Vector L** | Atomic transaction concurrency lock | **PASSED** |
-| **Vector O** | Append-only historical retention during retractions | **PASSED** |
+| **Vector O1** | Append-only retraction record creation with 100% immutable historical risk record | **PASSED** |
+| **Vector O2** | Idempotent repeated retractions with identical payload | **PASSED** |
+| **Vector O3** | Conflicting retraction payload fail-closed rejection | **PASSED** |
+| **Vector O4** | Cross-property retraction rejection | **PASSED** |
 | **Vector P** | Cross-tenant contamination rejection (`[CrossTenantContamination Violation]`) | **PASSED** |
 | **Vector Q** | Security Rules read authorization and direct client write prohibition | **PASSED** |
 | **Vector R** | Database-bounded property risk history query | **PASSED** |

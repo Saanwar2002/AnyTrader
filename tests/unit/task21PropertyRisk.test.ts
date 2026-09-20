@@ -21,12 +21,14 @@ function createMockFirestoreDb(initialData: {
   properties?: Record<string, any>;
   intelligence_evidence?: Record<string, any>;
   property_risk_history?: Record<string, any>;
+  property_risk_retractions?: Record<string, any>;
 } = {}) {
   const store: Record<string, Map<string, any>> = {
     jobs: new Map(Object.entries(initialData.jobs || {})),
     properties: new Map(Object.entries(initialData.properties || {})),
     intelligence_evidence: new Map(Object.entries(initialData.intelligence_evidence || {})),
     property_risk_history: new Map(Object.entries(initialData.property_risk_history || {})),
+    property_risk_retractions: new Map(Object.entries(initialData.property_risk_retractions || {})),
   };
 
   const createQuery = (
@@ -432,9 +434,9 @@ describe('V8.2 Task 21 — Property Risk Intelligence Unit Tests', () => {
   });
 
   // ----------------------------------------------------
-  // Vector O: Retraction changes projection without deleting history
+  // Vector O: Retraction changes projection without mutating historical risk record
   // ----------------------------------------------------
-  it('Vector O: Retraction updates current projection without deleting historical append-only records', async () => {
+  it('Vector O1: Retraction creates append-only retraction record, preserves historical risk record unchanged, and updates projection', async () => {
     const input: RecordPropertyRiskInput = {
       propertyId: 'prop_101',
       componentType: 'roof',
@@ -449,17 +451,85 @@ describe('V8.2 Task 21 — Property Risk Intelligence Unit Tests', () => {
     expect(mockDb.store.property_risk_history.get(res.riskId).status).toBe('derived');
 
     // Retract risk
-    await riskService.retractRiskAssessment(res.riskId, 'Corrective re-inspection confirmed tile replacement complete.');
+    const retractionReason = 'Corrective re-inspection confirmed tile replacement complete.';
+    const retractionRes = await riskService.retractRiskAssessment(res.riskId, retractionReason);
 
-    // Verify historical doc still exists but is marked retracted
+    // 1. Verify original historical doc remains 100% UNCHANGED and UNMUTATED
     const historyDoc = mockDb.store.property_risk_history.get(res.riskId);
     expect(historyDoc).toBeDefined();
-    expect(historyDoc.status).toBe('retracted');
-    expect(historyDoc.retractionReason).toBe('Corrective re-inspection confirmed tile replacement complete.');
+    expect(historyDoc.status).toBe('derived'); // Original status preserved!
+    expect(historyDoc.retractionReason).toBeUndefined(); // Never mutated!
 
-    // Verify property current projection no longer counts retracted risk
+    // 2. Verify append-only retraction record created in property_risk_retractions
+    const retractionDoc = mockDb.store.property_risk_retractions.get(retractionRes.retractionId);
+    expect(retractionDoc).toBeDefined();
+    expect(retractionDoc.riskId).toBe(res.riskId);
+    expect(retractionDoc.propertyId).toBe('prop_101');
+    expect(retractionDoc.reason).toBe(retractionReason);
+    expect(retractionDoc.contentHash).toBeDefined();
+
+    // 3. Verify property current projection excludes retracted risk
     const propDoc = mockDb.store.properties.get('prop_101');
     expect(propDoc.intelligence.riskProjection.activeRiskAssessments.length).toBe(0);
+  });
+
+  it('Vector O2: Repeated retraction with identical reason is idempotent', async () => {
+    const input: RecordPropertyRiskInput = {
+      propertyId: 'prop_101',
+      componentType: 'plumbing',
+      riskType: 'pipe_corrosion',
+      description: 'Corrosion on cold water inlet.',
+      severity: 'medium',
+      evidenceIds: ['ev_roof_1'],
+      provenance: { origin: 'manual_inspection' },
+    };
+
+    const res = await riskService.recordRiskAssessment(input);
+    const reason = 'Incorrect observation location';
+
+    const ret1 = await riskService.retractRiskAssessment(res.riskId, reason);
+    const ret2 = await riskService.retractRiskAssessment(res.riskId, reason);
+
+    expect(ret1.retractionId).toBe(ret2.retractionId);
+    expect(mockDb.store.property_risk_retractions.size).toBe(1);
+  });
+
+  it('Vector O3: Retraction with conflicting content/reason fails closed', async () => {
+    const input: RecordPropertyRiskInput = {
+      propertyId: 'prop_101',
+      componentType: 'electrical',
+      riskType: 'loose_wiring',
+      description: 'Loose connection in junction box.',
+      severity: 'high',
+      evidenceIds: ['ev_roof_1'],
+      provenance: { origin: 'manual_inspection' },
+    };
+
+    const res = await riskService.recordRiskAssessment(input);
+
+    await riskService.retractRiskAssessment(res.riskId, 'Initial retraction reason');
+
+    await expect(
+      riskService.retractRiskAssessment(res.riskId, 'Conflicting second retraction reason')
+    ).rejects.toThrow(`[PropertyRisk Violation] Conflicting retraction content for risk ID '${res.riskId}'`);
+  });
+
+  it('Vector O4: Reject cross-property retraction attempt', async () => {
+    const input: RecordPropertyRiskInput = {
+      propertyId: 'prop_101',
+      componentType: 'roof',
+      riskType: 'gutters_blocked',
+      description: 'Debris accumulation in roof gutters.',
+      severity: 'low',
+      evidenceIds: ['ev_roof_1'],
+      provenance: { origin: 'manual_inspection' },
+    };
+
+    const res = await riskService.recordRiskAssessment(input);
+
+    await expect(
+      riskService.retractRiskAssessment(res.riskId, 'Retract attempt', { propertyId: 'prop_202' })
+    ).rejects.toThrow(`[PropertyRisk Violation] Retraction property 'prop_202' does not match risk property 'prop_101'`);
   });
 
   // ----------------------------------------------------
@@ -629,6 +699,36 @@ describe('V8.2 Task 21 — Real Firebase Emulator & Security Rules Integration',
     ).rejects.toThrow();
   });
 
+  it('Vector Q5: Security Rules — Direct client write on property_risk_retractions is DENIED', async () => {
+    const clientDb = testEnv.authenticatedContext('user_owner_101').firestore();
+    const docRef = clientDb.collection('property_risk_retractions').doc('retract_spoof_123');
+
+    await expect(
+      docRef.set({
+        retractionId: 'retract_spoof_123',
+        riskId: 'pr_sample_123',
+        propertyId: 'prop_emu_101',
+        reason: 'Client spoofed retraction',
+      })
+    ).rejects.toThrow();
+  });
+
+  it('Vector Q6: Security Rules — Property owner can read property_risk_retractions', async () => {
+    await adminDb.collection('property_risk_retractions').doc('retract_sample_123').set({
+      retractionId: 'retract_sample_123',
+      riskId: 'pr_sample_123',
+      propertyId: 'prop_emu_101',
+      reason: 'Admin verified retraction',
+      retractedAt: new Date().toISOString(),
+    });
+
+    const ownerDb = testEnv.authenticatedContext('user_owner_101').firestore();
+    const docRef = ownerDb.collection('property_risk_retractions').doc('retract_sample_123');
+
+    const snap = await docRef.get();
+    expect(snap.exists).toBe(true);
+  });
+
   // ----------------------------------------------------
   // Vector Real Emulator Execution
   // ----------------------------------------------------
@@ -659,5 +759,46 @@ describe('V8.2 Task 21 — Real Firebase Emulator & Security Rules Integration',
     const history = await emuRiskService.getPropertyRiskHistory('prop_emu_101', { limit: 5 });
     expect(history.length).toBe(1);
     expect(history[0].riskId).toBe(res.riskId);
+  });
+
+  it('Vector Real Emulator: PropertyRiskService retracts risk assessment on real emulator via append-only retraction record', async () => {
+    const emuRiskService = new PropertyRiskService({ firestoreDb: adminDb });
+
+    const input: RecordPropertyRiskInput = {
+      propertyId: 'prop_emu_101',
+      componentType: 'roof',
+      riskType: 'ridge_tile_loose',
+      description: 'Loose ridge tile over main pitched roof.',
+      severity: 'high',
+      evidenceIds: ['ev_emu_101'],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+    };
+
+    const riskRes = await emuRiskService.recordRiskAssessment(input);
+
+    // Perform retraction
+    const reason = 'Tile re-mortared and secured by roofing contractor.';
+    const retractionRes = await emuRiskService.retractRiskAssessment(riskRes.riskId, reason);
+
+    // 1. Verify original risk document in property_risk_history is UNCHANGED in emulator Firestore
+    const historySnap = await adminDb.collection('property_risk_history').doc(riskRes.riskId).get();
+    expect(historySnap.exists).toBe(true);
+    const historyData = historySnap.data();
+    expect(historyData?.status).toBe('derived'); // Original status unmutated!
+    expect(historyData?.retractionReason).toBeUndefined();
+
+    // 2. Verify append-only retraction record exists in property_risk_retractions in emulator Firestore
+    const retractionSnap = await adminDb.collection('property_risk_retractions').doc(retractionRes.retractionId).get();
+    expect(retractionSnap.exists).toBe(true);
+    const retractionData = retractionSnap.data();
+    expect(retractionData?.riskId).toBe(riskRes.riskId);
+    expect(retractionData?.propertyId).toBe('prop_emu_101');
+    expect(retractionData?.reason).toBe(reason);
+
+    // 3. Verify property projection on real emulator excludes retracted risk
+    const propSnap = await adminDb.collection('properties').doc('prop_emu_101').get();
+    const propData = propSnap.data();
+    const activeAssessments = propData?.intelligence?.riskProjection?.activeRiskAssessments || [];
+    expect(activeAssessments.some((item: any) => item.riskId === riskRes.riskId)).toBe(false);
   });
 });

@@ -465,6 +465,19 @@ export interface PropertyRiskProjection {
   updatedAt: string;
 }
 
+export interface PropertyRiskRetraction {
+  retractionId: string;
+  riskId: string;
+  propertyId: string;
+  reason: string;
+  retractedAt: string;
+  provenance?: Provenance;
+  methodologyVersion: string;
+  contentHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PropertyIntelligence {
   propertyId: string;
   currentVersionId?: string;

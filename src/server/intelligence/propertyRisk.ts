@@ -23,6 +23,7 @@ import {
   PropertyRiskAssessment,
   RecordPropertyRiskInput,
   PropertyRiskProjection,
+  PropertyRiskRetraction,
   SeverityLevel,
   ConfidenceScores,
   Provenance,
@@ -289,37 +290,145 @@ export class PropertyRiskService {
   }
 
   /**
-   * Retracts or corrects an existing risk assessment without deleting historical append-only records.
+   * Retracts or corrects an existing risk assessment via an append-only retraction record
+   * without mutating the original historical risk assessment document.
    */
   public async retractRiskAssessment(
     riskId: string,
     reason: string,
-    options?: { firestoreDb?: any }
-  ): Promise<void> {
+    options?: { firestoreDb?: any; propertyId?: string; provenance?: Provenance }
+  ): Promise<PropertyRiskRetraction> {
     const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb();
     if (!activeDb) {
       throw new Error('[PropertyRisk Error] Firestore database reference required for retraction');
     }
 
+    if (!riskId || typeof riskId !== 'string' || riskId.trim().length === 0) {
+      throw new Error('[PropertyRisk Error] Valid riskId is required for retraction');
+    }
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      throw new Error('[PropertyRisk Error] Valid retraction reason is required');
+    }
+
+    // 1. Fetch original historical risk assessment record (must exist)
     const historyRef = activeDb.collection('property_risk_history').doc(riskId);
     const docSnap = await historyRef.get();
     if (!docSnap || !docSnap.exists) {
       throw new Error(`[PropertyRisk Error] Risk assessment '${riskId}' not found`);
     }
 
-    const data = typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data;
-    const propertyId = data?.propertyId;
+    const riskData = typeof docSnap.data === 'function' ? docSnap.data() : docSnap.data;
+    const riskPropertyId = riskData?.propertyId;
 
-    await historyRef.update({
-      status: 'retracted',
-      retractedAt: new Date().toISOString(),
-      retractionReason: reason,
-      updatedAt: new Date().toISOString(),
+    if (!riskPropertyId) {
+      throw new Error(`[PropertyRisk Error] Property ID not found on risk assessment '${riskId}'`);
+    }
+
+    // 2. Reject Cross-Property Retraction
+    if (options?.propertyId && options.propertyId !== riskPropertyId) {
+      throw new Error(
+        `[PropertyRisk Violation] Retraction property '${options.propertyId}' does not match risk property '${riskPropertyId}'`
+      );
+    }
+
+    // 3. Compute Deterministic Identity & Content Hash for Retraction Event
+    const nowIso = new Date().toISOString();
+    const retractionPayloadForHash = {
+      riskId,
+      propertyId: riskPropertyId,
+      reason,
+      methodologyVersion: RISK_METHODOLOGY_VERSION,
+    };
+    const contentHash = computeSha256(JSON.stringify(retractionPayloadForHash));
+    const retractionId = `retract_${riskId}`;
+
+    const retractionRecord: PropertyRiskRetraction = {
+      retractionId,
+      riskId,
+      propertyId: riskPropertyId,
+      reason,
+      retractedAt: nowIso,
+      provenance: options?.provenance || {
+        origin: 'manual_retraction',
+        source: 'system',
+        generatedAt: nowIso,
+        tenantId: riskData.provenance?.tenantId,
+      },
+      methodologyVersion: RISK_METHODOLOGY_VERSION,
+      contentHash,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    // 4. Transactional Atomic Firestore Storage & Idempotency
+    const cleanRetractionRecord = cleanUndefinedFields(retractionRecord);
+
+    await activeDb.runTransaction(async (transaction: any) => {
+      const retractionRef = activeDb.collection('property_risk_retractions').doc(retractionId);
+      const existingRetractionDoc = await transaction.get(retractionRef);
+
+      if (existingRetractionDoc && existingRetractionDoc.exists) {
+        const existingData =
+          typeof existingRetractionDoc.data === 'function'
+            ? existingRetractionDoc.data()
+            : existingRetractionDoc.data;
+
+        if (existingData?.contentHash && existingData.contentHash !== contentHash) {
+          throw new Error(`[PropertyRisk Violation] Conflicting retraction content for risk ID '${riskId}'`);
+        }
+        // Idempotent hit: return without re-writing
+        return;
+      }
+
+      // Write immutable append-only retraction record
+      transaction.set(retractionRef, cleanRetractionRecord);
     });
 
-    if (propertyId) {
-      await this.updateCurrentPropertyRiskProjection(propertyId, activeDb);
+    // NOTE: historyRef (the original risk assessment in property_risk_history)
+    // is intentionally NOT modified. It remains strictly immutable and unchanged.
+
+    // 5. Recalculate Current Property Risk Projection (excluding retracted risks)
+    await this.updateCurrentPropertyRiskProjection(riskPropertyId, activeDb);
+
+    return retractionRecord;
+  }
+
+  /**
+   * Retrieves property risk retractions scoped to propertyId.
+   */
+  public async getPropertyRiskRetractions(
+    propertyId: string,
+    options?: { firestoreDb?: any }
+  ): Promise<PropertyRiskRetraction[]> {
+    const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb();
+    if (!activeDb) {
+      throw new Error('[PropertyRisk Error] Firestore database reference required for retractions');
     }
+
+    if (!propertyId || typeof propertyId !== 'string') {
+      throw new Error('[PropertyRisk Error] Valid propertyId is required');
+    }
+
+    const snapshot = await activeDb
+      .collection('property_risk_retractions')
+      .where('propertyId', '==', propertyId)
+      .get();
+
+    if (!snapshot || snapshot.empty) {
+      return [];
+    }
+
+    const results: PropertyRiskRetraction[] = [];
+    const docs = snapshot.docs || [];
+    for (const doc of docs) {
+      const data = typeof doc.data === 'function' ? doc.data() : doc.data;
+      if (data) {
+        results.push(data as PropertyRiskRetraction);
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -376,9 +485,28 @@ export class PropertyRiskService {
       throw new Error('[PropertyRisk Error] Firestore database reference required for projection update');
     }
 
-    // Query active non-retracted risk assessments for this property
+    // 1. Fetch retractions for this property (property-scoped query)
+    const retractionsSnap = await activeDb
+      .collection('property_risk_retractions')
+      .where('propertyId', '==', propertyId)
+      .get();
+
+    const retractedRiskIds = new Set<string>();
+    if (retractionsSnap && !retractionsSnap.empty) {
+      const docs = retractionsSnap.docs || [];
+      for (const doc of docs) {
+        const rData = typeof doc.data === 'function' ? doc.data() : doc.data;
+        if (rData?.riskId) {
+          retractedRiskIds.add(rData.riskId);
+        }
+      }
+    }
+
+    // 2. Query active non-retracted risk assessments for this property
     const history = await this.getPropertyRiskHistory(propertyId, { limit: 100, firestoreDb: activeDb });
-    const activeAssessments = history.filter(item => item.status !== 'retracted' && item.status !== 'rejected');
+    const activeAssessments = history.filter(
+      item => !retractedRiskIds.has(item.riskId) && item.status !== 'retracted' && item.status !== 'rejected'
+    );
 
     let overallRiskScore = 0;
     let primaryRiskSeverity: SeverityLevel = 'low';

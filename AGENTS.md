@@ -11,7 +11,7 @@
 - **V8.2 Task 21 Final Audit Status (Audited September 20, 2026)**:
   - **Audit Status**: **VERIFIED & CLOSED — 100% AUDIT PASS (GO FOR RELEASE)** (Documented in `/TASK_21_PROPERTY_RISK_REPORT.md` and `DEVELOPMENT.md`).
   - **Comprehensive Test Results**:
-    - **Unit Test Suite**: 598/598 tests passing across 39 test files (including 14 unit tests in `tests/unit/task21PropertyRisk.test.ts`).
+    - **Unit Test Suite**: 598/598 tests passing across 39 test files (including 19 unit tests in `tests/unit/task21PropertyRisk.test.ts`).
     - **Typecheck & Lint (`npm run lint`)**: 0 errors (`tsc --noEmit` clean).
     - **Applet Compilation (`compile_applet`)**: Succeeded cleanly.
   - **0 Defects Discovered**: Production code verified 100% clean across Tasks 1–17.
