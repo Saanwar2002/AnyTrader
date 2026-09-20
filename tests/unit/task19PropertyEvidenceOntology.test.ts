@@ -430,7 +430,7 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
 
         adminDb = adminApp.firestore();
       } catch {
-        adminDb = mockDb as any;
+        adminDb = null as any;
       }
     });
 
