@@ -11,9 +11,15 @@ import { cn } from "@/src/lib/utils";
 interface PropertyRiskAnalyticsProps {
   propertyPassport?: any;
   userPostcode?: string;
+  authoritativeRisk?: {
+    overallRiskScore: number;
+    primaryRiskSeverity: string;
+    methodologyVersion: string;
+    activeRiskAssessments?: any[];
+  };
 }
 
-export default function PropertyRiskAnalyticsWidget({ propertyPassport, userPostcode = "SW1A 1AA" }: PropertyRiskAnalyticsProps) {
+export default function PropertyRiskAnalyticsWidget({ propertyPassport, userPostcode = "SW1A 1AA", authoritativeRisk }: PropertyRiskAnalyticsProps) {
   const [selectedTab, setSelectedTab] = useState<"overview" | "vectors" | "forecast" | "certificate">("overview");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -23,10 +29,11 @@ export default function PropertyRiskAnalyticsWidget({ propertyPassport, userPost
   const epcRating = propertyPassport?.epcRating || "C";
   const boilerAge = propertyPassport?.boilerInfo?.age || "6 years";
 
-  // Calculated Risk Matrix
-  const overallRiskScore = 18; // 0 (Safest) - 100 (Highest Risk)
-  const insuranceGrade = "Grade A+ (Low Risk)";
-  const estInsuranceDiscount = "£240 / year";
+  // Task 21 Intelligence Boundary: Use authoritative risk score if present; otherwise fallback to UI preview with explicit demonstration badge.
+  const isAuthoritative = Boolean(authoritativeRisk?.methodologyVersion);
+  const overallRiskScore = isAuthoritative ? authoritativeRisk!.overallRiskScore : 18; // 0 (Safest) - 100 (Highest Risk)
+  const insuranceGrade = isAuthoritative ? `Authoritative (${authoritativeRisk!.primaryRiskSeverity.toUpperCase()})` : "Grade A+ (Demonstration)";
+  const estInsuranceDiscount = isAuthoritative ? "Evidence-Backed Risk Model" : "£240 / year (Demo Estimate)";
 
   // Risk Vector Breakdown
   const riskVectors = [

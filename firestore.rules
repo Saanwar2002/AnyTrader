@@ -1218,5 +1218,15 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable condition history; server Admin SDK writes only
     }
+    match /property_risk_history/{riskId} {
+      allow read: if isSignedIn() &&
+        resource.data.get('propertyId', '') != '' &&
+        (
+          isPropertyOwnerOrLandlord(resource.data.propertyId) ||
+          isAssignedPropertyManager(resource.data.propertyId) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Immutable risk history; server Admin SDK writes only
+    }
   }
 }

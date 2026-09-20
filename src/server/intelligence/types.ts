@@ -413,6 +413,58 @@ export interface PropertyRecommendedIntervention {
   component: string;
 }
 
+export interface PropertyRiskAssessment {
+  riskId: string;
+  propertyId: string;
+  componentType?: PropertyComponentType | string;
+  riskType: string;
+  description: string;
+  score: number; // 0 to 100
+  severity: SeverityLevel;
+  evidenceIds: string[];
+  supportingObservationIds?: string[];
+  supportingConditionIds?: string[];
+  sourceJobId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  confidence: ConfidenceScores;
+  provenance: Provenance;
+  methodologyVersion: string;
+  generatedAt: string;
+  status: EvidenceStatus | 'retracted';
+  contentHash: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordPropertyRiskInput {
+  propertyId: string;
+  componentType?: string;
+  riskType: string;
+  description: string;
+  severity?: SeverityLevel;
+  evidenceIds: string[];
+  supportingObservationIds?: string[];
+  supportingConditionIds?: string[];
+  sourceJobId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  confidence?: Partial<ConfidenceScores> | number;
+  provenance: Partial<Provenance> & { origin: string };
+  status?: EvidenceStatus | 'retracted';
+  metadata?: Record<string, unknown>;
+}
+
+export interface PropertyRiskProjection {
+  overallRiskScore: number;
+  primaryRiskSeverity: SeverityLevel;
+  activeRiskAssessments: PropertyRiskAssessment[];
+  riskCategoryBreakdown: Record<string, { count: number; maxScore: number; severity: SeverityLevel }>;
+  methodologyVersion: string;
+  updatedAt: string;
+}
+
 export interface PropertyIntelligence {
   propertyId: string;
   currentVersionId?: string;
@@ -424,6 +476,7 @@ export interface PropertyIntelligence {
   buildingComponents: PropertyBuildingComponent[];
   observedConditions: PropertyObservedCondition[];
   recommendedInterventions: PropertyRecommendedIntervention[];
+  riskProjection?: PropertyRiskProjection;
   derivedFromJobIds: string[];
   evidenceIds: string[];
   overallHealthScore: number; // 0 to 100

@@ -1,5 +1,27 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 21: Property Risk Intelligence & Evidence Verification (September 20, 2026)
+- **1. Evidence-Backed Risk Assertion Engine**:
+  - Built `PropertyRiskService` (`src/server/intelligence/propertyRisk.ts`) enforcing `RISK_METHODOLOGY_VERSION = 'v8.2-risk-v1'`.
+  - Enforces foundational invariant: **"NO EVIDENCE = NO RISK ASSERTION."** Rejects assertions missing registered evidence with `[PropertyRisk Violation]`.
+- **2. Deterministic Scoring & Content Hashing**:
+  - Risk scores (0–100) are deterministically derived from severity weights (`low`: 15, `medium`: 40, `high`: 70, `critical`: 90), confidence rating, and evidence quality.
+  - Generates SHA-256 content hashes and deterministic IDs (`pr_${propertyId}_${contentHash.slice(0, 16)}`) for atomic idempotency.
+- **3. Authoritative Lineage & Isolation Controls**:
+  - Uses `resolveAuthoritativeJobPropertyId` and `evidenceRegistry` to verify job and evidence alignment with target property.
+  - Enforces cross-tenant isolation matching property owner/landlord tenant ID (`[CrossTenantContamination Violation]`).
+- **4. AI Security Boundary**:
+  - Coerces AI-proposed `status: 'verified'` to `'derived'` unless originating from an authorized server action (`isVerifiedServerAction: true`).
+- **5. Append-Only Historical Records & Retractions**:
+  - Persists all risk assessments immutably to `/property_risk_history/{riskId}`.
+  - Supports retractions by updating status to `'retracted'` with a mandatory reason without deleting historical entries.
+- **6. Security Rules & Indexing**:
+  - `/property_risk_history` protected in `firestore.rules`: client reads restricted to property owners, landlords, managers, and admins; direct client writes strictly prohibited (`allow create, update, delete: if false;`).
+  - Added composite index for `property_risk_history` on `(propertyId ASC, generatedAt DESC)` in `firestore.indexes.json`.
+- **7. Comprehensive Unit Test Verification (`tests/unit/task21PropertyRisk.test.ts`)**:
+  - 19 test vectors covering evidence verification, isolation controls, scoring determinism, idempotency, retractions, history queries, and security rules.
+  - 100% test pass rate (598/598 unit tests passing across 39 test files). Clean `tsc --noEmit` typecheck (`npm run lint`).
+
 ## 🛡️ AnyTrader V8.2 — Task 20V: Property Lifecycle Remediation (September 20, 2026)
 - **1. Database-Bounded Queries**:
   - `src/server/intelligence/propertyLifecycle.ts` (`getPropertyConditionHistory`): Replaced in-memory sorting with database-level `query = query.orderBy('observedAt', 'desc').limit(limitVal)` (bounded to max 100).
