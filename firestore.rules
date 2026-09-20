@@ -45,6 +45,23 @@ service cloud.firestore {
         propData.get('landlordId', '') == request.auth.uid
       );
     }
+
+    function isPropertyOwnerOrLandlord(propertyId) {
+      return isSignedIn() &&
+        propertyId != '' &&
+        exists(/databases/$(database)/documents/properties/$(propertyId)) &&
+        isPropertyOwner(get(/databases/$(database)/documents/properties/$(propertyId)).data);
+    }
+
+    function isAssignedPropertyManager(propertyId) {
+      return isSignedIn() &&
+        propertyId != '' &&
+        exists(/databases/$(database)/documents/properties/$(propertyId)) &&
+        (
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.get('managerId', '') == request.auth.uid ||
+          get(/databases/$(database)/documents/properties/$(propertyId)).data.get('propertyManagerId', '') == request.auth.uid
+        );
+    }
     
     // --- Default Deny ---
     match /{document=**} {
@@ -1192,7 +1209,13 @@ service cloud.firestore {
       allow create, update, delete: if false; // Execution records are immutable audit trails; clients cannot create, update, or delete processing runs
     }
     match /property_condition_history/{conditionId} {
-      allow read: if isAdmin();
+      allow read: if isSignedIn() &&
+        resource.data.get('propertyId', '') != '' &&
+        (
+          isPropertyOwnerOrLandlord(resource.data.propertyId) ||
+          isAssignedPropertyManager(resource.data.propertyId) ||
+          isAdmin()
+        );
       allow create, update, delete: if false; // Append-only immutable condition history; server Admin SDK writes only
     }
   }

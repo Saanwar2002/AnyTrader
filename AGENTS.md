@@ -7,11 +7,11 @@
 
 ## Current Status
 - **Last Updated**: 2026-09-20
-- **Working State**: Application is fully functional with Enterprise V6/V7 Modular Server Architecture, V8.1 Structured Intelligence Engine, V8.2 Task 19 Property Evidence & Component Ontology, V8.2 Task 20 Property Condition & Lifecycle Intelligence, Server-Authoritative Pricing Catalog (`pricingCatalog.ts`), Stripe Connect Direct Routing, Formal State Machines, Payment Ledger, Concurrency Locks, Business-Logic Abuse Defense, and 100% Automated Test Pass Rate (585/585 unit tests passing across 38 test suites).
-- **V8.2 Task 20 Final Audit Status (Audited September 20, 2026)**:
+- **Working State**: Application is fully functional with Enterprise V6/V7 Modular Server Architecture, V8.1 Structured Intelligence Engine, V8.2 Task 19 Property Evidence & Component Ontology, V8.2 Task 20 Property Condition & Lifecycle Intelligence, V8.2 Task 20V Property Lifecycle Remediation (database-bounded queries, fail-closed security rules, 10-vector security tests, atomic transactions, outcome evidence verification), Server-Authoritative Pricing Catalog (`pricingCatalog.ts`), Stripe Connect Direct Routing, Formal State Machines, Payment Ledger, Concurrency Locks, Business-Logic Abuse Defense, and 100% Automated Test Pass Rate (585/585 unit tests passing across 38 test suites).
+- **V8.2 Task 20 & Task 20V Remediation Final Audit Status (Audited September 20, 2026)**:
   - **Audit Status**: **VERIFIED & CLOSED — 100% AUDIT PASS (GO FOR RELEASE)** (Documented in `/TASK_20_PROPERTY_CONDITION_LIFECYCLE_REPORT.md` and `DEVELOPMENT.md`).
   - **Comprehensive Test Results**:
-    - **Unit Test Suite**: 585/585 tests passing across 38 test files (including 15 tests in `tests/unit/task20PropertyConditionLifecycle.test.ts`).
+    - **Unit Test Suite**: 585/585 tests passing across 38 test files (including 16 tests in `tests/unit/task20PropertyConditionLifecycle.test.ts`).
     - **Typecheck & Lint (`npm run lint`)**: 0 errors (`tsc --noEmit` clean).
     - **Applet Compilation (`compile_applet`)**: Succeeded cleanly.
   - **0 Defects Discovered**: Production code verified 100% clean across Tasks 1–17.

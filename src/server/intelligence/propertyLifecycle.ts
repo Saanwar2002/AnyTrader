@@ -99,15 +99,16 @@ export class PropertyLifecycleService {
 
     // 7. Verify Authoritative Evidence Existence & Property Boundary
     const propertyEvidence = await evidenceRegistry.getForAggregate('property', input.propertyId, activeDb);
-    const validEvidenceIds = new Set(propertyEvidence.map((e) => e.evidenceId));
+    const validEvidenceMap = new Map<string, any>();
+    propertyEvidence.forEach((e) => validEvidenceMap.set(e.evidenceId, e));
 
     if (input.sourceJobId) {
       const jobEvidence = await evidenceRegistry.getForAggregate('job', input.sourceJobId, activeDb);
-      jobEvidence.forEach((e) => validEvidenceIds.add(e.evidenceId));
+      jobEvidence.forEach((e) => validEvidenceMap.set(e.evidenceId, e));
     }
 
     for (const evId of input.evidenceIds) {
-      if (!validEvidenceIds.has(evId)) {
+      if (!validEvidenceMap.has(evId)) {
         // Direct Firestore lookup fallback in intelligence_evidence
         const evDoc = await activeDb.collection('intelligence_evidence').doc(evId).get();
         if (!evDoc || !evDoc.exists) {
@@ -116,16 +117,36 @@ export class PropertyLifecycleService {
           );
         }
         const evData = typeof evDoc.data === 'function' ? evDoc.data() : evDoc.data;
-        const evPropId = evData?.propertyId || evData?.aggregateId;
-        const evJobId = evData?.sourceJobId || evData?.sourceId;
+
+        // Evidence Identity Verification
+        const docEvidenceId = evData?.evidenceId || evDoc.id;
+        if (docEvidenceId !== evId) {
+          throw new Error(
+            `[PropertyLifecycle Violation] Evidence document ID '${docEvidenceId}' does not match requested evidence ID '${evId}'`
+          );
+        }
+
+        // Tenant Boundary Verification
+        if (evData?.tenantId && authoritativeTenant && evData.tenantId !== authoritativeTenant) {
+          throw new Error(
+            `[CrossTenantContamination Violation] Evidence tenant '${evData.tenantId}' does not match property owner/tenant '${authoritativeTenant}'`
+          );
+        }
+
+        // Aggregate & Property/Job Lineage Verification
+        const evPropId = evData?.propertyId || (evData?.aggregateType === 'property' ? evData?.aggregateId : undefined);
+        const evJobId = evData?.sourceJobId || evData?.sourceId || (evData?.aggregateType === 'job' ? evData?.aggregateId : undefined);
 
         const matchesProperty = evPropId === input.propertyId;
         const matchesJob = Boolean(input.sourceJobId && evJobId === input.sourceJobId);
+
         if (!matchesProperty && !matchesJob) {
           throw new Error(
             `[PropertyLifecycle Violation] Evidence '${evId}' is not authoritative for property '${input.propertyId}'`
           );
         }
+
+        validEvidenceMap.set(evId, evData);
       }
     }
 
@@ -159,12 +180,19 @@ export class PropertyLifecycleService {
 
     // 9. Completed Job != Automatic Repair / Replacement Guardrail
     if ((input.lifecycleState === 'repaired' || input.lifecycleState === 'replaced') && !options?.isVerifiedServerAction) {
-      const hasOutcomeEvidence =
-        input.metadata?.isOutcomeVerified === true ||
-        (input.observationDetails?.conditionDescription &&
-          (input.observationDetails.conditionDescription.toLowerCase().includes('repaired') ||
-            input.observationDetails.conditionDescription.toLowerCase().includes('replaced') ||
-            input.observationDetails.conditionDescription.toLowerCase().includes('completed outcome')));
+      const validOutcomeTypes = [
+        'completion_certificate',
+        'outcome_verification',
+        'work_completion',
+        'repair_certificate',
+        'invoice_receipt',
+      ];
+
+      const hasRegisteredOutcomeEvidence = Array.from(validEvidenceMap.values()).some((ev) =>
+        validOutcomeTypes.includes(ev?.evidenceType || ev?.type)
+      );
+
+      const hasOutcomeEvidence = input.metadata?.isOutcomeVerified === true || hasRegisteredOutcomeEvidence;
 
       if (!hasOutcomeEvidence) {
         throw new Error(
@@ -201,17 +229,7 @@ export class PropertyLifecycleService {
     const conditionId = `pc_${input.propertyId}_${contentHash.slice(0, 16)}`;
     const now = new Date().toISOString();
 
-    // Check for existing record (Idempotent Append-Only Store)
     const historyDocRef = activeDb.collection('property_condition_history').doc(conditionId);
-    const existingSnap = await historyDocRef.get();
-
-    if (existingSnap && existingSnap.exists) {
-      const existingData = typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data;
-      return {
-        conditionId,
-        ...existingData,
-      } as PropertyConditionObservation;
-    }
 
     // Build Provenance
     const provenance: Provenance = {
@@ -249,13 +267,55 @@ export class PropertyLifecycleService {
       updatedAt: now,
     };
 
-    // 12. Persist to Append-Only Historical Store
+    // 12. Persist to Append-Only Historical Store via Atomic Transaction
     const payload = cleanUndefinedFields({
       ...record,
       updatedAt: now,
     });
 
-    await historyDocRef.set(payload);
+    let isExistingRecord = false;
+    let existingRecordData: any = null;
+
+    if (typeof activeDb.runTransaction === 'function') {
+      await activeDb.runTransaction(async (tx: any) => {
+        const existingSnap = await tx.get(historyDocRef);
+        const exists = existingSnap && (typeof existingSnap.exists === 'boolean' ? existingSnap.exists : (typeof existingSnap.exists === 'function' ? existingSnap.exists() : false));
+        if (exists) {
+          const existingData = typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data;
+          if (existingData?.contentHash && existingData.contentHash !== contentHash) {
+            throw new Error(
+              `[PropertyLifecycle Violation] Immutable condition record '${conditionId}' already exists with conflicting contentHash`
+            );
+          }
+          isExistingRecord = true;
+          existingRecordData = existingData;
+          return;
+        }
+        tx.set(historyDocRef, payload);
+      });
+    } else {
+      const existingSnap = await historyDocRef.get();
+      const exists = existingSnap && (typeof existingSnap.exists === 'boolean' ? existingSnap.exists : (typeof existingSnap.exists === 'function' ? existingSnap.exists() : false));
+      if (exists) {
+        const existingData = typeof existingSnap.data === 'function' ? existingSnap.data() : existingSnap.data;
+        if (existingData?.contentHash && existingData.contentHash !== contentHash) {
+          throw new Error(
+            `[PropertyLifecycle Violation] Immutable condition record '${conditionId}' already exists with conflicting contentHash`
+          );
+        }
+        isExistingRecord = true;
+        existingRecordData = existingData;
+      } else {
+        await historyDocRef.set(payload);
+      }
+    }
+
+    if (isExistingRecord) {
+      return {
+        conditionId,
+        ...existingRecordData,
+      } as PropertyConditionObservation;
+    }
 
     // 13. Update Mutable Current Property Condition Projection
     await this.updatePropertyConditionProjection(input.propertyId, { firestoreDb: activeDb });
@@ -273,6 +333,8 @@ export class PropertyLifecycleService {
     const activeDb = options?.firestoreDb || this.defaultDb || getGlobalIntelligenceDb();
     if (!activeDb) return [];
 
+    const limitVal = Math.min(Math.max(options?.limit ?? 50, 1), 100);
+
     let query = activeDb.collection('property_condition_history').where('propertyId', '==', propertyId);
 
     if (options?.componentType) {
@@ -280,25 +342,21 @@ export class PropertyLifecycleService {
       query = query.where('componentType', '==', normType);
     }
 
-    const limitVal = Math.min(options?.limit || 50, 100);
+    // Database-level ordering and limit
+    query = query.orderBy('observedAt', 'desc').limit(limitVal);
+
     const snap = await query.get();
 
     if (!snap || snap.empty) return [];
 
     const docs = typeof snap.docs !== 'undefined' ? snap.docs : [];
-    let records: PropertyConditionObservation[] = docs.map((d: any) => {
+    const records: PropertyConditionObservation[] = docs.map((d: any) => {
       const data = typeof d.data === 'function' ? d.data() : d.data;
       return {
         conditionId: d.id || data.conditionId,
         ...data,
       };
     });
-
-    // In-memory sort by observedAt desc
-    records.sort((a, b) => new Date(b.observedAt).getTime() - new Date(a.observedAt).getTime());
-    if (records.length > limitVal) {
-      records = records.slice(0, limitVal);
-    }
 
     return records;
   }
