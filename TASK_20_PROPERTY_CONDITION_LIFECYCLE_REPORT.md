@@ -116,8 +116,10 @@ Created `tests/unit/task20PropertyConditionLifecycle.test.ts` (15 tests, 100% pa
 
 ## 6. Audit & Verification Results
 
-- **Unit Tests**: 585/585 unit tests passing across 38 test files (100% pass rate).
-- **Task 20 Suite**: 16/16 tests passing in `tests/unit/task20PropertyConditionLifecycle.test.ts`.
+- **Unit Test Suite**: 598/598 unit tests passing across 39 test files (100% pass rate).
+- **Task 20 Unit Test Suite**: 13/13 tests passing in `tests/unit/task20UnitTests.test.ts`.
+- **Task 20 Emulator Suite**: 16/16 tests in `tests/unit/task20PropertyConditionLifecycle.test.ts` (3 real emulator integration tests: P, Q, R).
+- **Fail-Hard Emulator Guarantee**: Confirmed that `tests/unit/task20PropertyConditionLifecycle.test.ts` cannot silently skip tests if the emulator is missing; it throws `[Task20 Test Setup] Failed to initialize real Firebase emulator environment` and fails the test suite hard.
 - **TypeScript Typecheck**: `tsc --noEmit` clean with 0 errors (`npm run lint` clean).
 - **Applet Compilation**: `compile_applet` build succeeded cleanly.
 
@@ -134,7 +136,7 @@ Following an independent audit, 8 targeted remediations were executed and verifi
 3. **10-Vector Authenticated Security Tests**:
    - `tests/unit/task20PropertyConditionLifecycle.test.ts`: Added 10-vector security tests on real Firebase emulator covering unauthenticated read/create rejection, authenticated unrelated user read rejection, property owner/manager/admin read approval, direct client create/update/delete rejection, and malformed record rejection.
 4. **Fail-Hard Emulator Test Engine**:
-   - `tests/unit/task20PropertyConditionLifecycle.test.ts`: Removed silent error-swallowing try/catch block. Uses Vitest `ctx.skip()` when emulator is unreachable to prevent false-positive green passes without assertions running.
+   - `tests/unit/task20PropertyConditionLifecycle.test.ts`: Removed silent error-swallowing try/catch and `ctx.skip()` fallbacks. Made emulator initialization fail hard in `beforeAll()`. If the emulator environment fails to initialize, the test suite immediately throws `[Task20 Test Setup] Failed to initialize real Firebase emulator environment` and fails hard, guaranteeing that emulator tests cannot silently skip.
 5. **Atomic Transactions for Immutable History**:
    - `src/server/intelligence/propertyLifecycle.ts` (`recordConditionObservation`): Replaced check-then-write logic with atomic Firestore `activeDb.runTransaction(...)` preventing race conditions during concurrent observations.
 6. **Real Concurrency & Conflicting Mutation Tests**:
