@@ -1,5 +1,24 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 20: Property Condition & Lifecycle Intelligence (September 20, 2026)
+- **1. Observation vs. Inference Separation**:
+  - Built `PropertyLifecycleService` (`src/server/intelligence/propertyLifecycle.ts`) to manage evidence-backed property component condition history.
+  - Separates factual observations (`PropertyConditionObservation`) from AI model hypotheses (`inferenceDetails`: estimated remaining lifespan, cost benchmarks, hypotheses).
+- **2. AI Security Boundary & Non-Promotion**:
+  - Enforces strict AI boundary: model-derived candidates (`status: 'derived'`) cannot self-promote to `verified` or assert `repaired`/`replaced` states without server-authorized actions (`isVerifiedServerAction: true`).
+- **3. Completed Job != Automatic Repair**:
+  - Enforces that `job.status === "completed"` does NOT automatically establish `repaired` or `replaced` states without supporting outcome evidence or explicit server verification.
+- **4. Authoritative Lineage & Lineage Validation**:
+  - Uses `resolveAuthoritativeJobPropertyId` and `evidenceRegistry` to ensure all condition observations, evidence IDs, and source jobs strictly belong to the authoritative target property. Rejects cross-property contamination.
+- **5. Immutable Append-Only History & Projection**:
+  - Stores condition observations in `/property_condition_history/{conditionId}` (append-only log) with deterministic SHA-256 `contentHash`.
+  - Projects current component condition state into `/properties/{propertyId}` document under `intelligence.buildingComponents`.
+- **6. Security Rules & Indexes**:
+  - Added read guards and write restrictions (`allow write: if isAdmin()`) for `/property_condition_history` in `firestore.rules`.
+  - Added composite index for `property_condition_history` on `(propertyId ASC, observedAt DESC)` in `firestore.indexes.json`.
+- **7. Comprehensive Unit Test Verification (`tests/unit/task20PropertyConditionLifecycle.test.ts`)**:
+  - 15/15 unit tests passing. 100% pass rate across all 38 test files (585/585 tests passing). Clean `tsc --noEmit` typecheck and successful production build (`compile_applet`).
+
 ## 🛠️ CI Test Failure Investigation & Fix (September 20, 2026)
 - **1. Missing Java Environment in CI (`.github/workflows/ci.yml`)**:
   - The Firebase Emulator Suite requires a Java runtime environment (JRE/JDK).

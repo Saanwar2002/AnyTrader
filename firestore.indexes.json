@@ -121,6 +121,23 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "property_condition_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "observedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "property_condition_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "componentType", "order": "ASCENDING" },
+        { "fieldPath": "observedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

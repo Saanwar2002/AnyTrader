@@ -1191,5 +1191,9 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false; // Execution records are immutable audit trails; clients cannot create, update, or delete processing runs
     }
+    match /property_condition_history/{conditionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // Append-only immutable condition history; server Admin SDK writes only
+    }
   }
 }

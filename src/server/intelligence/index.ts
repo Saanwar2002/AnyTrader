@@ -42,4 +42,5 @@ export * from './processingErrorClassifier';
 export * from './costModel';
 export * from './processingRunStore';
 export * from './propertyOntology';
+export * from './propertyLifecycle';
 

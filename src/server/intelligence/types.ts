@@ -10,6 +10,8 @@
  * - Quality Assurance & Human Correction Provenance
  */
 
+import { PropertyComponentType, EvidenceStatus } from './propertyOntology';
+
 export type CanonicalAggregateType =
   | 'job'
   | 'property'
@@ -132,14 +134,20 @@ export interface ConfidenceScores {
 }
 
 export interface Provenance {
-  source: string;
-  evidenceIds: string[];
-  pipelineVersion: string;
-  modelVersion: string;
-  promptVersion: string;
-  generatedAt: string;
-  sourceContentHash: string; // SHA-256
+  source?: string;
+  evidenceIds?: string[];
+  pipelineVersion?: string;
+  modelVersion?: string;
+  promptVersion?: string;
+  generatedAt?: string;
+  sourceContentHash?: string; // SHA-256
   contentHash?: string;
+  origin?: string;
+  sourceId?: string;
+  sourceVersion?: string | number;
+  schemaVersion?: string;
+  tenantId?: string;
+  [key: string]: any;
 }
 
 export interface StorageManifest {
@@ -309,9 +317,80 @@ export interface JobIntelligence {
   updatedAt: string;
 }
 
+export type PropertyLifecycleState =
+  | 'unknown'
+  | 'observed_good'
+  | 'observed_fair'
+  | 'observed_degraded'
+  | 'observed_critical'
+  | 'repaired'
+  | 'replaced'
+  | 'archived';
+
+export interface PropertyConditionObservation {
+  conditionId: string;
+  propertyId: string;
+  componentType: PropertyComponentType;
+  lifecycleState: PropertyLifecycleState;
+  observedAt: string;
+  sourceType: string;
+  sourceId: string;
+  sourceJobId?: string;
+  evidenceIds: string[];
+  confidence: number;
+  provenance: Provenance;
+  contentHash: string;
+  status: EvidenceStatus;
+
+  observationDetails?: {
+    conditionDescription?: string;
+    severity?: 'low' | 'medium' | 'high' | 'critical';
+    capturedAt?: string;
+    sourceField?: string;
+  };
+  inferenceDetails?: {
+    hypothesis?: string;
+    reasoning?: string;
+    urgency?: 'immediate' | 'medium_term' | 'planned';
+    estimatedBenchmarkCost?: { min: number; max: number };
+  };
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordConditionObservationInput {
+  propertyId: string;
+  componentType: string;
+  lifecycleState: PropertyLifecycleState;
+  observedAt?: string;
+  sourceType: string;
+  sourceId?: string;
+  sourceJobId?: string;
+  evidenceIds: string[];
+  confidence?: number;
+  provenance: Partial<Provenance> & { origin: string };
+  status?: EvidenceStatus;
+
+  observationDetails?: {
+    conditionDescription?: string;
+    severity?: 'low' | 'medium' | 'high' | 'critical';
+    capturedAt?: string;
+    sourceField?: string;
+  };
+  inferenceDetails?: {
+    hypothesis?: string;
+    reasoning?: string;
+    urgency?: 'immediate' | 'medium_term' | 'planned';
+    estimatedBenchmarkCost?: { min: number; max: number };
+  };
+  metadata?: Record<string, unknown>;
+}
+
 export interface PropertyBuildingComponent {
   component: string;
   condition: string;
+  lifecycleState?: PropertyLifecycleState;
   lastObservedAt: string;
   confidence: number;
   evidenceIds: string[];
