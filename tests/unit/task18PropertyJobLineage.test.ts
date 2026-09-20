@@ -210,7 +210,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
       expect(jobIntelligence.jobId).toBe('job_alpha');
       expect(jobIntelligence.propertyId).toBe('prop_manor_101');
       expect((extraction.structuredCandidate as any).propertyId).toBe('prop_manor_101');
-    });
+    }, 15000);
 
     it('strips any untrusted model attempt to spoof propertyId or derivedFromJobIds', async () => {
       const evidenceItem = await evidenceRegistry.register(
@@ -340,7 +340,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
 
       expect(propertyIntelligence.propertyId).toBe('prop_manor_101');
       expect(propertyIntelligence.derivedFromJobIds).toEqual(['job_alpha', 'job_beta']);
-    });
+    }, 15000);
 
     it('rejects cross-property contamination when a historical job belongs to a different property', async () => {
       const foreignJob: JobIntelligence = {

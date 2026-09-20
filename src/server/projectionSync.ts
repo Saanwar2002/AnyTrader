@@ -151,7 +151,8 @@ export function sanitizeJobToPublicCard(jobId: string, jobData: Record<string, a
  */
 export function startPublicJobCardsSync(firestoreDb: admin.firestore.Firestore): () => void {
   try {
-    const unsubscribe = firestoreDb.collection("jobs").onSnapshot(
+    let unsubscribe: (() => void) | null = null;
+    unsubscribe = firestoreDb.collection("jobs").onSnapshot(
       async (snapshot) => {
         const batch = firestoreDb.batch();
         let operationsCount = 0;
@@ -194,14 +195,20 @@ export function startPublicJobCardsSync(firestoreDb: admin.firestore.Firestore):
           await batch.commit();
         }
       },
-      (error) => {
-        console.warn("[PublicJobCardsSync] Firestore listener notice:", error.message);
+      (error: any) => {
+        const msg = error?.message || String(error);
+        if (error?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+          if (unsubscribe) {
+            try { unsubscribe(); } catch {}
+          }
+          return;
+        }
+        console.warn("[PublicJobCardsSync] Firestore listener notice:", msg);
       }
     );
 
-    return unsubscribe;
+    return unsubscribe || (() => {});
   } catch (err: any) {
-    console.warn("[PublicJobCardsSync] Worker startup notice:", err?.message);
     return () => {};
   }
 }
@@ -279,7 +286,8 @@ export function sanitizePropertyToPublicPassport(propertyId: string, propertyDat
  */
 export function startPublicPropertiesSync(firestoreDb: admin.firestore.Firestore): () => void {
   try {
-    const unsubscribe = firestoreDb.collection("properties").onSnapshot(
+    let unsubscribe: (() => void) | null = null;
+    unsubscribe = firestoreDb.collection("properties").onSnapshot(
       async (snapshot) => {
         const batch = firestoreDb.batch();
         let operationsCount = 0;
@@ -309,14 +317,20 @@ export function startPublicPropertiesSync(firestoreDb: admin.firestore.Firestore
           await batch.commit();
         }
       },
-      (error) => {
-        console.warn("[PublicPropertiesSync] Firestore listener notice:", error.message);
+      (error: any) => {
+        const msg = error?.message || String(error);
+        if (error?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+          if (unsubscribe) {
+            try { unsubscribe(); } catch {}
+          }
+          return;
+        }
+        console.warn("[PublicPropertiesSync] Firestore listener notice:", msg);
       }
     );
 
-    return unsubscribe;
+    return unsubscribe || (() => {});
   } catch (err: any) {
-    console.warn("[PublicPropertiesSync] Worker startup notice:", err?.message);
     return () => {};
   }
 }

@@ -26,7 +26,8 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
   console.log("Starting Instant Match Engine...");
 
   // Cache platform config
-  const configUnsubscribe = db.collection("platform_config").doc("global").onSnapshot(
+  let configUnsubscribe: (() => void) | null = null;
+  configUnsubscribe = db.collection("platform_config").doc("global").onSnapshot(
     (doc) => {
       if (doc.exists) {
         const data = doc.data();
@@ -37,16 +38,21 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
     },
     (err: any) => {
       const msg = err?.message || String(err);
-      if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
-        console.warn("Instant match config listener error:", err);
+      if (err?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+        if (configUnsubscribe) {
+          try { configUnsubscribe(); } catch {}
+        }
+        return;
       }
+      console.warn("Instant match config listener error:", err);
     }
   );
 
   const processingMatches = new Set<string>();
 
   // Real-time listener for searching matches instead of polling
-  const matchesUnsubscribe = db.collection("instant_matches")
+  let matchesUnsubscribe: (() => void) | null = null;
+  matchesUnsubscribe = db.collection("instant_matches")
     .where("status", "==", "searching")
     .onSnapshot(async (matchesSnap) => {
       try {
@@ -121,9 +127,13 @@ export function startInstantMatchEngine(db: admin.firestore.Firestore) {
       }
     }, (err: any) => {
       const msg = err?.message || String(err);
-      if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED")) {
-        console.warn("Instant match listener error:", err);
+      if (err?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+        if (matchesUnsubscribe) {
+          try { matchesUnsubscribe(); } catch {}
+        }
+        return;
       }
+      console.warn("Instant match listener error:", err);
     });
 
   // We still need a very lightweight interval to check for timeouts on existing active attempts,

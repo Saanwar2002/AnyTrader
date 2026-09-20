@@ -62,7 +62,10 @@ dotenv.config();
 // Real-time Firestore sync for Gemini Category Prompt Layer
 const startCategoryRegistrySyncWorker = (firestoreDb: admin.firestore.Firestore) => {
   try {
-    firestoreDb.collection("platform_categories").onSnapshot((snapshot) => {
+    let unsubCat: (() => void) | null = null;
+    let unsubSyn: (() => void) | null = null;
+
+    unsubCat = firestoreDb.collection("platform_categories").onSnapshot((snapshot) => {
       const categories: any[] = [];
       snapshot.forEach((doc) => {
         categories.push({ id: doc.id, ...doc.data() });
@@ -71,11 +74,18 @@ const startCategoryRegistrySyncWorker = (firestoreDb: admin.firestore.Firestore)
         geminiServer.syncCategoryRegistryServer(categories);
         console.log(`[Gemini Sync] Synchronized ${categories.length} Firestore categories to AI prompt layer.`);
       }
-    }, (err) => {
-      console.warn("[Gemini Sync] Firestore category sync listener notice:", err.message);
+    }, (err: any) => {
+      const msg = err?.message || String(err);
+      if (err?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+        if (unsubCat) {
+          try { unsubCat(); } catch {}
+        }
+        return;
+      }
+      console.warn("[Gemini Sync] Firestore category sync listener notice:", msg);
     });
 
-    firestoreDb.collection("dynamic_search_synonyms").onSnapshot((snapshot) => {
+    unsubSyn = firestoreDb.collection("dynamic_search_synonyms").onSnapshot((snapshot) => {
       const synonyms: any[] = [];
       snapshot.forEach((doc) => {
         synonyms.push({ id: doc.id, ...doc.data() });
@@ -84,11 +94,18 @@ const startCategoryRegistrySyncWorker = (firestoreDb: admin.firestore.Firestore)
         geminiServer.syncCategoryRegistryServer(undefined, synonyms);
         console.log(`[Gemini Sync] Synchronized ${synonyms.length} search synonyms to AI prompt layer.`);
       }
-    }, (err) => {
-      console.warn("[Gemini Sync] Firestore synonym sync listener notice:", err.message);
+    }, (err: any) => {
+      const msg = err?.message || String(err);
+      if (err?.code === 7 || msg.includes("7") || msg.includes("PERMISSION_DENIED") || msg.includes("Missing or insufficient permissions") || msg.includes("UNAUTHENTICATED") || msg.includes("Could not load the default credentials")) {
+        if (unsubSyn) {
+          try { unsubSyn(); } catch {}
+        }
+        return;
+      }
+      console.warn("[Gemini Sync] Firestore synonym sync listener notice:", msg);
     });
   } catch (syncErr: any) {
-    console.warn("[Gemini Sync] Category sync worker initialization note:", syncErr?.message);
+    // Gracefully handle if DB is unavailable
   }
 };
 
@@ -308,7 +325,7 @@ async function getCachedConfig(docId: string): Promise<any> {
             },
             (error: any) => {
               const msg = error?.message || String(error);
-              if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+              if (error?.code !== 7 && !msg.includes("7") && !msg.includes("PERMISSION_DENIED") && !msg.includes("Missing or insufficient permissions") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
                 console.error(`Real-time config listener error for ${docId}:`, error);
               }
               if (!isResolved) {
@@ -320,7 +337,7 @@ async function getCachedConfig(docId: string): Promise<any> {
           cacheUnsubscribers.set(docId, unsub);
         } catch (err: any) {
           const msg = err?.message || String(err);
-          if (!msg.includes("PERMISSION_DENIED") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
+          if (err?.code !== 7 && !msg.includes("7") && !msg.includes("PERMISSION_DENIED") && !msg.includes("Missing or insufficient permissions") && !msg.includes("UNAUTHENTICATED") && !msg.includes("Could not load the default credentials")) {
             console.error(`Failed to register real-time config listener for ${docId}:`, err);
           }
           isResolved = true;
@@ -1428,7 +1445,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 50,
     keyGenerator: limitKeyGenerator,
-    validate: { xForwardedForHeader: false, ip: false },
+    validate: false,
     message: { error: "Too many AI requests, please try again after a minute" },
   });
   
@@ -1436,7 +1453,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 50,
     keyGenerator: limitKeyGenerator,
-    validate: { xForwardedForHeader: false, ip: false },
+    validate: false,
     message: { error: "Too many payment requests, please try again after a minute" },
   });
 
@@ -1444,7 +1461,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 30,
     keyGenerator: limitKeyGenerator,
-    validate: { xForwardedForHeader: false, ip: false },
+    validate: false,
     message: { error: "Too many postcode lookups, please try again after a minute" },
   });
   
@@ -1452,7 +1469,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 1000, // Bounded capacity for rapid navigation, polling, and iframe reloading
     keyGenerator: limitKeyGenerator,
-    validate: { xForwardedForHeader: false, ip: false },
+    validate: false,
     message: { error: "Too many requests, please try again after a minute" },
   });
 
