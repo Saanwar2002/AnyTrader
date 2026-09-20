@@ -1,5 +1,18 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛠️ CI Test Failure Investigation & Fix (September 20, 2026)
+- **1. Missing Java Environment in CI (`.github/workflows/ci.yml`)**:
+  - The Firebase Emulator Suite requires a Java runtime environment (JRE/JDK).
+  - In CI workflows, `firebase emulators:exec` failed with `java: not found`.
+  - Fix: Configured `actions/setup-java@v4` with `distribution: 'temurin'` and `java-version: '17'` prior to running emulator test steps.
+- **2. Firestore Undefined Fields Sanitization (`propertyOntology.ts`)**:
+  - Direct Firestore document writes (`set()`) in `PropertyOntologyService.registerComponentEvidence` failed under strict emulator environments when optional fields (such as `sourceJobId`) were `undefined`.
+  - Fix: Applied `cleanUndefinedFields` to sanitize payload keys before storing in `intelligence_evidence` collection, preventing `Value for argument "data" is not a valid Firestore document` serialization errors.
+- **3. Test Harness Emulator Settings (`task16TierBStorage.test.ts`, `task17PropertySecurity.test.ts`, `task19PropertyEvidenceOntology.test.ts`)**:
+  - Configured `adminDb.settings({ ignoreUndefinedProperties: true })` across all emulator test suites and wired `evidenceRegistry` & `evidenceLineageValidator` stores.
+- **4. Express Rate Limiter Validation (`server.ts`)**:
+  - Configured rate limiters with `validate: { xForwardedForHeader: false, ip: false }` to eliminate IPv6 subnet prefix key generator warnings.
+
 ## 🛡️ AnyTrader V8.2 — Task 19 & Task 19-V2: Property Evidence & Component Ontology (September 19, 2026)
 - **1. Property Component Ontology (`src/server/intelligence/propertyOntology.ts`)**:
   - Implemented type-safe, normalized component ontology covering all canonical building blocks (`roof`, `roofing_material`, `roof_structure`, `gutters`, `hvac`, `electrical`, `plumbing`, `windows`, `doors`, `exterior`, `interior`, `foundation`, `drainage`, `other`, `boiler`, `electrical_panel`, `pipe`, `radiator`, `wall`, `floor`, `chimney`).

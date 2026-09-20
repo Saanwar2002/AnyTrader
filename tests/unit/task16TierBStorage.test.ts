@@ -176,6 +176,11 @@ describe('Task 16 — Durable Tier-B Raw Intelligence Storage Verification Suite
       }
 
       adminDb = adminApp.firestore();
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
 
       setGlobalIntelligenceDb(adminDb as any);

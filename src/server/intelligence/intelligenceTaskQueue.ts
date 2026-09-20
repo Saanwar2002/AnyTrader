@@ -286,6 +286,8 @@ export class IntelligenceTaskQueue {
    */
   public async workerTick(): Promise<void> {
     if (!this.firestoreDb) return;
+    const col = this.firestoreDb.collection('intelligence_tasks');
+    if (typeof (col as any).where !== 'function') return;
     if (this.isWorkerRunning) return;
     this.isWorkerRunning = true;
 

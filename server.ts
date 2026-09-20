@@ -1428,6 +1428,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 50,
     keyGenerator: limitKeyGenerator,
+    validate: { xForwardedForHeader: false, ip: false },
     message: { error: "Too many AI requests, please try again after a minute" },
   });
   
@@ -1435,6 +1436,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 50,
     keyGenerator: limitKeyGenerator,
+    validate: { xForwardedForHeader: false, ip: false },
     message: { error: "Too many payment requests, please try again after a minute" },
   });
 
@@ -1442,6 +1444,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 30,
     keyGenerator: limitKeyGenerator,
+    validate: { xForwardedForHeader: false, ip: false },
     message: { error: "Too many postcode lookups, please try again after a minute" },
   });
   
@@ -1449,6 +1452,7 @@ async function startServer() {
     windowMs: 1 * 60 * 1000,
     max: 1000, // Bounded capacity for rapid navigation, polling, and iframe reloading
     keyGenerator: limitKeyGenerator,
+    validate: { xForwardedForHeader: false, ip: false },
     message: { error: "Too many requests, please try again after a minute" },
   });
 

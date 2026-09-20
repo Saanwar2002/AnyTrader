@@ -159,6 +159,11 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
       }
 
       adminDb = adminApp.firestore();
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
 
       setGlobalIntelligenceDb(adminDb as any);

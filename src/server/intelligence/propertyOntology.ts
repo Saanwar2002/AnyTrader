@@ -14,6 +14,7 @@ import { COMPONENT_ALIASES, normalizeComponentCode, sanitizeTerm } from './canon
 import { resolveAuthoritativeJobPropertyId } from './jobIntelligence';
 import { computeSha256 } from './provenance';
 import { getGlobalIntelligenceDb } from './immutableStore';
+import { cleanUndefinedFields } from './evidence';
 
 // ----------------------------------------------------
 // 1. Property Component Types & Vocabulary
@@ -341,7 +342,7 @@ export class PropertyOntologyService {
 
     // 6. Persistence to Immutable Evidence Store
     if (activeDb) {
-      await activeDb.collection('intelligence_evidence').doc(evidenceId).set({
+      const payload = cleanUndefinedFields({
         ...record,
         aggregateType: 'property',
         aggregateId: input.propertyId,
@@ -355,6 +356,8 @@ export class PropertyOntologyService {
         sourceRef: input.sourceJobId ? `jobs/${input.sourceJobId}` : `properties/${input.propertyId}`,
         updatedAt: now,
       });
+
+      await activeDb.collection('intelligence_evidence').doc(evidenceId).set(payload);
     }
 
     return record;

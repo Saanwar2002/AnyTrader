@@ -17,6 +17,9 @@ import {
   RegisterComponentEvidenceInput,
   propertyIntelligenceService,
   JobIntelligence,
+  evidenceRegistry,
+  evidenceLineageValidator,
+  GeminiIntelligenceProvider,
 } from '../../src/server/intelligence/index';
 import {
   setGlobalRawArtifactBucket,
@@ -438,10 +441,17 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
         }
 
         adminDb = adminApp.firestore();
+        try {
+          adminDb.settings({ ignoreUndefinedProperties: true });
+        } catch {
+          // ignore if already applied
+        }
         adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
 
         setGlobalIntelligenceDb(adminDb as any);
         setGlobalRawArtifactBucket(adminBucket);
+        evidenceRegistry.setDb(adminDb as any);
+        evidenceLineageValidator.setDb(adminDb as any);
       } catch (err: any) {
         throw new Error(
           `[Task19 Emulator Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`
@@ -452,6 +462,8 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
     afterAll(async () => {
       setGlobalRawArtifactBucket(null);
       setGlobalIntelligenceDb(null);
+      evidenceRegistry.setDb(null);
+      evidenceLineageValidator.setDb(null);
       if (testEnv) {
         await testEnv.cleanup();
       }
@@ -462,6 +474,9 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
         await testEnv.clearFirestore();
         await testEnv.clearStorage();
       }
+      evidenceRegistry.clear();
+      evidenceRegistry.setDb(adminDb as any);
+      evidenceLineageValidator.setDb(adminDb as any);
       setGlobalIntelligenceDb(adminDb as any);
       setGlobalRawArtifactBucket(adminBucket);
     });
@@ -604,6 +619,17 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
       await adminDb.collection('properties').doc('prop_emu_7').set({ landlordId: 'tenant_7', address: '10 Downing St' });
       await adminDb.collection('jobs').doc('job_emu_700').set({ propertyId: 'prop_emu_7', category: 'Roofing' });
 
+      // Register valid evidence in Firestore for lineage verification
+      const ev = await evidenceRegistry.register(
+        'job',
+        'job_emu_700',
+        'user_description',
+        'jobs/job_emu_700/desc',
+        'Leak in tiles on roof of property',
+        { propertyId: 'prop_emu_7' },
+        true
+      );
+
       const mockJobIntel: JobIntelligence = {
         jobId: 'job_emu_700',
         propertyId: 'prop_emu_7',
@@ -612,40 +638,94 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
         observedProblem: 'Leak in tiles',
         extractedScope: ['Replace tiles'],
         recommendedIntervention: 'Repair roof',
-        evidenceIds: ['ev_emu_700'],
+        evidenceIds: [ev.evidenceId],
         confidence: { overall: 0.9, extraction: 0.9, evidenceQuality: 0.9, classification: 0.9, temporalFreshness: 0.9, method: 'deterministic_heuristic' },
-        provenance: { source: 'jobs/job_emu_700', evidenceIds: ['ev_emu_700'], pipelineVersion: 'v8.1.0', modelVersion: 'm', promptVersion: 'p', generatedAt: new Date().toISOString(), sourceContentHash: 'hash' },
+        provenance: { source: 'jobs/job_emu_700', evidenceIds: [ev.evidenceId], pipelineVersion: 'v8.1.0', modelVersion: 'm', promptVersion: 'p', generatedAt: new Date().toISOString(), sourceContentHash: 'hash' },
         pipelineVersion: 'v8.1.0',
         updatedAt: new Date().toISOString(),
       };
 
-      const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
-        { propertyId: 'prop_emu_7', address: '10 Downing St', propertyType: 'residential' },
-        [mockJobIntel],
-        undefined,
-        { firestoreDb: adminDb }
-      );
+      const controlledRollupProvider = {
+        async extractJobCandidate() { throw new Error('Not used in property test'); },
+        async rollupPropertyCandidate() {
+          const rawRollup = JSON.stringify({
+            overallHealthScore: 88,
+            buildingComponents: [
+              {
+                component: 'Roofing',
+                condition: 'Good condition following tile repair',
+                lastObservedAt: new Date().toISOString(),
+                confidence: 0.95,
+                evidenceIds: [ev.evidenceId],
+              },
+            ],
+            observedConditions: [
+              {
+                condition: 'Leak in tiles',
+                severity: 'low',
+                component: 'Roofing',
+                evidenceIds: [ev.evidenceId],
+              },
+            ],
+            recommendedInterventions: [
+              {
+                intervention: 'Annual roof inspection',
+                urgency: 'routine',
+                component: 'Roofing',
+                evidenceIds: [ev.evidenceId],
+              },
+            ],
+            candidateConfidence: 0.95,
+          });
 
-      expect(result.propertyIntelligence).toBeDefined();
-      const snapshot = await adminDb.collection('intelligence_evidence').where('propertyId', '==', 'prop_emu_7').get();
-      expect(snapshot.empty).toBe(false);
+          return {
+            candidate: JSON.parse(rawRollup),
+            metrics: {
+              model: 'gemini-2.5-flash-controlled-test',
+              inputTokens: 250,
+              outputTokens: 120,
+              totalTokens: 370,
+              estimatedCostUsd: 0.0002,
+              processingDurationMs: 55,
+            },
+            rawResponseText: rawRollup,
+          };
+        },
+      };
 
-      // Section 8: Verify actual Tier-B artifact creation in Firebase Storage emulator
-      const rawManifest = result.extraction.rawManifest;
-      expect(rawManifest).toBeDefined();
-      expect(rawManifest.storagePath).toMatch(/^intelligence_raw\/property\/prop_emu_7\//);
+      propertyIntelligenceService.setProvider(controlledRollupProvider as any);
 
-      // Verify object exists in Firebase Storage emulator
-      const fileRef = adminApp.storage().bucket(BUCKET_NAME).file(rawManifest.storagePath);
-      const [exists] = await fileRef.exists();
-      expect(exists).toBe(true);
+      try {
+        const result = await propertyIntelligenceService.aggregatePropertyIntelligence(
+          { propertyId: 'prop_emu_7', address: '10 Downing St', propertyType: 'residential' },
+          [mockJobIntel],
+          [{ id: ev.evidenceId, type: 'user_description', content: 'Leak in tiles' }],
+          { firestoreDb: adminDb }
+        );
 
-      // Verify download and integrity check using rawArtifactStore APIs
-      const isValid = await verifyRawArtifact(rawManifest, adminBucket);
-      expect(isValid).toBe(true);
+        expect(result.propertyIntelligence).toBeDefined();
+        const snapshot = await adminDb.collection('intelligence_evidence').where('propertyId', '==', 'prop_emu_7').get();
+        expect(snapshot.empty).toBe(false);
 
-      const decompressed = await readRawArtifact(rawManifest, adminBucket);
-      expect(decompressed.length).toBeGreaterThan(0);
+        // Section 8: Verify actual Tier-B artifact creation in Firebase Storage emulator
+        const rawManifest = result.extraction.rawManifest;
+        expect(rawManifest).toBeDefined();
+        expect(rawManifest.storagePath).toMatch(/^intelligence_raw\/property\/prop_emu_7\//);
+
+        // Verify object exists in Firebase Storage emulator
+        const fileRef = adminApp.storage().bucket(BUCKET_NAME).file(rawManifest.storagePath);
+        const [exists] = await fileRef.exists();
+        expect(exists).toBe(true);
+
+        // Verify download and integrity check using rawArtifactStore APIs
+        const isValid = await verifyRawArtifact(rawManifest, adminBucket);
+        expect(isValid).toBe(true);
+
+        const decompressed = await readRawArtifact(rawManifest, adminBucket);
+        expect(decompressed.length).toBeGreaterThan(0);
+      } finally {
+        propertyIntelligenceService.setProvider(new GeminiIntelligenceProvider());
+      }
     });
 
     it('J. Retrieval isolation: evidence for Property A does not leak to Property B', async () => {
