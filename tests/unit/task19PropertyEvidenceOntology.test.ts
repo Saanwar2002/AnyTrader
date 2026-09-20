@@ -785,7 +785,7 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
             recommendedInterventions: [
               {
                 intervention: 'Annual roof inspection',
-                urgency: 'routine',
+                urgency: 'planned',
                 component: 'Roofing',
                 evidenceIds: [ev.evidenceId],
               },
