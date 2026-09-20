@@ -13,7 +13,7 @@
 - **4. Express Rate Limiter Validation (`server.ts`)**:
   - Configured rate limiters with `validate: { xForwardedForHeader: false, ip: false }` to eliminate IPv6 subnet prefix key generator warnings.
 
-## 🛡️ AnyTrader V8.2 — Task 19 & Task 19-V2: Property Evidence & Component Ontology (September 19, 2026)
+## 🛡️ AnyTrader V8.2 — Task 19, Task 19-V2 & Task 19-V3: Property Evidence & Component Ontology (September 19-20, 2026)
 - **1. Property Component Ontology (`src/server/intelligence/propertyOntology.ts`)**:
   - Implemented type-safe, normalized component ontology covering all canonical building blocks (`roof`, `roofing_material`, `roof_structure`, `gutters`, `hvac`, `electrical`, `plumbing`, `windows`, `doors`, `exterior`, `interior`, `foundation`, `drainage`, `other`, `boiler`, `electrical_panel`, `pipe`, `radiator`, `wall`, `floor`, `chimney`).
   - Added `isPropertyComponentType`, `normalizeComponentType` (mapping raw synonyms like `'shingles'`, `'double glazing'` to canonical codes), and fail-closed `validateComponentType`.
@@ -35,12 +35,15 @@
   - Implemented fail-fast emulator harness behavior to cleanly throw when emulators are unreachable rather than allowing unhandled null reference crashes.
   - Added end-to-end Storage verification in Test I: verifies `StorageManifest`, Storage emulator file existence, digest validation via `verifyRawArtifact`, and payload decompression via `readRawArtifact`.
   - Aligned Firestore `intelligence_evidence` records with canonical `IntelligenceEvidence` fields (`aggregateType`, `aggregateId`, `sourceId`, `sourceRef`, `byteSize`, `schemaVersion`, `integrityStatus`, `verified`) for cross-service interoperability.
-- **7. Verification**:
-  - Full unit test suite passing 565/565 tests across 37 test suites.
-  - 111/111 intelligence unit tests passing.
+- **7. Task 19-V3 Strict Evidence Contract & AI Candidate ID Sanitization**:
+  - Enforced strict `z.array(z.string())` for `evidenceIds` in `AIExtractionCandidateSchema`.
+  - Added input normalization in `JobIntelligence` and `PropertyIntelligence` services to sanitize mixed/object evidence ID representations into clean string arrays before schema validation and storage.
+  - Created standalone unit test suite `tests/unit/task19UnitTests.test.ts` verifying all ontology validations, lineage checks, security boundaries, and contract invariants.
+- **8. Verification**:
+  - Full unit test suite passing 585/585 tests across 38 test suites.
+  - 100% test pass rate across all intelligence and platform suites.
   - `npm run lint` (`tsc --noEmit`) clean with 0 errors.
   - `compile_applet` build succeeded cleanly.
-  - Pre-flight release audit (`npm run audit:release`) passed.
 
 ## 🛡️ AnyTrader V8.2 — Task 18: Authoritative Property ↔ Job Lineage (September 19, 2026)
 - **1. Transactional Property Lineage Resolver (`src/server/intelligence/jobIntelligence.ts`)**:

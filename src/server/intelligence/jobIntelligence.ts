@@ -229,7 +229,12 @@ export class JobIntelligenceService {
       evidenceItems = await evidenceRegistry.getForAggregate('job', job.jobId);
     }
 
-    const targetEvidenceIds = overrideEvidenceIds || evidenceItems.map((e) => e.evidenceId);
+    const targetEvidenceIds: string[] = (Array.isArray(overrideEvidenceIds)
+      ? overrideEvidenceIds
+          .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+          .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+          .map((id: string) => id.trim())
+      : null) || evidenceItems.map((e) => e.evidenceId);
 
     // Enforce invariant: No evidence, no assertion!
     evidenceRegistry.assertHasEvidence(targetEvidenceIds);
@@ -390,10 +395,15 @@ export class JobIntelligenceService {
       },
     };
 
-    const candidateEvidence = (candidate as any).evidenceIds ||
+    const rawCandidateEvidence = (candidate as any).evidenceIds ||
       (candidate.identifiedEvidenceReferences && candidate.identifiedEvidenceReferences.length > 0
         ? candidate.identifiedEvidenceReferences
         : targetEvidenceIds);
+
+    const candidateEvidence: string[] = (Array.isArray(rawCandidateEvidence) ? rawCandidateEvidence : [rawCandidateEvidence])
+      .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+      .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+      .map((id: string) => id.trim());
 
     const rawCandidateObj: any = {
       domain: ((candidate as any).domain || candidate.category || 'general').toLowerCase(),

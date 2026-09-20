@@ -208,7 +208,12 @@ export class PropertyIntelligenceService {
       }
     }
 
-    const targetEvidenceIds = overrideEvidenceIds || propertyEvidenceIds;
+    const targetEvidenceIds: string[] = (Array.isArray(overrideEvidenceIds)
+      ? overrideEvidenceIds
+          .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+          .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+          .map((id: string) => id.trim())
+      : null) || propertyEvidenceIds;
 
     // Invariant: No evidence, no assertion
     evidenceRegistry.assertHasEvidence(targetEvidenceIds);
@@ -259,9 +264,14 @@ export class PropertyIntelligenceService {
     const manifest = await persistRawArtifact({ compressedBuffer, manifest: rawManifestDraft });
 
     // 5. Construct Untrusted AI Candidate for Security Boundary Processing
-    const candidateEvidenceIds = Array.isArray((candidate as any)?.evidenceIds) && (candidate as any).evidenceIds.length > 0
+    const rawCandidateEvidenceIds = Array.isArray((candidate as any)?.evidenceIds) && (candidate as any).evidenceIds.length > 0
       ? (candidate as any).evidenceIds
       : targetEvidenceIds;
+
+    const candidateEvidenceIds: string[] = (Array.isArray(rawCandidateEvidenceIds) ? rawCandidateEvidenceIds : [rawCandidateEvidenceIds])
+      .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+      .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+      .map((id: string) => id.trim());
 
     const rawCandidateObj = {
       ...(typeof candidate === 'object' && candidate !== null ? candidate : {}),
@@ -269,33 +279,60 @@ export class PropertyIntelligenceService {
       category: (candidate as any)?.category || propInput.propertyType || 'Residential',
       component: (candidate as any)?.component || 'Building Fabric',
       buildingComponents: Array.isArray((candidate as any)?.buildingComponents)
-        ? (candidate as any).buildingComponents.map((bc: any) => ({
-            component: bc?.component,
-            condition: bc?.condition,
-            confidence: bc?.confidence,
-            lastObservedAt: bc?.lastObservedAt || new Date().toISOString(),
-            evidenceIds: Array.isArray(bc?.evidenceIds) && bc.evidenceIds.length > 0 ? bc.evidenceIds : candidateEvidenceIds.slice(0, 1),
-          }))
+        ? (candidate as any).buildingComponents.map((bc: any) => {
+            const rawBcEvidence = Array.isArray(bc?.evidenceIds) && bc.evidenceIds.length > 0
+              ? bc.evidenceIds
+              : candidateEvidenceIds.slice(0, 1);
+            const bcEvidenceIds: string[] = (Array.isArray(rawBcEvidence) ? rawBcEvidence : [rawBcEvidence])
+              .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+              .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+              .map((id: string) => id.trim());
+            return {
+              component: bc?.component,
+              condition: bc?.condition,
+              confidence: bc?.confidence,
+              lastObservedAt: bc?.lastObservedAt || new Date().toISOString(),
+              evidenceIds: bcEvidenceIds,
+            };
+          })
         : (candidate as any)?.buildingComponents,
       observedConditions: Array.isArray((candidate as any)?.observedConditions)
-        ? (candidate as any).observedConditions.map((oc: any) => ({
-            condition: oc?.condition,
-            severity: oc?.severity,
-            component: oc?.component,
-            evidenceIds: Array.isArray(oc?.evidenceIds) && oc.evidenceIds.length > 0 ? oc.evidenceIds : candidateEvidenceIds.slice(0, 1),
-          }))
+        ? (candidate as any).observedConditions.map((oc: any) => {
+            const rawOcEvidence = Array.isArray(oc?.evidenceIds) && oc.evidenceIds.length > 0
+              ? oc.evidenceIds
+              : candidateEvidenceIds.slice(0, 1);
+            const ocEvidenceIds: string[] = (Array.isArray(rawOcEvidence) ? rawOcEvidence : [rawOcEvidence])
+              .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+              .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+              .map((id: string) => id.trim());
+            return {
+              condition: oc?.condition,
+              severity: oc?.severity,
+              component: oc?.component,
+              evidenceIds: ocEvidenceIds,
+            };
+          })
         : (candidate as any)?.observedConditions,
       recommendedInterventions: Array.isArray((candidate as any)?.recommendedInterventions)
-        ? (candidate as any).recommendedInterventions.map((ri: any) => ({
-            intervention: ri?.intervention,
-            urgency: ri?.urgency,
-            component: ri?.component,
-            evidenceIds: Array.isArray(ri?.evidenceIds) && ri.evidenceIds.length > 0 ? ri.evidenceIds : candidateEvidenceIds.slice(0, 1),
-            estimatedBenchmarkCost: ri?.estimatedBenchmarkCost ? {
-              min: ri.estimatedBenchmarkCost.min ?? 0,
-              max: ri.estimatedBenchmarkCost.max ?? 0,
-            } : undefined,
-          }))
+        ? (candidate as any).recommendedInterventions.map((ri: any) => {
+            const rawRiEvidence = Array.isArray(ri?.evidenceIds) && ri.evidenceIds.length > 0
+              ? ri.evidenceIds
+              : candidateEvidenceIds.slice(0, 1);
+            const riEvidenceIds: string[] = (Array.isArray(rawRiEvidence) ? rawRiEvidence : [rawRiEvidence])
+              .map((item: any) => (typeof item === 'string' ? item : item?.id || item?.evidenceId))
+              .filter((id: any): id is string => typeof id === 'string' && id.trim().length > 0)
+              .map((id: string) => id.trim());
+            return {
+              intervention: ri?.intervention,
+              urgency: ri?.urgency,
+              component: ri?.component,
+              evidenceIds: riEvidenceIds,
+              estimatedBenchmarkCost: ri?.estimatedBenchmarkCost ? {
+                min: ri.estimatedBenchmarkCost.min ?? 0,
+                max: ri.estimatedBenchmarkCost.max ?? 0,
+              } : undefined,
+            };
+          })
         : (candidate as any)?.recommendedInterventions,
       overallHealthScore: (candidate as any)?.overallHealthScore,
       evidenceIds: candidateEvidenceIds,
