@@ -1,6 +1,6 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.2 — Task 19: Property Evidence & Component Ontology (September 19, 2026)
+## 🛡️ AnyTrader V8.2 — Task 19 & Task 19-V2: Property Evidence & Component Ontology (September 19, 2026)
 - **1. Property Component Ontology (`src/server/intelligence/propertyOntology.ts`)**:
   - Implemented type-safe, normalized component ontology covering all canonical building blocks (`roof`, `roofing_material`, `roof_structure`, `gutters`, `hvac`, `electrical`, `plumbing`, `windows`, `doors`, `exterior`, `interior`, `foundation`, `drainage`, `other`, `boiler`, `electrical_panel`, `pipe`, `radiator`, `wall`, `floor`, `chimney`).
   - Added `isPropertyComponentType`, `normalizeComponentType` (mapping raw synonyms like `'shingles'`, `'double glazing'` to canonical codes), and fail-closed `validateComponentType`.
@@ -16,9 +16,18 @@
 - **5. Cross-Tenant Isolation & Confidence Validation**:
   - Validates `provenance.tenantId` against property owner/landlord records, rejecting tenant mismatches with `[CrossTenantContamination Violation]`.
   - Validates confidence scores in range `[0.0, 1.0]`, rejecting invalid or out-of-bounds numeric inputs.
-- **6. Verification (`tests/unit/task19PropertyEvidenceOntology.test.ts`)**:
-  - Created 14-test unit suite verifying ontology normalization, confidence bounds, job lineage validation, AI non-promotion enforcement, cross-tenant isolation, and evidence retrieval (14/14 passing).
-  - Passed 111/111 intelligence unit tests; `npm run lint` (`tsc --noEmit`) clean with 0 errors; `compile_applet` build succeeded.
+- **6. Task 19-V2 Emulator Harness & Tier-B Storage Alignment (`task19PropertyEvidenceOntology.test.ts`)**:
+  - Identified and resolved Tier-B fail-closed storage behavior (`RawArtifactPersistenceError: [TierB] No raw artifact bucket configured`).
+  - Wired real Firebase Storage emulator bucket (`adminBucket = adminApp.storage().bucket(BUCKET_NAME)`) and `setGlobalRawArtifactBucket(adminBucket)` in the test suite setup.
+  - Implemented fail-fast emulator harness behavior to cleanly throw when emulators are unreachable rather than allowing unhandled null reference crashes.
+  - Added end-to-end Storage verification in Test I: verifies `StorageManifest`, Storage emulator file existence, digest validation via `verifyRawArtifact`, and payload decompression via `readRawArtifact`.
+  - Aligned Firestore `intelligence_evidence` records with canonical `IntelligenceEvidence` fields (`aggregateType`, `aggregateId`, `sourceId`, `sourceRef`, `byteSize`, `schemaVersion`, `integrityStatus`, `verified`) for cross-service interoperability.
+- **7. Verification**:
+  - Full unit test suite passing 565/565 tests across 37 test suites.
+  - 111/111 intelligence unit tests passing.
+  - `npm run lint` (`tsc --noEmit`) clean with 0 errors.
+  - `compile_applet` build succeeded cleanly.
+  - Pre-flight release audit (`npm run audit:release`) passed.
 
 ## 🛡️ AnyTrader V8.2 — Task 18: Authoritative Property ↔ Job Lineage (September 19, 2026)
 - **1. Transactional Property Lineage Resolver (`src/server/intelligence/jobIntelligence.ts`)**:

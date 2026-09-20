@@ -18,6 +18,14 @@ import {
   propertyIntelligenceService,
   JobIntelligence,
 } from '../../src/server/intelligence/index';
+import {
+  setGlobalRawArtifactBucket,
+  RawArtifactBucketLike,
+  verifyRawArtifact,
+  readRawArtifact,
+} from '../../src/server/intelligence/rawArtifactStore';
+import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
+import { StorageManifest } from '../../src/server/intelligence/types';
 
 // Mock in-memory Firestore database with transaction support
 function createMockFirestoreDb(initialData: {
@@ -396,6 +404,7 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
     const BUCKET_NAME = 'demo-anytrader.appspot.com';
     let adminApp: admin.app.App;
     let adminDb: admin.firestore.Firestore;
+    let adminBucket: RawArtifactBucketLike;
 
     beforeAll(async () => {
       process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
@@ -429,12 +438,20 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
         }
 
         adminDb = adminApp.firestore();
-      } catch {
-        adminDb = null as any;
+        adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
+
+        setGlobalIntelligenceDb(adminDb as any);
+        setGlobalRawArtifactBucket(adminBucket);
+      } catch (err: any) {
+        throw new Error(
+          `[Task19 Emulator Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`
+        );
       }
     });
 
     afterAll(async () => {
+      setGlobalRawArtifactBucket(null);
+      setGlobalIntelligenceDb(null);
       if (testEnv) {
         await testEnv.cleanup();
       }
@@ -443,7 +460,10 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
     beforeEach(async () => {
       if (testEnv) {
         await testEnv.clearFirestore();
+        await testEnv.clearStorage();
       }
+      setGlobalIntelligenceDb(adminDb as any);
+      setGlobalRawArtifactBucket(adminBucket);
     });
 
     it('A. Valid component evidence: accepts and persists evidence for valid property', async () => {
@@ -609,6 +629,23 @@ describe('Task 19 — Property Evidence & Component Ontology', () => {
       expect(result.propertyIntelligence).toBeDefined();
       const snapshot = await adminDb.collection('intelligence_evidence').where('propertyId', '==', 'prop_emu_7').get();
       expect(snapshot.empty).toBe(false);
+
+      // Section 8: Verify actual Tier-B artifact creation in Firebase Storage emulator
+      const rawManifest = result.extraction.rawManifest;
+      expect(rawManifest).toBeDefined();
+      expect(rawManifest.storagePath).toMatch(/^intelligence_raw\/property\/prop_emu_7\//);
+
+      // Verify object exists in Firebase Storage emulator
+      const fileRef = adminApp.storage().bucket(BUCKET_NAME).file(rawManifest.storagePath);
+      const [exists] = await fileRef.exists();
+      expect(exists).toBe(true);
+
+      // Verify download and integrity check using rawArtifactStore APIs
+      const isValid = await verifyRawArtifact(rawManifest, adminBucket);
+      expect(isValid).toBe(true);
+
+      const decompressed = await readRawArtifact(rawManifest, adminBucket);
+      expect(decompressed.length).toBeGreaterThan(0);
     });
 
     it('J. Retrieval isolation: evidence for Property A does not leak to Property B', async () => {

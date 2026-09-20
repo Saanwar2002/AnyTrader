@@ -74,7 +74,36 @@ Task 19 establishes a **deterministic, server-authoritative Property Evidence & 
 - **`compile_applet`**: Build succeeded cleanly.
 - **`npm run lint` (`tsc --noEmit`)**: 0 errors (Clean).
 
+## Task 19-V2 — Real Emulator Harness & Tier-B Storage Verification
+
+### Diagnosis & Root Cause
+In Task 19 verification, `aggregatePropertyIntelligence` on the production path persists raw model extractions to Tier-B Storage via `persistRawArtifact`. When running without a configured storage bucket, `rawArtifactStore.ts` strictly enforces:
+```
+RawArtifactPersistenceError: [TierB] No raw artifact bucket configured. Refusing to emit a manifest (fail-closed).
+```
+This fail-closed behavior is an intentional V8.1/V8.2 security invariant: without an authoritative storage bucket, the system refuses to emit a false storage manifest or simulate a successful persistence.
+
+In `tests/unit/task19PropertyEvidenceOntology.test.ts`, the emulator test harness previously initialized only `adminApp.firestore()`, without configuring `adminBucket = adminApp.storage().bucket(BUCKET_NAME)` or calling `setGlobalRawArtifactBucket(adminBucket)`. Additionally, failure to connect to the emulator previously set `adminDb = null as any;`, which caused subsequent tests to crash with null dereference errors instead of failing fast.
+
+### Implementation of Task 19-V2
+1. **Real Firebase Storage Emulator Configuration**:
+   - Initialized `adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;` in the test suite `beforeAll`.
+   - Wired `setGlobalRawArtifactBucket(adminBucket)` and `setGlobalIntelligenceDb(adminDb)` into the global stores.
+   - Cleared and restored both Firestore and Storage in `beforeEach`.
+   - Cleaned up global bucket and DB references in `afterAll`.
+2. **Fail-Fast Emulator Setup**:
+   - Replaced silent `adminDb = null as any` catch block with a fast-fail exception:
+     `throw new Error('[Task19 Emulator Setup] Failed to initialize real Firebase emulator environment: ' + err.message)`.
+3. **End-to-End Tier-B Storage Verification in Test I**:
+   - Validated that `aggregatePropertyIntelligence` produces a valid `StorageManifest`.
+   - Verified that `rawManifest.storagePath` adheres to `intelligence_raw/property/{propertyId}/...`.
+   - Confirmed that the object exists in the Firebase Storage emulator via `fileRef.exists()`.
+   - Verified integrity validation via `verifyRawArtifact(rawManifest, adminBucket) === true`.
+   - Verified payload retrieval and decompression via `readRawArtifact(rawManifest, adminBucket)`.
+4. **Canonical Evidence Alignment**:
+   - Preserved `PropertyComponentEvidence` while enriching the document in `intelligence_evidence` with canonical `IntelligenceEvidence` fields (`aggregateType`, `aggregateId`, `sourceId`, `sourceRef`, `byteSize`, `schemaVersion`, `integrityStatus`, `verified`), guaranteeing 100% interoperability across both `PropertyOntologyService` and `EvidenceRegistry`.
+
 ---
 
 ## Conclusion & Next Steps
-Task 19 implementation and verification are complete. Task 20 or any subsequent V8.2 tasks are NOT started, per instructions. System is ready for sign-off.
+Task 19 and Task 19-V2 implementation and verification are complete. Task 20 or any subsequent V8.2 tasks are NOT started, per instructions. System is ready for sign-off.

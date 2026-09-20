@@ -128,6 +128,9 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
   let adminDb: admin.firestore.Firestore;
 
   beforeAll(async () => {
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+    process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
     const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf-8');
     const storageRules = fs.readFileSync(path.resolve(process.cwd(), 'storage.rules'), 'utf-8');
 
@@ -157,11 +160,7 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
 
       adminDb = adminApp.firestore();
       adminBucket = adminApp.storage().bucket(BUCKET_NAME) as unknown as RawArtifactBucketLike;
-    } catch {
-      adminDb = null as any;
-    }
 
-    if (adminDb) {
       setGlobalIntelligenceDb(adminDb as any);
       setGlobalRawArtifactBucket(adminBucket);
       evidenceRegistry.setDb(adminDb as any);
@@ -169,6 +168,10 @@ describe('Task 17-V — Property AI Security Boundary Final Verification (Real F
       (intelligenceTaskQueue as any).firestoreDb = adminDb;
 
       registerIntelligenceTaskHandlers(adminDb as any);
+    } catch (err: any) {
+      throw new Error(
+        `[Task17 Emulator Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`
+      );
     }
   });
 

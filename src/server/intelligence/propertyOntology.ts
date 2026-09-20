@@ -345,7 +345,14 @@ export class PropertyOntologyService {
         ...record,
         aggregateType: 'property',
         aggregateId: input.propertyId,
+        sourceId: input.sourceJobId || `properties/${input.propertyId}`,
+        sourceVersion: input.provenance?.sourceVersion ? String(input.provenance.sourceVersion) : '1',
+        evidenceType: 'structured_record',
+        byteSize: Buffer.byteLength(JSON.stringify(input.metadata || {})),
+        schemaVersion: 'v8.1.0',
+        integrityStatus: record.status === 'verified' ? 'verified' : 'unverified',
         verified: record.status === 'verified',
+        sourceRef: input.sourceJobId ? `jobs/${input.sourceJobId}` : `properties/${input.propertyId}`,
         updatedAt: now,
       });
     }
