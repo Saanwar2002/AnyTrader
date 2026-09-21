@@ -90,6 +90,20 @@ export function classifyTaskError(err: unknown): {
     name === 'LineageValidationError' ||
     name === 'ZodError' ||
     message.includes('Lineage validation failed') ||
+    message.includes('lineage') ||
+    message.includes('Lineage') ||
+    message.includes('Cross-property') ||
+    message.includes('Fabricated') ||
+    message.includes('Tenant isolation') ||
+    message.includes('tenant mismatch') ||
+    message.includes('property mismatch') ||
+    message.includes('Retracted') ||
+    message.includes('Unverified') ||
+    message.includes('NO EVIDENCE') ||
+    message.includes('Outcome certificate required') ||
+    message.includes('Prediction validation') ||
+    message.includes('Risk assertion') ||
+    message.includes('Lifecycle assertion') ||
     message.includes('[Intelligence Immutability Error]') ||
     message.includes('Cannot mutate historical intelligence version') ||
     message.includes('Firestore DB reference is required') ||

@@ -31,6 +31,9 @@
  * Z. Tier-B storage separation remains intact where raw artifacts exist
  */
 
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import * as admin from 'firebase-admin';
 import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
@@ -50,8 +53,10 @@ import {
   FIRESTORE_DOC_MAX_BYTES,
   compressPayload,
   decompressPayload,
+  intelligenceTaskQueue,
 } from '../../src/server/intelligence/index';
 import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
+import { registerIntelligenceTaskHandlers } from '../../server';
 
 // Helper for Mock In-Memory Firestore DB for isolated logic tests
 function createMockFirestoreDb(initialData: {
@@ -858,19 +863,23 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
         firestore: { rules, host: '127.0.0.1', port: 8088 },
       });
 
-      if (admin.apps.length === 0) {
-        adminApp = admin.initializeApp({
-          projectId: PROJECT_ID,
-        });
-      } else {
-        adminApp = admin.app();
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map((app) => app?.delete()));
       }
+      adminApp = admin.initializeApp({ projectId: PROJECT_ID });
 
       adminDb = adminApp.firestore();
-      adminDb.settings({ ignoreUndefinedProperties: true });
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
       setGlobalIntelligenceDb(adminDb);
+      intelligenceTaskQueue.setFirestoreDb(adminDb);
+      registerIntelligenceTaskHandlers(adminDb);
     } catch (err: any) {
-      console.warn('[Task22 Test Setup] Real Firebase emulator not running, skipping emulator integration block:', err?.message || err);
+      console.error('[Task22 Test Setup] Real Firebase emulator error:', err);
+      throw new Error(`[Task22 Test Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`);
     }
   });
 
@@ -884,15 +893,21 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   beforeEach(async () => {
-    if (!testEnv) return;
     await testEnv.clearFirestore();
 
-    // Seed authoritative property & evidence records via Admin SDK
+    // Seed authoritative property & evidence records
     await adminDb.collection('properties').doc('prop_emu_101').set({
       propertyId: 'prop_emu_101',
       ownerId: 'user_owner_101',
       tenantId: 'tenant_101',
       address: '101 Security Way',
+    });
+
+    await adminDb.collection('properties').doc('prop_emu_202').set({
+      propertyId: 'prop_emu_202',
+      ownerId: 'user_owner_202',
+      tenantId: 'tenant_202',
+      address: '202 Unrelated Court',
     });
 
     await adminDb.collection('intelligence_evidence').doc('ev_emu_101').set({
@@ -905,13 +920,265 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
       verified: true,
       createdAt: new Date().toISOString(),
     });
+
+    await adminDb.collection('intelligence_evidence').doc('ev_emu_cross_202').set({
+      evidenceId: 'ev_emu_cross_202',
+      aggregateType: 'property',
+      aggregateId: 'prop_emu_202',
+      sourceReference: { propertyId: 'prop_emu_202' },
+      provenance: { tenantId: 'tenant_202' },
+      evidenceQuality: 0.90,
+      verified: true,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Production Task Queue & Service Integration via Real Emulator
+  // -----------------------------------------------------------------------
+  it('Production Integration A & B: Valid prediction succeeds through production task handler and updates projection', async () => {
+    const idempotencyKey = 'idem_emu_prod_valid_101';
+    const task = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      idempotencyKey,
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'roof',
+        predictionType: 'maintenance_due',
+        forecastStart: '2026-11-01',
+        forecastEnd: '2027-02-01',
+        rationale: 'Slate tile inspection reveals weathering with degradation forecast within 90 days',
+        evidenceIds: ['ev_emu_101'],
+        provenance: {
+          source: 'user_owner_101',
+          origin: 'manual_inspection',
+          tenantId: 'tenant_101',
+        },
+        isVerifiedServerAction: false,
+      }
+    );
+
+    expect(task.taskId).toBeDefined();
+
+    // Execute via production task worker
+    const executedTask = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executedTask.lastError).toBeUndefined();
+    expect(executedTask.status).toBe('succeeded');
+    const payload = executedTask.payload as any;
+    expect(payload.success).toBe(true);
+    expect(payload.maintenanceId).toBeDefined();
+    expect(payload.contentHash).toBeDefined();
+
+    // Verify persisted to property_maintenance_history in real emulator
+    const histSnap = await adminDb.collection('property_maintenance_history').doc(payload.maintenanceId).get();
+    expect(histSnap.exists).toBe(true);
+    const histData = histSnap.data();
+
+    // Verify required deterministic Task 22 methodology fields
+    expect(histData?.propertyId).toBe('prop_emu_101');
+    expect(histData?.evidenceIds).toEqual(['ev_emu_101']);
+    expect(histData?.componentType).toBe('roof');
+    expect(histData?.methodologyVersion).toBe(MAINTENANCE_METHODOLOGY_VERSION);
+    expect(histData?.forecastStart).toBe('2026-11-01');
+    expect(histData?.forecastEnd).toBe('2027-02-01');
+    expect(histData?.status).toBe('predicted');
+    expect(histData?.contentHash).toBe(payload.contentHash);
+    expect(histData?.likelihood).toBeDefined();
+    expect(histData?.likelihood).toBeGreaterThan(0);
+
+    // Verify current maintenance projection updated under properties/prop_emu_101
+    const propSnap = await adminDb.collection('properties').doc('prop_emu_101').get();
+    expect(propSnap.exists).toBe(true);
+    const propData = propSnap.data();
+    const projection = propData?.intelligence?.maintenanceProjection;
+    expect(projection).toBeDefined();
+    expect(projection.methodologyVersion).toBe(MAINTENANCE_METHODOLOGY_VERSION);
+    expect(projection.activePredictions.some((p: any) => p.maintenanceId === payload.maintenanceId)).toBe(true);
+    expect(projection.componentForecasts?.roof).toBeDefined();
+    expect(projection.componentForecasts.roof.predictionCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('Production Integration C: Fabricated evidence fails through production path', async () => {
+    const task = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      'idem_emu_fab_evidence',
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'roof',
+        predictionType: 'maintenance_due',
+        forecastStart: '2026-11-01',
+        forecastEnd: '2027-02-01',
+        rationale: 'Unsubstantiated claim',
+        evidenceIds: ['ev_fabricated_ghost_999'],
+        provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+      }
+    );
+
+    const executedTask = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executedTask.status).toBe('dead_letter');
+    expect(executedTask.lastError).toMatch(/Fabricated or non-existent evidence ID/i);
+
+    // Ensure no historical record was created
+    const histQuery = await adminDb
+      .collection('property_maintenance_history')
+      .where('propertyId', '==', 'prop_emu_101')
+      .where('evidenceIds', 'array-contains', 'ev_fabricated_ghost_999')
+      .get();
+    expect(histQuery.empty).toBe(true);
+  });
+
+  it('Production Integration D: Cross-property lineage fails through production path', async () => {
+    const task = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      'idem_emu_cross_prop',
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'roof',
+        predictionType: 'maintenance_due',
+        forecastStart: '2026-11-01',
+        forecastEnd: '2027-02-01',
+        rationale: 'Cross-property evidence usage attempt',
+        evidenceIds: ['ev_emu_cross_202'], // Belongs to prop_emu_202
+        provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+      }
+    );
+
+    const executedTask = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executedTask.status).toBe('dead_letter');
+    expect(executedTask.lastError).toMatch(/Cross-property lineage violation/i);
+  });
+
+  it('Production Integration E: Production-path idempotency works cleanly', async () => {
+    const key = 'idem_emu_idempotent_test';
+    const task1 = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      key,
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'plumbing',
+        predictionType: 'inspection_due',
+        forecastStart: '2026-12-01',
+        forecastEnd: '2027-01-15',
+        rationale: 'Boiler pressure drop inspection',
+        evidenceIds: ['ev_emu_101'],
+        provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+      }
+    );
+    const run1 = await intelligenceTaskQueue.executeTask(task1.taskId);
+    expect(run1.status).toBe('succeeded');
+    const initialMaintId = (run1.payload as any).maintenanceId;
+
+    // Repeat enqueue with identical key
+    const task2 = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      key,
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'plumbing',
+        predictionType: 'inspection_due',
+        forecastStart: '2026-12-01',
+        forecastEnd: '2027-01-15',
+        rationale: 'Boiler pressure drop inspection',
+        evidenceIds: ['ev_emu_101'],
+        provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+      }
+    );
+    expect(task2.taskId).toBe(task1.taskId);
+    const run2 = await intelligenceTaskQueue.executeTask(task2.taskId);
+    expect(run2.status).toBe('succeeded');
+    expect((run2.payload as any).maintenanceId).toBe(initialMaintId);
+  });
+
+  it('Production Integration F & G: Historical prediction remains unchanged after supersession, and current projection updates', async () => {
+    // 1. Initial prediction via production entry point
+    const pTask = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      'idem_emu_supersede_base',
+      {
+        propertyId: 'prop_emu_101',
+        componentType: 'hvac',
+        predictionType: 'maintenance_due',
+        forecastStart: '2026-11-15',
+        forecastEnd: '2026-12-15',
+        rationale: 'Initial HVAC inspection recommendation',
+        evidenceIds: ['ev_emu_101'],
+        provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+      }
+    );
+    const pResult = await intelligenceTaskQueue.executeTask(pTask.taskId);
+    expect(pResult.status).toBe('succeeded');
+    const baseMaintId = (pResult.payload as any).maintenanceId;
+
+    // Read initial history doc
+    const initialDoc = await adminDb.collection('property_maintenance_history').doc(baseMaintId).get();
+    const initialContentHash = initialDoc.data()?.contentHash;
+
+    // 2. Perform supersession
+    const service = new PredictiveMaintenanceService({ firestoreDb: adminDb });
+    const supersession = await service.supersedeMaintenancePrediction(
+      baseMaintId,
+      'Superseded by verified engineer full replacement quote',
+      {
+        propertyId: 'prop_emu_101',
+        provenance: { origin: 'engineer_inspection', tenantId: 'tenant_101' },
+      }
+    );
+    expect(supersession.supersessionId).toBeDefined();
+
+    // 3. F: Verify historical record is unchanged in property_maintenance_history
+    const afterDoc = await adminDb.collection('property_maintenance_history').doc(baseMaintId).get();
+    expect(afterDoc.data()?.contentHash).toBe(initialContentHash);
+    expect(afterDoc.data()?.status).toBe('predicted'); // Original immutable record unchanged
+
+    // 4. G: Current projection updates correctly (base prediction is removed from active predictions)
+    const propDoc = await adminDb.collection('properties').doc('prop_emu_101').get();
+    const active = propDoc.data()?.intelligence?.maintenanceProjection?.activePredictions || [];
+    expect(active.some((p: any) => p.maintenanceId === baseMaintId)).toBe(false);
+  });
+
+  it('Production Integration: AI raw candidate boundary prevents property spoofing and unverified claim escalation', async () => {
+    const task = await intelligenceTaskQueue.enqueueTaskAsync(
+      'predictive_maintenance',
+      'property',
+      'prop_emu_101',
+      'idem_emu_ai_boundary',
+      {
+        propertyId: 'prop_emu_101',
+        rawCandidate: {
+          propertyId: 'prop_emu_202', // AI spoof attempt
+          componentType: 'roof',
+          description: 'AI detected roof leak',
+          evidenceIds: ['ev_emu_101'],
+          isVerifiedServerAction: true, // AI cannot self-verify
+        },
+        provenance: { origin: 'ai_model', modelVersion: 'gemini-2.5-flash' },
+      }
+    );
+    const executed = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executed.status).toBe('succeeded');
+    const maintId = (executed.payload as any).maintenanceId;
+    const savedDoc = await adminDb.collection('property_maintenance_history').doc(maintId).get();
+
+    // Proves authoritative propertyId is bound from server context, NOT AI candidate claim
+    expect(savedDoc.data()?.propertyId).toBe('prop_emu_101');
   });
 
   // ----------------------------------------------------
   // Vector T: Security Rules — Client Access Denied
   // ----------------------------------------------------
   it('Vector T1: Unauthenticated user cannot read property_maintenance_history', async () => {
-    if (!testEnv) return;
     const unauthContext = testEnv.unauthenticatedContext();
     const db = unauthContext.firestore();
 
@@ -921,7 +1188,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T2: Unrelated authenticated user cannot read property_maintenance_history', async () => {
-    if (!testEnv) return;
     // Seed record via Admin SDK
     await adminDb.collection('property_maintenance_history').doc('pm_prop_emu_101_sample').set({
       maintenanceId: 'pm_prop_emu_101_sample',
@@ -940,7 +1206,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T3: Property owner can read property_maintenance_history', async () => {
-    if (!testEnv) return;
     await adminDb.collection('property_maintenance_history').doc('pm_prop_emu_101_sample').set({
       maintenanceId: 'pm_prop_emu_101_sample',
       propertyId: 'prop_emu_101',
@@ -957,7 +1222,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T4: Client-side write (create) to property_maintenance_history is denied', async () => {
-    if (!testEnv) return;
     const ownerContext = testEnv.authenticatedContext('user_owner_101');
     const db = ownerContext.firestore();
 
@@ -970,7 +1234,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T5: Client-side write (update) to property_maintenance_history is denied', async () => {
-    if (!testEnv) return;
     await adminDb.collection('property_maintenance_history').doc('pm_prop_emu_101_sample').set({
       maintenanceId: 'pm_prop_emu_101_sample',
       propertyId: 'prop_emu_101',
@@ -987,7 +1250,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T6: Client-side write (delete) to property_maintenance_history is denied', async () => {
-    if (!testEnv) return;
     await adminDb.collection('property_maintenance_history').doc('pm_prop_emu_101_sample').set({
       maintenanceId: 'pm_prop_emu_101_sample',
       propertyId: 'prop_emu_101',
@@ -1002,7 +1264,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   });
 
   it('Vector T7: Client-side write to property_maintenance_supersessions is denied', async () => {
-    if (!testEnv) return;
     const ownerContext = testEnv.authenticatedContext('user_owner_101');
     const db = ownerContext.firestore();
 
@@ -1019,7 +1280,6 @@ describe('V8.2 Task 22 — Real Firebase Emulator & Security Rules Integration',
   // Vectors V, W, X, Y: Cross-Task Regressions
   // ----------------------------------------------------
   it('Vector V: Task 17 Property Security regression passes', async () => {
-    if (!testEnv) return;
     // Owner can access property
     const ownerContext = testEnv.authenticatedContext('user_owner_101');
     const db = ownerContext.firestore();

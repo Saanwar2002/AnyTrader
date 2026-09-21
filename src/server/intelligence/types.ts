@@ -94,7 +94,8 @@ export type TaskType =
   | 'job_extraction'
   | 'property_rollup'
   | 'evidence_ingestion'
-  | 'quality_reprocess';
+  | 'quality_reprocess'
+  | 'predictive_maintenance';
 
 export type ConfidenceMethod =
   | 'deterministic_heuristic'

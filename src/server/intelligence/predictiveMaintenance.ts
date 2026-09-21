@@ -21,6 +21,7 @@ import { resolveAuthoritativeJobPropertyId } from './jobIntelligence';
 import { evidenceRegistry } from './evidenceRegistry';
 import { validateComponentType, normalizeComponentType, EvidenceStatus } from './propertyOntology';
 import { cleanUndefinedFields, getEvidenceFromFirestore } from './evidence';
+import { intelligenceTaskQueue } from './intelligenceTaskQueue';
 import {
   PredictiveMaintenanceAssessment,
   RecordPredictiveMaintenanceInput,
@@ -31,6 +32,7 @@ import {
   SeverityLevel,
   ConfidenceScores,
   Provenance,
+  IntelligenceTask,
 } from './types';
 
 export const MAINTENANCE_METHODOLOGY_VERSION = 'v8.2-maintenance-v1';
@@ -174,7 +176,9 @@ export class PredictiveMaintenanceService {
         // Direct Firestore fallback check in intelligence_evidence
         const evDoc = await activeDb.collection('intelligence_evidence').doc(evId).get();
         if (!evDoc || !evDoc.exists) {
-          throw new Error(`[PredictiveMaintenance Violation] Referenced evidence ID '${evId}' does not exist`);
+          throw new Error(
+            `[PredictiveMaintenance Violation] Fabricated or non-existent evidence ID: Referenced evidence ID '${evId}' does not exist`
+          );
         }
         const evData = typeof evDoc.data === 'function' ? evDoc.data() : evDoc.data;
         const evPropertyId = evData?.sourceReference?.propertyId ?? evData?.propertyId ?? evData?.aggregateId;
@@ -188,7 +192,7 @@ export class PredictiveMaintenanceService {
         const isJobMatch = Boolean(input.sourceJobId && evJobId && input.sourceJobId === evJobId);
         if (evPropertyId && evPropertyId !== input.propertyId && !isJobMatch) {
           throw new Error(
-            `[PredictiveMaintenance Violation] Evidence '${evId}' belongs to property '${evPropertyId}', not '${input.propertyId}'`
+            `[PredictiveMaintenance Violation] Cross-property lineage violation: Evidence '${evId}' belongs to property '${evPropertyId}', not '${input.propertyId}'`
           );
         }
 
@@ -201,7 +205,7 @@ export class PredictiveMaintenanceService {
         const isJobMatch = Boolean(input.sourceJobId && evJobId && input.sourceJobId === evJobId);
         if (evPropertyId && evPropertyId !== input.propertyId && !isJobMatch) {
           throw new Error(
-            `[PredictiveMaintenance Violation] Evidence '${evId}' belongs to property '${evPropertyId}', not '${input.propertyId}'`
+            `[PredictiveMaintenance Violation] Cross-property lineage violation: Evidence '${evId}' belongs to property '${evPropertyId}', not '${input.propertyId}'`
           );
         }
         const evStatus = (registeredEv as any).status || (registeredEv.integrityStatus as string);
@@ -730,3 +734,29 @@ export class PredictiveMaintenanceService {
 }
 
 export const predictiveMaintenanceService = new PredictiveMaintenanceService();
+
+/**
+ * Production Task Queue entry point for triggering Predictive Maintenance
+ */
+export async function enqueuePredictiveMaintenanceTask(
+  propertyId: string,
+  input: Partial<RecordPredictiveMaintenanceInput> & { rawCandidate?: any; db?: any },
+  options?: { firestoreDb?: any; idempotencyKey?: string }
+): Promise<IntelligenceTask> {
+  const activeDb = options?.firestoreDb || input.db || getGlobalIntelligenceDb();
+  if (activeDb) {
+    intelligenceTaskQueue.setFirestoreDb(activeDb);
+  }
+  const idempKey = options?.idempotencyKey || `idem_pm_${propertyId}_${input.componentType || 'roof'}_${computeSha256(JSON.stringify(input)).slice(0, 16)}`;
+  return intelligenceTaskQueue.enqueueTaskAsync(
+    'predictive_maintenance',
+    'property',
+    propertyId,
+    idempKey,
+    {
+      ...input,
+      propertyId,
+      db: activeDb,
+    }
+  );
+}

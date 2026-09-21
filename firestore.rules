@@ -443,7 +443,7 @@ service cloud.firestore {
       allow get, list: if isSignedIn() && (
         isAdmin() || 
         resource == null || 
-        (request.auth.token.email != null && resource.data.get('email', '').lower() == request.auth.token.email.lower()) ||
+        ('email' in request.auth.token && resource.data.get('email', '') != '' && resource.data.get('email', '').lower() == request.auth.token.email.lower()) ||
         resource.data.get('invitedBy', '') == request.auth.uid
       );
       allow create: if isSignedIn() && (
@@ -453,7 +453,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         isAdmin() || 
         resource.data.get('invitedBy', '') == request.auth.uid ||
-        (request.auth.token.email != null && resource.data.get('email', '').lower() == request.auth.token.email.lower())
+        ('email' in request.auth.token && resource.data.get('email', '') != '' && resource.data.get('email', '').lower() == request.auth.token.email.lower())
       );
       allow delete: if isSignedIn() && (
         isAdmin() || 
@@ -534,7 +534,13 @@ service cloud.firestore {
         resource.data.get('userId', '') == request.auth.uid || 
         resource.data.get('landlordId', '') == request.auth.uid ||
         (resource.data.get('transferStatus', '') == 'pending' && resource.data.get('pendingTransferToUid', '') == request.auth.uid) ||
-        (request.auth.token.get('email_verified', false) == true && request.auth.token.get('email', '') != '' && resource.data.get('tenantEmail', '').lower() == request.auth.token.email.lower()) ||
+        (
+          'email' in request.auth.token &&
+          'email_verified' in request.auth.token &&
+          request.auth.token.email_verified == true &&
+          resource.data.get('tenantEmail', '') != '' &&
+          resource.data.get('tenantEmail', '').lower() == request.auth.token.email.lower()
+        ) ||
         isAdmin()
       );
       allow list: if isSignedIn() && (
@@ -591,7 +597,11 @@ service cloud.firestore {
                        request.resource.data.get('title', '') is string;
       allow get, list: if isSignedIn() && (
         resource.data.get('landlordOwnerId', '') == request.auth.uid || 
-        (request.auth.token.get('email', '') != '' && resource.data.get('tenantEmail', '').lower() == request.auth.token.email.lower()) ||
+        (
+          'email' in request.auth.token &&
+          resource.data.get('tenantEmail', '') != '' &&
+          resource.data.get('tenantEmail', '').lower() == request.auth.token.email.lower()
+        ) ||
         isAdmin()
       );
       allow update: if isSignedIn() && (

@@ -44,9 +44,13 @@ import {
   processAICandidateToCanonical,
   resolveAuthoritativeJobPropertyId,
   AICandidateSecurityError,
+  validateAndSanitizeAICandidate,
   TrustedServerContext,
   INTELLIGENCE_PIPELINE_VERSION,
-  INTELLIGENCE_SCHEMA_VERSION
+  INTELLIGENCE_SCHEMA_VERSION,
+  PredictiveMaintenanceService,
+  enqueuePredictiveMaintenanceTask,
+  RecordPredictiveMaintenanceInput
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -150,7 +154,12 @@ export async function initializeFirebaseAdminAsync(): Promise<{ app: admin.app.A
 }
 
 export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
-  if (!overrideDb && intelligenceTaskQueue.hasHandler("job_extraction") && intelligenceTaskQueue.hasHandler("property_rollup")) {
+  if (
+    !overrideDb &&
+    intelligenceTaskQueue.hasHandler("job_extraction") &&
+    intelligenceTaskQueue.hasHandler("property_rollup") &&
+    intelligenceTaskQueue.hasHandler("predictive_maintenance")
+  ) {
     return;
   }
 
@@ -296,6 +305,130 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
       { firestoreDb: activeDb }
     );
     return { propertyIntelligence: result.propertyIntelligence, eventId: result.event.eventId, versionId: result.versionId };
+  });
+
+  intelligenceTaskQueue.registerHandler("predictive_maintenance", async (task) => {
+    const payload = (task.payload || {}) as any;
+    const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    if (!activeDb) {
+      throw new Error("[PredictiveMaintenance Task] Firestore DB reference is required");
+    }
+
+    const targetPropertyId = payload.propertyId || task.aggregateId;
+    if (!targetPropertyId) {
+      throw new Error("[PredictiveMaintenance Task] Missing propertyId");
+    }
+
+    // Resolve authoritative propertyId from properties collection
+    let authoritativePropertyId = targetPropertyId;
+    try {
+      const propSnap = await activeDb.collection("properties").doc(targetPropertyId).get();
+      if (propSnap && propSnap.exists) {
+        authoritativePropertyId = propSnap.data()?.propertyId || targetPropertyId;
+      }
+    } catch {
+      // Retain targetPropertyId
+    }
+
+    const {
+      componentType,
+      predictionType,
+      forecastStart,
+      forecastEnd,
+      likelihood,
+      severity,
+      rationale,
+      evidenceIds,
+      supportingConditionIds,
+      supportingRiskIds,
+      supportingJobIds,
+      sourceJobId,
+      sourceType,
+      sourceId,
+      confidence,
+      provenance,
+      isVerifiedServerAction,
+      metadata,
+      rawCandidate,
+    } = payload;
+
+    let effectiveInput: RecordPredictiveMaintenanceInput = {
+      propertyId: authoritativePropertyId,
+      componentType: componentType || 'roof',
+      predictionType: predictionType || 'maintenance_due',
+      forecastStart: forecastStart || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+      forecastEnd: forecastEnd || new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
+      likelihood,
+      severity: severity || 'medium',
+      rationale: rationale || 'Authoritative evidence-backed maintenance forecast',
+      evidenceIds: Array.isArray(evidenceIds) ? evidenceIds : [],
+      supportingConditionIds,
+      supportingRiskIds,
+      supportingJobIds,
+      sourceJobId,
+      sourceType,
+      sourceId,
+      confidence,
+      provenance: provenance || {
+        origin: 'manual_inspection',
+        tenantId: 'tenant_default',
+      },
+      metadata,
+    };
+
+    if (rawCandidate && typeof rawCandidate === 'object') {
+      // 1. Reject attempts to manufacture raw evidence or hijack system instructions
+      if ('evidenceRegistryRecord' in rawCandidate || 'createEvidence' in rawCandidate || 'rawEvidence' in rawCandidate) {
+        throw new AICandidateSecurityError('AI model output is strictly forbidden from creating raw evidence records');
+      }
+
+      // 2. Untrusted AI candidates can NEVER self-verify or override server-authoritative context
+      const safeCandidate = { ...rawCandidate };
+      delete (safeCandidate as any).propertyId;
+      delete (safeCandidate as any).aggregateId;
+      delete (safeCandidate as any).aggregateType;
+      delete (safeCandidate as any).isVerifiedServerAction;
+      delete (safeCandidate as any).verified;
+      delete (safeCandidate as any).maintenanceId;
+
+      if (Array.isArray(safeCandidate.evidenceIds)) {
+        effectiveInput.evidenceIds = safeCandidate.evidenceIds;
+      }
+      if (safeCandidate.componentType) {
+        effectiveInput.componentType = safeCandidate.componentType;
+      }
+      if (safeCandidate.forecastStart) {
+        effectiveInput.forecastStart = safeCandidate.forecastStart;
+      }
+      if (safeCandidate.forecastEnd) {
+        effectiveInput.forecastEnd = safeCandidate.forecastEnd;
+      }
+      if (safeCandidate.rationale || safeCandidate.description) {
+        effectiveInput.rationale = safeCandidate.rationale || safeCandidate.description;
+      }
+      if (safeCandidate.predictionType) {
+        effectiveInput.predictionType = safeCandidate.predictionType;
+      }
+      if (safeCandidate.likelihood !== undefined) {
+        effectiveInput.likelihood = safeCandidate.likelihood;
+      }
+      if (safeCandidate.severity) {
+        effectiveInput.severity = safeCandidate.severity;
+      }
+    }
+
+    const service = new PredictiveMaintenanceService({ firestoreDb: activeDb });
+    const assessment = await service.recordMaintenancePrediction(effectiveInput, {
+      firestoreDb: activeDb,
+      isVerifiedServerAction: rawCandidate ? false : !!isVerifiedServerAction,
+    });
+
+    return {
+      success: true,
+      maintenanceId: assessment.maintenanceId,
+      contentHash: assessment.contentHash,
+      assessment,
+    };
   });
 }
 
@@ -5413,6 +5546,80 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       res.status(202).json({
         success: true,
         message: "Property rollup task enqueued",
+        taskId: task.taskId,
+        idempotencyKey: task.idempotencyKey,
+        status: task.status,
+      });
+    } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Trigger Asynchronous Property Predictive Maintenance Assessment
+  app.post("/api/intelligence/properties/:propertyId/predictive-maintenance", requireAuth, async (req, res) => {
+    try {
+      const { propertyId } = req.params;
+      const user = (req as any).user;
+
+      // Ownership or Admin access check
+      if (db) {
+        const propDoc = await db.collection("properties").doc(propertyId).get();
+        if (!propDoc.exists) {
+          return res.status(404).json({ error: "Property not found" });
+        }
+        const propData = propDoc.data();
+        const isOwner = propData?.ownerId === user.uid || propData?.homeownerId === user.uid;
+        const isAdmin = user.isAdmin === true || user.role === "admin";
+        if (!isOwner && !isAdmin) {
+          return res.status(403).json({ error: "Forbidden: Not property owner or admin" });
+        }
+      }
+
+      const {
+        componentType,
+        predictionType,
+        forecastStart,
+        forecastEnd,
+        likelihood,
+        severity,
+        rationale,
+        evidenceIds,
+        rawCandidate,
+      } = req.body || {};
+
+      const idempotencyKey = buildIdempotencyKey(
+        propertyId,
+        `PM_${componentType || "roof"}_${forecastStart || "default"}`,
+        "v1"
+      );
+      const task = await intelligenceTaskQueue.enqueueTaskAsync(
+        "predictive_maintenance",
+        "property",
+        propertyId,
+        idempotencyKey,
+        {
+          propertyId,
+          componentType,
+          predictionType,
+          forecastStart,
+          forecastEnd,
+          likelihood,
+          severity,
+          rationale,
+          evidenceIds,
+          rawCandidate,
+          provenance: {
+            source: user.uid,
+            origin: "api_request",
+            triggeredBy: user.uid,
+          },
+          isVerifiedServerAction: false,
+        }
+      );
+
+      res.status(202).json({
+        success: true,
+        message: "Property predictive maintenance task enqueued",
         taskId: task.taskId,
         idempotencyKey: task.idempotencyKey,
         status: task.status,
