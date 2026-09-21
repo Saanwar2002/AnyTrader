@@ -145,6 +145,8 @@ export class PropertyPassportService {
       }
       if (c.id) allSourceRecordIds.add(c.id);
 
+      const condStatus: PassportVerificationStatus = c.status || (c.condition === 'derived' || c.provenance?.origin?.startsWith('ai') ? 'derived' : (evidenceList.length > 0 ? 'observed' : 'derived'));
+
       conditionSummary.push({
         componentType: normComp,
         condition: c.condition || c.lifecycleState || 'observed',
@@ -152,7 +154,8 @@ export class PropertyPassportService {
         observedAt: c.observedAt || c.createdAt || new Date().toISOString(),
         evidenceIds: evidenceList.slice().sort(),
         sourceRecordId: c.id,
-      });
+        status: condStatus,
+      } as any);
     }
 
     // 5. Load & Aggregate Risk Intelligence & Retractions (Bounded Queries)
@@ -482,6 +485,9 @@ export class PropertyPassportService {
     // B. Merge with condition summary components
     for (const cs of conditionSummary) {
       const existing = componentsMap.get(cs.componentType);
+      const isDerived = (cs as any).status === 'derived' || cs.condition === 'derived' || cs.evidenceIds.length === 0;
+      const compStatus: PassportVerificationStatus = (cs as any).status === 'verified' && cs.evidenceIds.length > 0 ? 'verified' : (isDerived ? 'derived' : 'observed');
+
       if (existing) {
         existing.condition = cs.condition;
         existing.lifecycleState = cs.lifecycleState;
@@ -492,14 +498,14 @@ export class PropertyPassportService {
           existing.sourceRecordIds.push(cs.sourceRecordId);
         }
         if (existing.status !== 'verified') {
-          existing.status = 'observed';
+          existing.status = compStatus;
         }
       } else {
         componentsMap.set(cs.componentType, {
           componentType: cs.componentType,
           condition: cs.condition,
           lifecycleState: cs.lifecycleState,
-          status: 'observed',
+          status: compStatus,
           lastObservedAt: cs.observedAt,
           evidenceIds: cs.evidenceIds.slice().sort(),
           sourceRecordIds: cs.sourceRecordId ? [cs.sourceRecordId] : [],
@@ -707,15 +713,17 @@ export async function enqueuePropertyPassportTask(
     intelligenceTaskQueue.setFirestoreDb(activeDb);
   }
   const idempKey = options?.idempotencyKey || `idem_pps_${propertyId}_${Date.now()}`;
+  const payloadInput = { ...input };
+  delete (payloadInput as any).db;
+
   return intelligenceTaskQueue.enqueueTaskAsync(
     'property_passport',
     'property',
     propertyId,
     idempKey,
     {
-      ...input,
+      ...payloadInput,
       propertyId,
-      db: activeDb,
     }
   );
 }

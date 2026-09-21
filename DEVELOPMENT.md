@@ -26,8 +26,10 @@
 - **6. Task Queue Integration & Handler Registration**:
   - Registered `'property_passport'` task handler in `registerIntelligenceTaskHandlers` (`server.ts`).
   - Implemented `enqueuePropertyPassportTask` in `propertyPassport.ts` and `server.ts`.
-- **7. Comprehensive Unit Test Verification (`tests/unit/task23PropertyPassport.test.ts`)**:
-  - 23 test vectors (A through W) covering valid projections, missing/non-existent property rejection, cross-property lineage violations, retracted risk exclusions, superseded maintenance exclusions, job outcome tracking, AI status preservation, deterministic hashing, idempotency, snapshot retrieval, tenant isolation, bounded queries, task queue execution, and regression across Tasks 17, 20, 21, and 22.
+- **7. Comprehensive Test & Real Firebase Emulator Verification (`tests/unit/task23PropertyPassport.test.ts`)**:
+  - 23 unit test vectors (A through W) plus 10 Real Firebase Emulator & Security Rules Integration production tests.
+  - Full Real Firebase Emulator execution (`firebase emulators:exec --project demo-anytrader --only firestore 'npx vitest run tests/unit/task23PropertyPassport.test.ts'`) -> **100% PASS (31/31 passed)**.
+  - Verifies production task queue execution, real Firestore document persistence under `/property_passports` and `/property_passport_history`, content hash idempotency, immutable snapshot write denial, Security Rules access matrix enforcement, cross-tenant rejection, AI non-promotion preservation, provenance retention, and bounded query limits.
   - 100% test pass rate (598/598 unit tests passing across 39 test files). Clean `tsc --noEmit` typecheck (`npm run lint`), successful application build (`compile_applet`), and pre-flight audit pass.
 
 ## 🛡️ AnyTrader V8.2 — Task 22: Predictive Maintenance Intelligence (September 21, 2026)

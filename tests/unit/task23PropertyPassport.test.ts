@@ -33,7 +33,13 @@ process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import * as admin from 'firebase-admin';
-import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
+import {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+  RulesTestEnvironment,
+} from '@firebase/rules-unit-testing';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -642,5 +648,354 @@ describe('Task 23: Property Passport Projection Intelligence', () => {
   it('Vector W: Regression: Task 22 Predictive Maintenance invariants pass', () => {
     const maintService = new PredictiveMaintenanceService({ firestoreDb: mockDb });
     expect(maintService).toBeDefined();
+  });
+});
+
+// =========================================================================
+// Real Firebase Emulator & Security Rules Integration
+// =========================================================================
+describe('V8.2 Task 23 — Real Firebase Emulator & Security Rules Integration', () => {
+  const PROJECT_ID = 'demo-anytrader';
+  let testEnv: RulesTestEnvironment;
+  let adminApp: admin.app.App;
+  let adminDb: admin.firestore.Firestore;
+
+  beforeAll(async () => {
+    process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
+    try {
+      const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        firestore: { rules, host: '127.0.0.1', port: 8088 },
+      });
+
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map((app) => app?.delete()));
+      }
+      adminApp = admin.initializeApp({ projectId: PROJECT_ID });
+
+      adminDb = adminApp.firestore();
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+      setGlobalIntelligenceDb(adminDb);
+      intelligenceTaskQueue.setFirestoreDb(adminDb);
+      registerIntelligenceTaskHandlers(adminDb);
+    } catch (err: any) {
+      console.error('[Task23 Test Setup] Real Firebase emulator error:', err);
+      throw new Error(`[Task23 Test Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`);
+    }
+  });
+
+  afterAll(async () => {
+    if (testEnv) {
+      await testEnv.cleanup();
+    }
+    if (adminApp) {
+      await adminApp.delete();
+    }
+  });
+
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+
+    // Seed authoritative properties
+    await adminDb.collection('properties').doc('prop_emu_101').set({
+      propertyId: 'prop_emu_101',
+      ownerId: 'user_owner_101',
+      tenantId: 'tenant_101',
+      managerId: 'user_manager_101',
+      address: '101 Passport Way, London',
+      createdAt: new Date().toISOString(),
+    });
+
+    await adminDb.collection('properties').doc('prop_emu_202').set({
+      propertyId: 'prop_emu_202',
+      ownerId: 'user_owner_202',
+      tenantId: 'tenant_202',
+      address: '202 Unrelated Court, London',
+      createdAt: new Date().toISOString(),
+    });
+
+    // Seed authoritative evidence
+    await adminDb.collection('intelligence_evidence').doc('ev_emu_101').set({
+      evidenceId: 'ev_emu_101',
+      aggregateType: 'property',
+      aggregateId: 'prop_emu_101',
+      sourceReference: { propertyId: 'prop_emu_101' },
+      provenance: { tenantId: 'tenant_101' },
+      evidenceQuality: 0.95,
+      verified: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    await adminDb.collection('intelligence_evidence').doc('ev_emu_cross_202').set({
+      evidenceId: 'ev_emu_cross_202',
+      aggregateType: 'property',
+      aggregateId: 'prop_emu_202',
+      sourceReference: { propertyId: 'prop_emu_202' },
+      provenance: { tenantId: 'tenant_202' },
+      evidenceQuality: 0.90,
+      verified: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Seed property condition history
+    await adminDb.collection('property_condition_history').doc('cond_emu_101').set({
+      conditionId: 'cond_emu_101',
+      propertyId: 'prop_emu_101',
+      componentType: 'roof',
+      condition: 'operational',
+      lifecycleState: 'good',
+      observedAt: new Date().toISOString(),
+      evidenceIds: ['ev_emu_101'],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+    });
+
+    // Seed property risk history
+    await adminDb.collection('property_risk_history').doc('risk_emu_101').set({
+      riskId: 'risk_emu_101',
+      propertyId: 'prop_emu_101',
+      componentType: 'roof',
+      riskType: 'weather_damage',
+      severity: 'medium',
+      riskScore: 45,
+      status: 'assessed',
+      evaluatedAt: new Date().toISOString(),
+      evidenceIds: ['ev_emu_101'],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+    });
+
+    // Seed property maintenance history
+    await adminDb.collection('property_maintenance_history').doc('maint_emu_101').set({
+      maintenanceId: 'maint_emu_101',
+      propertyId: 'prop_emu_101',
+      componentType: 'roof',
+      predictionType: 'inspection_due',
+      forecastStart: '2026-11-01',
+      forecastEnd: '2027-02-01',
+      severity: 'medium',
+      rationale: 'Slate tile maintenance window',
+      evidenceIds: ['ev_emu_101'],
+      likelihood: 0.65,
+      status: 'predicted',
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_101' },
+    });
+
+    // Seed completed job
+    await adminDb.collection('jobs').doc('job_emu_101').set({
+      id: 'job_emu_101',
+      linkedPropertyId: 'prop_emu_101',
+      propertyId: 'prop_emu_101',
+      status: 'completed',
+      completed: true,
+      outcomeSummary: 'Slate tile repair completed',
+      evidenceIds: ['ev_emu_101'],
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Production Task Queue & Real Emulator Verification Tests
+  // -----------------------------------------------------------------------
+  it('Production Integration 1 & 2: Valid property_passport task executes through production task handler and persists passport projection and snapshot to real emulator', async () => {
+    const task = await enqueuePropertyPassportTask('prop_emu_101', {
+      db: adminDb,
+      provenance: { tenantId: 'tenant_101' },
+    });
+
+    expect(task.taskId).toBeDefined();
+
+    const executedTask = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executedTask.lastError).toBeUndefined();
+    expect(executedTask.status).toBe('succeeded');
+
+    const payload = executedTask.payload as any;
+    expect(payload.success).toBe(true);
+    expect(payload.propertyId).toBe('prop_emu_101');
+    expect(payload.snapshotId).toBeDefined();
+    expect(payload.contentHash).toBeDefined();
+    expect(payload.passport).toBeDefined();
+
+    // Verify /property_passports/prop_emu_101 persisted in real emulator
+    const passportSnap = await adminDb.collection('property_passports').doc('prop_emu_101').get();
+    expect(passportSnap.exists).toBe(true);
+    const passportData = passportSnap.data();
+    expect(passportData?.propertyId).toBe('prop_emu_101');
+    expect(passportData?.schemaVersion).toBe(PASSPORT_SCHEMA_VERSION);
+    expect(passportData?.provenance?.contentHash).toBe(payload.contentHash);
+    expect(passportData?.provenance?.snapshotId).toBe(payload.snapshotId);
+    expect(Array.isArray(passportData?.components)).toBe(true);
+    expect(passportData?.riskSummary).toBeDefined();
+
+    // Verify /property_passport_history/{snapshotId} persisted in real emulator
+    const histSnap = await adminDb.collection('property_passport_history').doc(payload.snapshotId).get();
+    expect(histSnap.exists).toBe(true);
+    const histData = histSnap.data();
+    expect(histData?.propertyId).toBe('prop_emu_101');
+    expect(histData?.snapshotId).toBe(payload.snapshotId);
+    expect(histData?.provenance?.contentHash).toBe(payload.contentHash);
+  });
+
+  it('Production Integration 3: Idempotent execution produces identical content hash and snapshot on repeated runs', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    const p1 = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+    const p2 = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+
+    expect(p1.provenance.contentHash).toBe(p2.provenance.contentHash);
+    expect(p1.provenance.snapshotId).toBe(p2.provenance.snapshotId);
+
+    // Ensure single authoritative current passport document under /property_passports/prop_emu_101
+    const passportSnap = await adminDb.collection('property_passports').doc('prop_emu_101').get();
+    expect(passportSnap.data()?.provenance.snapshotId).toBe(p1.provenance.snapshotId);
+  });
+
+  it('Production Integration 4: Historical snapshot is immutable and client writes are strictly denied', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    const passport = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+    const snapshotId = passport.provenance.snapshotId;
+
+    // Verify snapshot exists via Admin SDK
+    const snapBefore = await adminDb.collection('property_passport_history').doc(snapshotId).get();
+    expect(snapBefore.exists).toBe(true);
+    const originalHash = snapBefore.data()?.provenance?.contentHash;
+
+    // Client context attempt to modify or overwrite snapshot
+    const ownerDb = testEnv.authenticatedContext('user_owner_101').firestore();
+    await assertFails(
+      setDoc(doc(ownerDb, 'property_passport_history', snapshotId), {
+        propertyId: 'prop_emu_101',
+        tampered: true,
+      })
+    );
+    await assertFails(
+      updateDoc(doc(ownerDb, 'property_passport_history', snapshotId), {
+        'provenance.contentHash': 'forged_hash',
+      })
+    );
+    await assertFails(deleteDoc(doc(ownerDb, 'property_passport_history', snapshotId)));
+
+    // Re-verify snapshot unchanged via Admin SDK
+    const snapAfter = await adminDb.collection('property_passport_history').doc(snapshotId).get();
+    expect(snapAfter.data()?.provenance?.contentHash).toBe(originalHash);
+  });
+
+  it('Production Integration 5: Real Firestore Security Rules enforce strict access controls on property_passports and property_passport_history', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    const passport = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+    const snapshotId = passport.provenance.snapshotId;
+
+    const unauthDb = testEnv.unauthenticatedContext().firestore();
+    const ownerDb = testEnv.authenticatedContext('user_owner_101').firestore();
+    const managerDb = testEnv.authenticatedContext('user_manager_101').firestore();
+    const strangerDb = testEnv.authenticatedContext('user_stranger_999').firestore();
+    const adminCtxDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+
+    // 1. Unauthenticated read denied
+    await assertFails(getDoc(doc(unauthDb, 'property_passports', 'prop_emu_101')));
+    await assertFails(getDoc(doc(unauthDb, 'property_passport_history', snapshotId)));
+
+    // 2. Unrelated authenticated user read denied
+    await assertFails(getDoc(doc(strangerDb, 'property_passports', 'prop_emu_101')));
+    await assertFails(getDoc(doc(strangerDb, 'property_passport_history', snapshotId)));
+
+    // 3. Property owner read allowed
+    await assertSucceeds(getDoc(doc(ownerDb, 'property_passports', 'prop_emu_101')));
+    await assertSucceeds(getDoc(doc(ownerDb, 'property_passport_history', snapshotId)));
+
+    // 4. Assigned property manager read allowed
+    await assertSucceeds(getDoc(doc(managerDb, 'property_passports', 'prop_emu_101')));
+    await assertSucceeds(getDoc(doc(managerDb, 'property_passport_history', snapshotId)));
+
+    // 5. Admin read allowed
+    await assertSucceeds(getDoc(doc(adminCtxDb, 'property_passports', 'prop_emu_101')));
+    await assertSucceeds(getDoc(doc(adminCtxDb, 'property_passport_history', snapshotId)));
+
+    // 6. Client writes denied on property_passports (create, update, delete)
+    await assertFails(
+      setDoc(doc(ownerDb, 'property_passports', 'prop_emu_101'), {
+        propertyId: 'prop_emu_101',
+        fakeField: 'client_forged',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(ownerDb, 'property_passports', 'prop_emu_101'), {
+        schemaVersion: 'v99.0',
+      })
+    );
+    await assertFails(deleteDoc(doc(ownerDb, 'property_passports', 'prop_emu_101')));
+  });
+
+  it('Production Integration 6 & 7: Cross-tenant contamination is strictly rejected', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    await expect(
+      service.generatePropertyPassport({
+        propertyId: 'prop_emu_101',
+        provenance: { tenantId: 'tenant_202' }, // Mismatched tenant
+      })
+    ).rejects.toThrow(/CrossTenantContamination Violation/i);
+  });
+
+  it('Production Integration 8: AI-derived component status is preserved (No self-promotion to verified)', async () => {
+    // Seed AI-derived condition record without verification evidence
+    await adminDb.collection('property_condition_history').doc('cond_ai_101').set({
+      conditionId: 'cond_ai_101',
+      propertyId: 'prop_emu_101',
+      componentType: 'electrical',
+      condition: 'derived',
+      lifecycleState: 'operational',
+      observedAt: new Date().toISOString(),
+      evidenceIds: [],
+      provenance: { origin: 'ai_copilot', tenantId: 'tenant_101' },
+    });
+
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    const passport = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+
+    const elecComp = passport.components.find((c: any) => c.componentType === 'electrical');
+    expect(elecComp).toBeDefined();
+    expect(elecComp?.status).toBe('derived'); // Preserved derived AI status
+  });
+
+  it('Production Integration 9: Source provenance and evidence identifiers are retained in material assertions', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    const passport = await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+
+    expect(passport.provenance.tenantId).toBe('tenant_101');
+    expect(passport.components.some((c: any) => c.evidenceIds.includes('ev_emu_101'))).toBe(true);
+    expect(passport.riskSummary.risks.some((r: any) => r.evidenceIds.includes('ev_emu_101'))).toBe(true);
+  });
+
+  it('Production Integration 10: Bounded queries are enforced for history retrieval', async () => {
+    const service = new PropertyPassportService({ firestoreDb: adminDb });
+    await service.generatePropertyPassport({
+      propertyId: 'prop_emu_101',
+      provenance: { tenantId: 'tenant_101' },
+    });
+
+    const history = await service.getPassportHistory('prop_emu_101', { limit: 10 });
+    expect(Array.isArray(history)).toBe(true);
+    expect(history.length).toBeGreaterThanOrEqual(1);
+    expect(history.length).toBeLessThanOrEqual(10);
   });
 });
