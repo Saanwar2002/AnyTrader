@@ -1,5 +1,34 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 22: Predictive Maintenance Intelligence (September 21, 2026)
+- **1. Evidence-Backed Predictive Maintenance Engine**:
+  - Built `PredictiveMaintenanceService` (`src/server/intelligence/predictiveMaintenance.ts`) enforcing `MAINTENANCE_METHODOLOGY_VERSION = 'v8.2-maintenance-v1'`.
+  - Enforces foundational invariants:
+    - **"PREDICTION IS AN INFERENCE, NOT AN OBSERVATION."**
+    - **"NO EVIDENCE = NO PREDICTION."**
+    - **"COMPLETED JOBS ALONE DO NOT EQUAL REPAIR."**
+    - **"PREDICTIVE-MAINTENANCE HISTORY IS STRICTLY IMMUTABLE (APPEND-ONLY)."**
+  - Rejects predictions lacking registered evidence with `[PredictiveMaintenance Violation]`.
+- **2. Deterministic Likelihood, Severity & Content Hashing**:
+  - Likelihood (0.0 to 1.0) and severity (`low`, `medium`, `high`, `critical`) are deterministically calculated based on component health signals, historical degradation, and evidence quality.
+  - Generates SHA-256 content hashes and deterministic IDs (`pm_${propertyId}_${contentHash.slice(0, 16)}`) ensuring idempotent execution and concurrent race-condition safety.
+- **3. Authoritative Lineage & Cross-Property/Tenant Isolation**:
+  - Uses `resolveAuthoritativeJobPropertyId` and `evidenceRegistry` (with direct Firestore fallback) to verify job and evidence alignment with target property.
+  - Enforces cross-tenant isolation matching property owner/landlord tenant ID (`[CrossTenantContamination Violation]`).
+- **4. Inference vs. Observation Separation & AI Security Boundary**:
+  - Rejects AI or client attempts to assert predictions as observed conditions (`[AIPredictionObservationConfusion Violation]`).
+  - Coerces AI-proposed `status: 'verified'` to `'predicted'` unless originating from an authorized server action (`isVerifiedServerAction: true`).
+- **5. Append-Only Historical Records & Supersessions**:
+  - Historical records in `/property_maintenance_history/{maintenanceId}` are strictly immutable (no `update()` allowed on historical documents).
+  - Supersessions create append-only records in `/property_maintenance_supersessions/{supersessionId}` with deterministic identity (`supersede_${maintenanceId}`), reason, and content hash.
+  - Property projections on `/properties/{propertyId}` (`intelligence.maintenanceProjection`) dynamically query active predictions while excluding superseded or retracted items.
+- **6. Security Rules & Indexing**:
+  - Protected `/property_maintenance_history/{maintenanceId}` and `/property_maintenance_supersessions/{supersessionId}` in `firestore.rules`: client reads restricted to authenticated property owners, landlords, managers, and admins; direct client writes strictly prohibited (`allow create, update, delete: if false;`).
+  - Added composite indexes in `firestore.indexes.json` for `property_maintenance_history` on `(propertyId ASC, forecastStart ASC)` and `property_maintenance_supersessions` on `(propertyId ASC, supersededAt DESC)`.
+- **7. Comprehensive Unit Test Verification (`tests/unit/task22PredictiveMaintenance.test.ts`)**:
+  - 32 test vectors covering evidence verification, isolation controls, forecasting determinism, forecast window validation, repair evidence logic, immutability, supersession, security rules, and cross-task regressions.
+  - 100% test pass rate (598/598 unit tests passing across 39 test files). Clean `tsc --noEmit` typecheck (`npm run lint`), successful application build (`compile_applet`), and pre-flight audit pass (`npm run audit:release`).
+
 ## 🛡️ AnyTrader V8.2 — Task 21: Property Risk Intelligence & Evidence Verification (September 20, 2026)
 - **1. Evidence-Backed Risk Assertion Engine**:
   - Built `PropertyRiskService` (`src/server/intelligence/propertyRisk.ts`) enforcing `RISK_METHODOLOGY_VERSION = 'v8.2-risk-v1'`.

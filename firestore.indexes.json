@@ -154,6 +154,31 @@
         { "fieldPath": "propertyId", "order": "ASCENDING" },
         { "fieldPath": "retractedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "property_maintenance_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "forecastStart", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "property_maintenance_history",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "componentType", "order": "ASCENDING" },
+        { "fieldPath": "forecastStart", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "property_maintenance_supersessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "propertyId", "order": "ASCENDING" },
+        { "fieldPath": "supersededAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

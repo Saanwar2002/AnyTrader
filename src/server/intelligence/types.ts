@@ -478,6 +478,97 @@ export interface PropertyRiskRetraction {
   updatedAt: string;
 }
 
+// ==========================================
+// Task 22: Predictive Maintenance Intelligence Types
+// ==========================================
+
+export type PredictiveMaintenanceType =
+  | 'inspection_due'
+  | 'maintenance_due'
+  | 'replacement_likelihood'
+  | 'condition_review';
+
+export type PredictiveMaintenanceStatus =
+  | 'predicted'
+  | 'superseded'
+  | 'retracted';
+
+export interface PredictiveMaintenanceAssessment {
+  maintenanceId: string;
+  propertyId: string;
+  componentType: string;
+  predictionType: PredictiveMaintenanceType;
+  forecastStart: string;
+  forecastEnd: string;
+  likelihood?: number;
+  severity: SeverityLevel;
+  rationale: string;
+  evidenceIds: string[];
+  supportingConditionIds?: string[];
+  supportingRiskIds?: string[];
+  supportingJobIds?: string[];
+  sourceJobId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  confidence: ConfidenceScores;
+  provenance: Provenance;
+  methodologyVersion: string;
+  generatedAt: string;
+  status: PredictiveMaintenanceStatus;
+  contentHash: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordPredictiveMaintenanceInput {
+  propertyId: string;
+  componentType: string;
+  predictionType: PredictiveMaintenanceType;
+  forecastStart: string;
+  forecastEnd: string;
+  likelihood?: number;
+  severity?: SeverityLevel;
+  rationale: string;
+  evidenceIds: string[];
+  supportingConditionIds?: string[];
+  supportingRiskIds?: string[];
+  supportingJobIds?: string[];
+  sourceJobId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  confidence?: Partial<ConfidenceScores> | number;
+  provenance: Partial<Provenance> & { origin: string };
+  status?: PredictiveMaintenanceStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PredictiveMaintenanceSupersession {
+  supersessionId: string;
+  maintenanceId: string;
+  propertyId: string;
+  reason: string;
+  supersededByMaintenanceId?: string;
+  supersededAt: string;
+  provenance?: Provenance;
+  methodologyVersion: string;
+  contentHash: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyMaintenanceProjection {
+  activePredictions: PredictiveMaintenanceAssessment[];
+  componentForecasts: Record<string, {
+    nextInspectionDate?: string;
+    nextMaintenanceDate?: string;
+    predictionCount: number;
+    highestSeverity: SeverityLevel;
+  }>;
+  methodologyVersion: string;
+  updatedAt: string;
+}
+
 export interface PropertyIntelligence {
   propertyId: string;
   currentVersionId?: string;
@@ -490,6 +581,7 @@ export interface PropertyIntelligence {
   observedConditions: PropertyObservedCondition[];
   recommendedInterventions: PropertyRecommendedIntervention[];
   riskProjection?: PropertyRiskProjection;
+  maintenanceProjection?: PropertyMaintenanceProjection;
   derivedFromJobIds: string[];
   evidenceIds: string[];
   overallHealthScore: number; // 0 to 100

@@ -1238,5 +1238,25 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable retractions; server Admin SDK writes only
     }
+    match /property_maintenance_history/{maintenanceId} {
+      allow read: if isSignedIn() &&
+        resource.data.get('propertyId', '') != '' &&
+        (
+          isPropertyOwnerOrLandlord(resource.data.propertyId) ||
+          isAssignedPropertyManager(resource.data.propertyId) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Immutable predictive maintenance history; server Admin SDK writes only
+    }
+    match /property_maintenance_supersessions/{supersessionId} {
+      allow read: if isSignedIn() &&
+        resource.data.get('propertyId', '') != '' &&
+        (
+          isPropertyOwnerOrLandlord(resource.data.propertyId) ||
+          isAssignedPropertyManager(resource.data.propertyId) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable supersessions; server Admin SDK writes only
+    }
   }
 }
