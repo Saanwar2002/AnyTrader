@@ -95,7 +95,8 @@ export type TaskType =
   | 'property_rollup'
   | 'evidence_ingestion'
   | 'quality_reprocess'
-  | 'predictive_maintenance';
+  | 'predictive_maintenance'
+  | 'property_passport';
 
 export type ConfidenceMethod =
   | 'deterministic_heuristic'
@@ -806,5 +807,105 @@ export interface IntelligenceProcessingRun {
   retryable?: boolean;
   sanitizedDiagnostic?: string;
   createdAt: string;
+}
+
+// ==========================================
+// Task 23: Property Passport Projection Types
+// ==========================================
+
+export type PassportVerificationStatus = 'verified' | 'derived' | 'unverified' | 'observed';
+
+export interface PropertyPassportComponent {
+  componentType: string;
+  condition?: string;
+  lifecycleState?: string;
+  status: PassportVerificationStatus;
+  lastObservedAt?: string;
+  evidenceIds: string[];
+  sourceRecordIds: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface PropertyPassportConditionSummary {
+  componentType: string;
+  condition: string;
+  lifecycleState: string;
+  observedAt: string;
+  evidenceIds: string[];
+  sourceRecordId: string;
+}
+
+export interface PropertyPassportRiskSummary {
+  riskScore: number; // 0 - 100
+  overallSeverity: SeverityLevel;
+  activeRiskCount: number;
+  criticalRiskCount: number;
+  risks: Array<{
+    riskId: string;
+    riskType: string;
+    description: string;
+    severity: SeverityLevel;
+    evidenceIds: string[];
+  }>;
+  evidenceIds: string[];
+}
+
+export interface PropertyPassportMaintenanceSummary {
+  upcomingInterventionsCount: number;
+  estimatedTotalBudgetMin: number;
+  estimatedTotalBudgetMax: number;
+  currency: string;
+  upcomingActions: Array<{
+    maintenanceAssessmentId: string;
+    componentType: string;
+    predictionType: string;
+    forecastStart: string;
+    forecastEnd: string;
+    urgency: UrgencyLevel;
+    evidenceIds: string[];
+  }>;
+  evidenceIds: string[];
+}
+
+export interface PropertyPassportVerifiedOutcomeSummary {
+  totalCompletedJobs: number;
+  lastCompletedJobAt?: string;
+  completedOutcomeIds: string[];
+  evidenceIds: string[];
+}
+
+export interface PropertyPassportProvenance {
+  pipelineVersion: string;
+  schemaVersion: string;
+  generatedAt: string;
+  contentHash: string; // SHA-256 of canonical projection
+  snapshotId: string;  // e.g. pps_${propertyId}_${contentHash.slice(0, 16)}
+  sourceRecordIds: string[];
+  sourceCollections: string[];
+  tenantId?: string;
+}
+
+export interface PropertyPassport {
+  propertyId: string;
+  components: PropertyPassportComponent[];
+  conditionSummary: PropertyPassportConditionSummary[];
+  riskSummary: PropertyPassportRiskSummary;
+  maintenanceSummary: PropertyPassportMaintenanceSummary;
+  verifiedOutcomeSummary: PropertyPassportVerifiedOutcomeSummary;
+  evidenceIds: string[];
+  confidence: ConfidenceScores;
+  provenance: PropertyPassportProvenance;
+  schemaVersion: string;
+  updatedAt: string;
+}
+
+export interface PropertyPassportSnapshot extends PropertyPassport {
+  snapshotId: string;
+  generatedAt: string;
+}
+
+export interface GeneratePropertyPassportInput {
+  propertyId: string;
+  provenance?: Partial<Provenance>;
 }
 

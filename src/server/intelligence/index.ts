@@ -45,4 +45,5 @@ export * from './propertyOntology';
 export * from './propertyLifecycle';
 export * from './propertyRisk';
 export * from './predictiveMaintenance';
+export * from './propertyPassport';
 

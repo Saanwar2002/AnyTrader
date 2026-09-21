@@ -50,7 +50,11 @@ import {
   INTELLIGENCE_SCHEMA_VERSION,
   PredictiveMaintenanceService,
   enqueuePredictiveMaintenanceTask,
-  RecordPredictiveMaintenanceInput
+  RecordPredictiveMaintenanceInput,
+  PropertyPassportService,
+  propertyPassportService,
+  GeneratePropertyPassportInput,
+  enqueuePropertyPassportTask
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -428,6 +432,39 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
       maintenanceId: assessment.maintenanceId,
       contentHash: assessment.contentHash,
       assessment,
+    };
+  });
+
+  intelligenceTaskQueue.registerHandler("property_passport", async (task) => {
+    const payload = (task.payload || {}) as any;
+    const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    if (!activeDb) {
+      throw new Error("[PropertyPassport Task] Firestore DB reference is required");
+    }
+
+    const targetPropertyId = payload.propertyId || task.aggregateId;
+    if (!targetPropertyId) {
+      throw new Error("[PropertyPassport Task] Missing propertyId");
+    }
+
+    const { provenance, isVerifiedServerAction } = payload;
+    const input: GeneratePropertyPassportInput = {
+      propertyId: targetPropertyId,
+      provenance,
+    };
+
+    const service = new PropertyPassportService({ firestoreDb: activeDb });
+    const passport = await service.generatePropertyPassport(input, {
+      firestoreDb: activeDb,
+      isVerifiedServerAction: !!isVerifiedServerAction,
+    });
+
+    return {
+      success: true,
+      propertyId: passport.propertyId,
+      snapshotId: passport.provenance.snapshotId,
+      contentHash: passport.provenance.contentHash,
+      passport,
     };
   });
 }

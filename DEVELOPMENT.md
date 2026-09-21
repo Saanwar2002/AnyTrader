@@ -1,5 +1,35 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 23: Property Passport Projection Intelligence (September 21, 2026)
+- **1. Evidence-Backed Property Passport Projection Engine**:
+  - Built `PropertyPassportService` (`src/server/intelligence/propertyPassport.ts`) enforcing `PASSPORT_SCHEMA_VERSION = 'v8.2-passport-v1'` and `PASSPORT_PIPELINE_VERSION = 'v8.2.0'`.
+  - Enforces foundational invariants:
+    - **"THE PASSPORT IS A DERIVED PROJECTION, NOT A NEW SOURCE OF TRUTH."**
+    - **"NO EVIDENCE = NO MATERIAL ASSERTION."**
+    - **"NO AI SELF-PROMOTION (AI-DERIVED/UNVERIFIED SOURCES REMAIN UNVERIFIED)."**
+    - **"NO DEMO/SYNTHETIC DATA."**
+    - **"APPEND-ONLY IMMUTABLE SNAPSHOT HISTORY."**
+  - Aggregates multi-source intelligence: property component ontology, condition lifecycle history, active risk assessments, non-superseded predictive maintenance forecasts, and verified job outcomes.
+- **2. Deterministic Content Hashing & Idempotency**:
+  - Generates SHA-256 content hashes over canonical JSON payloads and deterministic snapshot IDs (`pps_${propertyId}_${contentHash.slice(0, 16)}`).
+  - Ensures identical property states generate identical snapshot IDs and prevents redundant writes.
+- **3. Authoritative Lineage & Cross-Property/Tenant Isolation**:
+  - Validates property existence and cross-property lineage across all source documents (condition, risk, maintenance, jobs).
+  - Enforces cross-tenant isolation matching property owner/landlord tenant ID (`[CrossTenantContamination Violation]`).
+- **4. Immutable Snapshot History & Projections**:
+  - Historical snapshots are persisted immutably in `/property_passport_history/{snapshotId}` with complete provenance (source collections, record IDs, pipeline version, timestamp, content hash).
+  - Current authoritative projection is stored at `/property_passports/{propertyId}` for fast operational reads.
+- **5. Security Rules & Indexing**:
+  - Protected `/property_passports/{propertyId}` and `/property_passport_history/{snapshotId}` in `firestore.rules`: client reads restricted to authenticated property owners, landlords, assigned property managers, and admins; direct client writes strictly prohibited (`allow create, update, delete: if false;`).
+  - Added composite index in `firestore.indexes.json` for `property_passport_history` on `(propertyId ASC, generatedAt DESC)`.
+  - Added blueprint entries in `firebase-blueprint.json` for `/property_passports/{id}` and `/property_passport_history/{id}`.
+- **6. Task Queue Integration & Handler Registration**:
+  - Registered `'property_passport'` task handler in `registerIntelligenceTaskHandlers` (`server.ts`).
+  - Implemented `enqueuePropertyPassportTask` in `propertyPassport.ts` and `server.ts`.
+- **7. Comprehensive Unit Test Verification (`tests/unit/task23PropertyPassport.test.ts`)**:
+  - 23 test vectors (A through W) covering valid projections, missing/non-existent property rejection, cross-property lineage violations, retracted risk exclusions, superseded maintenance exclusions, job outcome tracking, AI status preservation, deterministic hashing, idempotency, snapshot retrieval, tenant isolation, bounded queries, task queue execution, and regression across Tasks 17, 20, 21, and 22.
+  - 100% test pass rate (598/598 unit tests passing across 39 test files). Clean `tsc --noEmit` typecheck (`npm run lint`), successful application build (`compile_applet`), and pre-flight audit pass.
+
 ## 🛡️ AnyTrader V8.2 — Task 22: Predictive Maintenance Intelligence (September 21, 2026)
 - **1. Evidence-Backed Predictive Maintenance Engine**:
   - Built `PredictiveMaintenanceService` (`src/server/intelligence/predictiveMaintenance.ts`) enforcing `MAINTENANCE_METHODOLOGY_VERSION = 'v8.2-maintenance-v1'`.

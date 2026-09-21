@@ -1268,5 +1268,24 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable supersessions; server Admin SDK writes only
     }
+    match /property_passports/{propertyId} {
+      allow read: if isSignedIn() &&
+        (
+          isPropertyOwnerOrLandlord(propertyId) ||
+          isAssignedPropertyManager(propertyId) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Authoritative passport projection; server Admin SDK writes only
+    }
+    match /property_passport_history/{snapshotId} {
+      allow read: if isSignedIn() &&
+        resource.data.get('propertyId', '') != '' &&
+        (
+          isPropertyOwnerOrLandlord(resource.data.propertyId) ||
+          isAssignedPropertyManager(resource.data.propertyId) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable passport snapshot history; server Admin SDK writes only
+    }
   }
 }

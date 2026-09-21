@@ -4317,6 +4317,18 @@
         "$ref": "#/entities/Job"
       },
       "description": "Durable intelligence task execution observability and processing run records."
+    },
+    "/property_passports/{id}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Authoritative evidence-backed Property Passport projections aggregating condition, risk, and predictive maintenance."
+    },
+    "/property_passport_history/{id}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Append-only immutable historical Property Passport snapshots with cryptographic content hashes."
     }
   }
 }
