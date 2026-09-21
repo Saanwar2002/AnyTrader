@@ -171,7 +171,7 @@ export class BuyerIntelligenceService {
     // B. Convert Passport Building Components / Condition Gaps to Recommended Inquiries
     if (Array.isArray(passport.components)) {
       for (const comp of passport.components) {
-        if (comp.status === 'unverified' || comp.condition === 'poor' || comp.condition === 'critical') {
+        if (comp.status === 'unverified' || comp.status === 'derived' || comp.condition === 'derived' || comp.condition === 'poor' || comp.condition === 'critical') {
           const compEvIds = Array.isArray(comp.evidenceIds) ? comp.evidenceIds.filter(Boolean) : [];
           for (const eid of compEvIds) allEvidenceIds.add(eid);
 

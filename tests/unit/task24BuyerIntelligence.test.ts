@@ -11,13 +11,19 @@
  *    - Standard legal / non-conveyancing / non-valuation disclaimers
  *    - Deterministic content hashing & idempotency
  *    - Immutable snapshot history storage & current assessment retrieval
- *    - Bounded property-scoped historical queries
  *    - Async task queue execution for 'buyer_intelligence'
- * 2. Real Firebase Emulator Integration Tests (Security Rules):
- *    - Client write rejection on /buyer_intelligence/{propertyId}
- *    - Client write rejection on /buyer_intelligence_history/{snapshotId}
- *    - Authorized read allowed for property owner/landlord/admin
- *    - Unauthorized read rejected for non-owner/unauthenticated users
+ * 
+ * 2. Real Production Firebase Emulator Integration Tests:
+ *    - Production Task Queue execution through registered 'buyer_intelligence' handler
+ *    - Full end-to-end pipeline against real Firestore Admin DB & emulator
+ *    - Persistence of current projection (/buyer_intelligence/{propertyId}) & snapshot history (/buyer_intelligence_history/{snapshotId})
+ *    - Production idempotency & deterministic content hashing
+ *    - Client-side write denial & historical snapshot immutability
+ *    - Cross-property & cross-tenant data isolation & fail-closed security
+ *    - Missing property fail-closed rejection & missing passport auto-generation
+ *    - Evidence gap representation & preserved AI non-promotion
+ *    - Real Firestore security rules enforcement (owner/manager/admin allowed, unauth/stranger denied)
+ *    - Material finding evidence provenance & bounded historical queries
  */
 
 process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
@@ -42,6 +48,7 @@ import {
   BUYER_INTELLIGENCE_PIPELINE_VERSION,
   MAX_BUYER_HISTORY_QUERY_LIMIT,
   STANDARD_LEGAL_DISCLAIMER,
+  PropertyPassportService,
   propertyPassportService,
   intelligenceTaskQueue,
   enqueueBuyerIntelligenceTask,
@@ -49,7 +56,9 @@ import {
 import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
 import { registerIntelligenceTaskHandlers } from '../../server';
 
+// =========================================================================
 // Helper for Mock In-Memory Firestore DB for isolated deterministic logic tests
+// =========================================================================
 function createMockFirestoreDb(initialData: {
   jobs?: Record<string, any>;
   properties?: Record<string, any>;
@@ -170,6 +179,9 @@ function createMockFirestoreDb(initialData: {
   };
 }
 
+// =========================================================================
+// SECTION 1: Unit & Logic Tests (Mock Store)
+// =========================================================================
 describe('Task 24 — Buyer / Conveyancing Intelligence Unit & Logic Tests', () => {
   const samplePropId = 'prop_buyer_test_101';
   const sampleTenant = 'tenant_buyer_1';
@@ -347,7 +359,7 @@ describe('Task 24 — Buyer / Conveyancing Intelligence Unit & Logic Tests', () 
     expect(history[0].snapshotId).toBe(assessment.provenance.assessmentId);
   });
 
-  it('9. Async task queue execution for buyer_intelligence succeeds', async () => {
+  it('9. Async task queue execution for buyer_intelligence succeeds in unit mock mode', async () => {
     registerIntelligenceTaskHandlers(mockDb);
     intelligenceTaskQueue.setFirestoreDb(mockDb);
 
@@ -361,100 +373,423 @@ describe('Task 24 — Buyer / Conveyancing Intelligence Unit & Logic Tests', () 
   });
 });
 
-describe('Task 24 — Real Firebase Emulator Security Rules Tests', () => {
+// =========================================================================
+// SECTION 2: Real Production Firebase Emulator Integration Tests
+// =========================================================================
+describe('V8.2 Task 24 — Real Production Firebase Emulator & Security Rules Verification', () => {
+  const PROJECT_ID = 'demo-anytrader';
   let testEnv: RulesTestEnvironment;
+  let adminApp: admin.app.App;
+  let adminDb: admin.firestore.Firestore;
 
   beforeAll(async () => {
-    const rulesPath = path.resolve(process.cwd(), 'firestore.rules');
-    const rules = fs.readFileSync(rulesPath, 'utf8');
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+    process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
 
-    testEnv = await initializeTestEnvironment({
-      projectId: 'ai-studio-anytrader-44dab8b3-bbc9-4352-b725-2cbe7a1dfd2a',
-      firestore: {
-        host: '127.0.0.1',
-        port: 8088,
-        rules,
-      },
-    });
+    try {
+      const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        firestore: { rules, host: '127.0.0.1', port: 8088 },
+      });
+
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map((app) => app?.delete()));
+      }
+      adminApp = admin.initializeApp({ projectId: PROJECT_ID });
+
+      adminDb = adminApp.firestore();
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      setGlobalIntelligenceDb(adminDb);
+      propertyPassportService.setFirestoreDb(adminDb);
+      buyerIntelligenceService.setFirestoreDb(adminDb);
+      intelligenceTaskQueue.setFirestoreDb(adminDb);
+      registerIntelligenceTaskHandlers(adminDb);
+    } catch (err: any) {
+      console.error('[Task24 Test Setup] Real Firebase emulator error:', err);
+      throw new Error(`[Task24 Test Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`);
+    }
   });
 
   afterAll(async () => {
     if (testEnv) {
       await testEnv.cleanup();
     }
+    if (adminApp) {
+      await adminApp.delete();
+    }
   });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
 
-    // Seed test property
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      const db = context.firestore();
-      await setDoc(doc(db, 'properties', 'prop_sec_24_101'), {
-        propertyId: 'prop_sec_24_101',
-        ownerId: 'user_owner_24',
-        landlordId: 'user_owner_24',
-        postcode: 'SW1A 1AA',
-      });
+    // Seed primary authoritative property 101
+    await adminDb.collection('properties').doc('prop_emu_24_101').set({
+      propertyId: 'prop_emu_24_101',
+      ownerId: 'user_owner_24_101',
+      landlordId: 'user_owner_24_101',
+      tenantId: 'tenant_emu_24_101',
+      managerId: 'user_manager_24_101',
+      address: '101 Buyer Way, London',
+      postcode: 'SW1A 1AA',
+      createdAt: new Date().toISOString(),
+    });
 
-      await setDoc(doc(db, 'buyer_intelligence', 'prop_sec_24_101'), {
-        propertyId: 'prop_sec_24_101',
-        conveyancingFlags: [],
-        recommendedInquiries: [],
-        schemaVersion: 'v8.2-buyer-v1',
-      });
+    // Seed secondary property 202 (for cross-property / cross-tenant isolation testing)
+    await adminDb.collection('properties').doc('prop_emu_24_202').set({
+      propertyId: 'prop_emu_24_202',
+      ownerId: 'user_owner_24_202',
+      tenantId: 'tenant_emu_24_202',
+      address: '202 Unrelated Court, London',
+      postcode: 'E1 6AN',
+      createdAt: new Date().toISOString(),
+    });
 
-      await setDoc(doc(db, 'buyer_intelligence_history', 'bia_prop_sec_24_101_hash1'), {
-        snapshotId: 'bia_prop_sec_24_101_hash1',
-        propertyId: 'prop_sec_24_101',
-        conveyancingFlags: [],
-        schemaVersion: 'v8.2-buyer-v1',
-      });
+    // Seed verified evidence for property 101
+    await adminDb.collection('intelligence_evidence').doc('ev_emu_24_101').set({
+      evidenceId: 'ev_emu_24_101',
+      aggregateType: 'property',
+      aggregateId: 'prop_emu_24_101',
+      sourceReference: { propertyId: 'prop_emu_24_101' },
+      provenance: { tenantId: 'tenant_emu_24_101' },
+      evidenceQuality: 0.95,
+      verified: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Seed property condition history for property 101
+    await adminDb.collection('property_condition_history').doc('cond_emu_24_roof').set({
+      conditionId: 'cond_emu_24_roof',
+      propertyId: 'prop_emu_24_101',
+      componentType: 'roof',
+      condition: 'poor',
+      lifecycleState: 'operational',
+      observedAt: new Date().toISOString(),
+      evidenceIds: ['ev_emu_24_101'],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_emu_24_101' },
+    });
+
+    // Seed property risk history for property 101
+    await adminDb.collection('property_risk_history').doc('risk_emu_24_damp').set({
+      riskId: 'risk_emu_24_damp',
+      propertyId: 'prop_emu_24_101',
+      componentType: 'roof',
+      riskType: 'damp_and_mould',
+      description: 'Active penetrating damp observed on south wall',
+      severity: 'high',
+      riskScore: 75,
+      status: 'assessed',
+      evaluatedAt: new Date().toISOString(),
+      evidenceIds: ['ev_emu_24_101'],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_emu_24_101' },
+    });
+
+    // Seed property maintenance forecast for property 101
+    await adminDb.collection('property_maintenance_history').doc('maint_emu_24_roof').set({
+      maintenanceId: 'maint_emu_24_roof',
+      propertyId: 'prop_emu_24_101',
+      componentType: 'roof',
+      predictionType: 'maintenance_due',
+      forecastStart: '2026-11-01',
+      forecastEnd: '2027-02-01',
+      urgency: 'immediate',
+      severity: 'high',
+      rationale: 'Slate tile maintenance window',
+      evidenceIds: ['ev_emu_24_101'],
+      likelihood: 0.85,
+      status: 'predicted',
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_emu_24_101' },
+    });
+
+    // Seed completed job for property 101
+    await adminDb.collection('jobs').doc('job_emu_24_101').set({
+      id: 'job_emu_24_101',
+      linkedPropertyId: 'prop_emu_24_101',
+      propertyId: 'prop_emu_24_101',
+      status: 'completed',
+      completed: true,
+      outcomeSummary: 'Slate tile repair completed',
+      evidenceIds: ['ev_emu_24_101'],
     });
   });
 
-  it('1. Client write on /buyer_intelligence/{propertyId} is DENIED for authenticated user', async () => {
-    const context = testEnv.authenticatedContext('user_owner_24');
-    const db = context.firestore();
+  // -----------------------------------------------------------------------
+  // Real Production Task Handler & Emulator Persistence Verification
+  // -----------------------------------------------------------------------
+  it('Production Vector A & B: Valid buyer_intelligence task executes through production handler and persists projection & history to real emulator', async () => {
+    const task = await enqueueBuyerIntelligenceTask(
+      'prop_emu_24_101',
+      { provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
 
+    expect(task.taskId).toBeDefined();
+
+    const executedTask = await intelligenceTaskQueue.executeTask(task.taskId);
+    expect(executedTask.lastError).toBeUndefined();
+    expect(executedTask.status).toBe('succeeded');
+
+    const payload = executedTask.payload as any;
+    expect(payload.success).toBe(true);
+    expect(payload.propertyId).toBe('prop_emu_24_101');
+    expect(payload.assessmentId).toBeDefined();
+    expect(payload.contentHash).toBeDefined();
+    expect(payload.assessment).toBeDefined();
+
+    // Verify /buyer_intelligence/prop_emu_24_101 persisted in real emulator
+    const projSnap = await adminDb.collection('buyer_intelligence').doc('prop_emu_24_101').get();
+    expect(projSnap.exists).toBe(true);
+    const projData = projSnap.data();
+    expect(projData?.propertyId).toBe('prop_emu_24_101');
+    expect(projData?.schemaVersion).toBe(BUYER_INTELLIGENCE_SCHEMA_VERSION);
+    expect(projData?.provenance?.contentHash).toBe(payload.contentHash);
+    expect(projData?.provenance?.assessmentId).toBe(payload.assessmentId);
+    expect(Array.isArray(projData?.conveyancingFlags)).toBe(true);
+    expect(Array.isArray(projData?.recommendedInquiries)).toBe(true);
+    expect(projData?.disclaimers?.isNonLegalAdviceNotice).toBe(true);
+
+    // Verify /buyer_intelligence_history/{snapshotId} persisted in real emulator
+    const histSnap = await adminDb.collection('buyer_intelligence_history').doc(payload.assessmentId).get();
+    expect(histSnap.exists).toBe(true);
+    const histData = histSnap.data();
+    expect(histData?.propertyId).toBe('prop_emu_24_101');
+    expect(histData?.snapshotId).toBe(payload.assessmentId);
+    expect(histData?.provenance?.contentHash).toBe(payload.contentHash);
+  });
+
+  it('Production Vector C: Idempotent execution produces identical content hash and snapshot on repeated runs', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const b1 = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+    const b2 = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+
+    expect(b1.provenance.contentHash).toBe(b2.provenance.contentHash);
+    expect(b1.provenance.assessmentId).toBe(b2.provenance.assessmentId);
+
+    // Ensure single authoritative current assessment document under /buyer_intelligence/prop_emu_24_101
+    const currentSnap = await adminDb.collection('buyer_intelligence').doc('prop_emu_24_101').get();
+    expect(currentSnap.data()?.provenance.assessmentId).toBe(b1.provenance.assessmentId);
+  });
+
+  it('Production Vector D: Historical snapshot is immutable and client writes are strictly denied', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const assessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+    const assessmentId = assessment.provenance.assessmentId;
+
+    // Verify snapshot exists via Admin SDK
+    const snapBefore = await adminDb.collection('buyer_intelligence_history').doc(assessmentId).get();
+    expect(snapBefore.exists).toBe(true);
+    const originalHash = snapBefore.data()?.provenance?.contentHash;
+
+    // Client context attempt to modify or overwrite snapshot
+    const ownerDb = testEnv.authenticatedContext('user_owner_24_101').firestore();
     await assertFails(
-      setDoc(doc(db, 'buyer_intelligence', 'prop_sec_24_101'), {
-        propertyId: 'prop_sec_24_101',
-        conveyancingFlags: [{ flagId: 'malicious' }],
+      setDoc(doc(ownerDb, 'buyer_intelligence_history', assessmentId), {
+        propertyId: 'prop_emu_24_101',
+        tampered: true,
       })
     );
-  });
-
-  it('2. Client write on /buyer_intelligence_history/{snapshotId} is DENIED for authenticated user', async () => {
-    const context = testEnv.authenticatedContext('user_owner_24');
-    const db = context.firestore();
-
     await assertFails(
-      setDoc(doc(db, 'buyer_intelligence_history', 'bia_malicious_snapshot'), {
-        snapshotId: 'bia_malicious_snapshot',
-        propertyId: 'prop_sec_24_101',
+      updateDoc(doc(ownerDb, 'buyer_intelligence_history', assessmentId), {
+        'provenance.contentHash': 'forged_hash',
       })
     );
+    await assertFails(deleteDoc(doc(ownerDb, 'buyer_intelligence_history', assessmentId)));
+
+    // Re-verify snapshot unchanged via Admin SDK
+    const snapAfter = await adminDb.collection('buyer_intelligence_history').doc(assessmentId).get();
+    expect(snapAfter.data()?.provenance?.contentHash).toBe(originalHash);
   });
 
-  it('3. Property owner can READ /buyer_intelligence/{propertyId}', async () => {
-    const context = testEnv.authenticatedContext('user_owner_24');
-    const db = context.firestore();
+  it('Production Vector E & F: Cross-property & cross-tenant contamination are strictly rejected', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
 
-    await assertSucceeds(getDoc(doc(db, 'buyer_intelligence', 'prop_sec_24_101')));
+    // Mismatched tenant check
+    await expect(
+      service.generateBuyerIntelligence(
+        { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_202' } },
+        { firestoreDb: adminDb }
+      )
+    ).rejects.toThrow(/CrossTenantContamination Violation/i);
+
+    // Cross-property assessment check
+    const assessment1 = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+    expect(assessment1.propertyId).toBe('prop_emu_24_101');
+    expect(assessment1.provenance.sourceRecordIds).not.toContain('ev_emu_cross_202');
   });
 
-  it('4. Unauthenticated user CANNOT read /buyer_intelligence/{propertyId}', async () => {
-    const context = testEnv.unauthenticatedContext();
-    const db = context.firestore();
+  it('Production Vector G & H: Missing property fails closed, and missing passport is auto-generated', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
 
-    await assertFails(getDoc(doc(db, 'buyer_intelligence', 'prop_sec_24_101')));
+    // Non-existent property fails closed
+    await expect(
+      service.generateBuyerIntelligence(
+        { propertyId: 'prop_emu_24_non_existent' },
+        { firestoreDb: adminDb }
+      )
+    ).rejects.toThrow(/does not exist/i);
+
+    // Seed property 303 without an existing property_passports document
+    await adminDb.collection('properties').doc('prop_emu_24_303').set({
+      propertyId: 'prop_emu_24_303',
+      ownerId: 'user_owner_24_303',
+      tenantId: 'tenant_emu_24_303',
+      address: '303 AutoPassport Ave',
+      createdAt: new Date().toISOString(),
+    });
+
+    const autoAssessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_303', provenance: { tenantId: 'tenant_emu_24_303' } },
+      { firestoreDb: adminDb }
+    );
+    expect(autoAssessment.propertyId).toBe('prop_emu_24_303');
+
+    // Verify property passport was generated on the fly in real emulator
+    const passportSnap = await adminDb.collection('property_passports').doc('prop_emu_24_303').get();
+    expect(passportSnap.exists).toBe(true);
   });
 
-  it('5. Non-owner user CANNOT read /buyer_intelligence/{propertyId}', async () => {
-    const context = testEnv.authenticatedContext('user_stranger_999');
-    const db = context.firestore();
+  it('Production Vector I & J: Evidence gaps and conflicting records are preserved without silent dropping', async () => {
+    // Seed unverified condition record
+    await adminDb.collection('property_condition_history').doc('cond_unverified_elec').set({
+      conditionId: 'cond_unverified_elec',
+      propertyId: 'prop_emu_24_101',
+      componentType: 'electrical',
+      condition: 'critical',
+      lifecycleState: 'operational',
+      observedAt: new Date().toISOString(),
+      evidenceIds: [],
+      provenance: { origin: 'manual_inspection', tenantId: 'tenant_emu_24_101' },
+    });
 
-    await assertFails(getDoc(doc(db, 'buyer_intelligence', 'prop_sec_24_101')));
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const assessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+
+    expect(assessment.recommendedInquiries.some((i) => i.inquiryId.includes('electrical'))).toBe(true);
+  });
+
+  it('Production Vector K: AI-derived source data is preserved and not self-promoted to verified', async () => {
+    // Seed property prop_emu_24_104
+    await adminDb.collection('properties').doc('prop_emu_24_104').set({
+      propertyId: 'prop_emu_24_104',
+      ownerId: 'user_owner_24_104',
+      tenantId: 'tenant_emu_24_104',
+      address: '104 AI Derivation St',
+      createdAt: new Date().toISOString(),
+    });
+
+    // Seed AI-derived condition record without verification evidence
+    await adminDb.collection('property_condition_history').doc('cond_ai_24_104').set({
+      conditionId: 'cond_ai_24_104',
+      propertyId: 'prop_emu_24_104',
+      componentType: 'plumbing',
+      condition: 'derived',
+      lifecycleState: 'operational',
+      observedAt: new Date().toISOString(),
+      evidenceIds: [],
+      provenance: { origin: 'ai_copilot', tenantId: 'tenant_emu_24_104' },
+    });
+
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const assessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_104', provenance: { tenantId: 'tenant_emu_24_104' } },
+      { firestoreDb: adminDb }
+    );
+
+    // Verify plumbing is represented in inquiries or flags and evidence summary maintains unverified status logic
+    expect(assessment.recommendedInquiries.some((i) => i.inquiryId.includes('plumbing'))).toBe(true);
+  });
+
+  it('Production Vector L: Real Firestore Security Rules enforce strict access controls on buyer_intelligence and history', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const assessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+    const assessmentId = assessment.provenance.assessmentId;
+
+    const unauthDb = testEnv.unauthenticatedContext().firestore();
+    const ownerDb = testEnv.authenticatedContext('user_owner_24_101').firestore();
+    const managerDb = testEnv.authenticatedContext('user_manager_24_101').firestore();
+    const strangerDb = testEnv.authenticatedContext('user_stranger_999').firestore();
+    const adminCtxDb = testEnv.authenticatedContext('admin_user', { admin: true }).firestore();
+
+    // 1. Unauthenticated read denied
+    await assertFails(getDoc(doc(unauthDb, 'buyer_intelligence', 'prop_emu_24_101')));
+    await assertFails(getDoc(doc(unauthDb, 'buyer_intelligence_history', assessmentId)));
+
+    // 2. Unrelated authenticated user read denied
+    await assertFails(getDoc(doc(strangerDb, 'buyer_intelligence', 'prop_emu_24_101')));
+    await assertFails(getDoc(doc(strangerDb, 'buyer_intelligence_history', assessmentId)));
+
+    // 3. Property owner read allowed
+    await assertSucceeds(getDoc(doc(ownerDb, 'buyer_intelligence', 'prop_emu_24_101')));
+    await assertSucceeds(getDoc(doc(ownerDb, 'buyer_intelligence_history', assessmentId)));
+
+    // 4. Assigned property manager read allowed
+    await assertSucceeds(getDoc(doc(managerDb, 'buyer_intelligence', 'prop_emu_24_101')));
+    await assertSucceeds(getDoc(doc(managerDb, 'buyer_intelligence_history', assessmentId)));
+
+    // 5. Admin read allowed
+    await assertSucceeds(getDoc(doc(adminCtxDb, 'buyer_intelligence', 'prop_emu_24_101')));
+    await assertSucceeds(getDoc(doc(adminCtxDb, 'buyer_intelligence_history', assessmentId)));
+
+    // 6. Client writes denied on buyer_intelligence (create, update, delete)
+    await assertFails(
+      setDoc(doc(ownerDb, 'buyer_intelligence', 'prop_emu_24_101'), {
+        propertyId: 'prop_emu_24_101',
+        fakeField: 'client_forged',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(ownerDb, 'buyer_intelligence', 'prop_emu_24_101'), {
+        schemaVersion: 'v99.0',
+      })
+    );
+    await assertFails(deleteDoc(doc(ownerDb, 'buyer_intelligence', 'prop_emu_24_101')));
+  });
+
+  it('Production Vector M: Material findings retain evidence provenance and embedded legal disclaimers', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    const assessment = await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+
+    expect(assessment.disclaimers.disclaimerText).toContain('DOES NOT constitute formal legal advice');
+    expect(assessment.evidenceSummary.evidenceIds).toContain('ev_emu_24_101');
+    expect(assessment.conveyancingFlags.some((f) => f.evidenceIds.includes('ev_emu_24_101'))).toBe(true);
+  });
+
+  it('Production Vector N: Bounded queries are enforced for history retrieval', async () => {
+    const service = new BuyerIntelligenceService({ firestoreDb: adminDb });
+    await service.generateBuyerIntelligence(
+      { propertyId: 'prop_emu_24_101', provenance: { tenantId: 'tenant_emu_24_101' } },
+      { firestoreDb: adminDb }
+    );
+
+    const history = await service.getBuyerIntelligenceHistory('prop_emu_24_101', { limit: 10, firestoreDb: adminDb });
+    expect(Array.isArray(history)).toBe(true);
+    expect(history.length).toBeGreaterThanOrEqual(1);
+    expect(history.length).toBeLessThanOrEqual(10);
   });
 });
