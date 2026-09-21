@@ -31,13 +31,37 @@ Task 24 implements **Buyer / Conveyancing Intelligence** as a derived, evidence-
 - **`firestore.rules`**: Added secure read and forbidden write rules for `/buyer_intelligence/{propertyId}` and `/buyer_intelligence_history/{snapshotId}`.
 - **`firestore.indexes.json`**: Added composite index for `buyer_intelligence_history` (`propertyId` ASC, `generatedAt` DESC).
 - **`firebase-blueprint.json`**: Added schema definitions for `/buyer_intelligence/{id}` and `/buyer_intelligence_history/{id}`.
-- **`tests/unit/task24BuyerIntelligence.test.ts`**: Test suite verifying unit logic and Firebase Emulator security rules.
+- **`tests/unit/task24BuyerIntelligence.test.ts`**: Test suite verifying mock unit logic and real Firebase Emulator integration/security rules.
+
+### 2.2 Production Execution Pipeline (Real Firebase Emulator Verified)
+
+```text
+Real Firebase Emulator
+        ↓
+Real Admin Firestore
+        ↓
+intelligenceTaskQueue
+        ↓
+registered buyer_intelligence handler
+        ↓
+BuyerIntelligenceService
+        ↓
+buyer_intelligence projection
+        ↓
+buyer_intelligence_history
+```
 
 ---
 
 ## 3. Test Verification & Security Vectors
 
-### 3.1 Unit Test Vectors (9/9 Passed)
+**Total Task 24 Tests**: **19/19 tests passed** in `tests/unit/task24BuyerIntelligence.test.ts`.
+
+The test suite is structured into two distinct execution tiers:
+- **9 mock / in-memory unit tests**
+- **10 real Firebase emulator integration & security tests**
+
+### 3.1 Mock / In-Memory Unit Tests (9/9 Passed)
 
 | Vector | Description | Result |
 |---|---|---|
@@ -49,24 +73,30 @@ Task 24 implements **Buyer / Conveyancing Intelligence** as a derived, evidence-
 | **Vector 6** | Standard non-legal, non-conveyancing, non-valuation disclaimers are enforced | **PASSED** |
 | **Vector 7** | Deterministic content hashing produces identical hash on identical inputs | **PASSED** |
 | **Vector 8** | Current assessment and historical snapshot are retrievable | **PASSED** |
-| **Vector 9** | Async task queue execution for `buyer_intelligence` succeeds | **PASSED** |
+| **Vector 9** | Async task queue execution for `buyer_intelligence` succeeds in unit mock mode | **PASSED** |
 
-### 3.2 Real Firebase Emulator Security Rules Integration Vectors (5/5 Passed)
+### 3.2 Real Production Firebase Emulator Integration & Security Tests (10/10 Passed)
 
-| Test Vector | Description | Result |
+| Production Vector | Description | Result |
 |---|---|---|
-| **Security Vector 1** | Client write on `/buyer_intelligence/{propertyId}` is DENIED for authenticated user | **PASSED** |
-| **Security Vector 2** | Client write on `/buyer_intelligence_history/{snapshotId}` is DENIED for authenticated user | **PASSED** |
-| **Security Vector 3** | Property owner/landlord can READ `/buyer_intelligence/{propertyId}` | **PASSED** |
-| **Security Vector 4** | Unauthenticated user CANNOT read `/buyer_intelligence/{propertyId}` | **PASSED** |
-| **Security Vector 5** | Non-owner user CANNOT read `/buyer_intelligence/{propertyId}` | **PASSED** |
+| **Production Vector A & B** | Valid `buyer_intelligence` task executes through production handler and persists projection & history to real emulator | **PASSED** |
+| **Production Vector C** | Idempotent execution produces identical content hash and snapshot on repeated runs | **PASSED** |
+| **Production Vector D** | Historical snapshot is immutable and client writes are strictly denied | **PASSED** |
+| **Production Vector E & F** | Cross-property & cross-tenant contamination are strictly rejected | **PASSED** |
+| **Production Vector G & H** | Missing property fails closed, and missing passport is auto-generated | **PASSED** |
+| **Production Vector I & J** | Evidence gaps and conflicting records are preserved without silent dropping | **PASSED** |
+| **Production Vector K** | AI-derived source data is preserved and not self-promoted to verified | **PASSED** |
+| **Production Vector L** | Real Firestore Security Rules enforce strict access controls on `buyer_intelligence` and history (unauth/stranger denied; owner/manager/admin allowed; client writes forbidden) | **PASSED** |
+| **Production Vector M** | Material findings retain evidence provenance and embedded legal disclaimers | **PASSED** |
+| **Production Vector N** | Bounded queries are enforced for history retrieval | **PASSED** |
 
 ---
 
 ## 4. Test Suite & Build Results
 
-- **Unit Test Suite**: **598/598 tests passing** across 39 test files (`npm run test`).
-- **Task 24 Unit & Integration Suite**: **14/14 tests passing** (9 unit + 5 security rules tests) in `tests/unit/task24BuyerIntelligence.test.ts`.
+- **Task 24 Suite Total**: **19/19 tests passed** (9 mock/in-memory unit tests + 10 real Firebase emulator integration/security tests) in `tests/unit/task24BuyerIntelligence.test.ts`.
+- **Real Firebase Emulator Test Suite (`npm run test:security-rules`)**: **388/388 tests passed** across 10 test suites running against the real Firebase emulator.
+- **Unit Test Suite (`npm test`)**: **598/598 tests passed** across 39 test files.
 - **TypeScript Typecheck (`npm run lint`)**: 0 errors (`tsc --noEmit` clean).
 - **Vite/Rollup Compilation (`compile_applet`)**: Build succeeded cleanly.
 
@@ -74,4 +104,4 @@ Task 24 implements **Buyer / Conveyancing Intelligence** as a derived, evidence-
 
 ## 5. Release Verdict
 
-**Task 24 (Buyer / Conveyancing Intelligence) is fully implemented, verified, tested against real Firebase Security Rules & Emulator patterns, and ready for release.**
+**Task 24 (Buyer / Conveyancing Intelligence) is fully implemented, verified, tested against real production Firebase Security Rules & Emulator execution pipelines, and ready for release.**
