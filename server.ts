@@ -54,7 +54,11 @@ import {
   PropertyPassportService,
   propertyPassportService,
   GeneratePropertyPassportInput,
-  enqueuePropertyPassportTask
+  enqueuePropertyPassportTask,
+  BuyerIntelligenceService,
+  buyerIntelligenceService,
+  GenerateBuyerIntelligenceInput,
+  enqueueBuyerIntelligenceTask
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -465,6 +469,40 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
       snapshotId: passport.provenance.snapshotId,
       contentHash: passport.provenance.contentHash,
       passport,
+    };
+  });
+
+  intelligenceTaskQueue.registerHandler("buyer_intelligence", async (task) => {
+    const payload = (task.payload || {}) as any;
+    const activeDb = overrideDb || payload.db || payload.firestoreDb || (intelligenceTaskQueue as any).firestoreDb || db;
+    if (!activeDb) {
+      throw new Error("[BuyerIntelligence Task] Firestore DB reference is required");
+    }
+
+    const targetPropertyId = payload.propertyId || task.aggregateId;
+    if (!targetPropertyId) {
+      throw new Error("[BuyerIntelligence Task] Missing propertyId");
+    }
+
+    const { provenance, isVerifiedServerAction, requestingUserRole } = payload;
+    const input: GenerateBuyerIntelligenceInput = {
+      propertyId: targetPropertyId,
+      provenance,
+      requestingUserRole,
+    };
+
+    const service = new BuyerIntelligenceService({ firestoreDb: activeDb });
+    const assessment = await service.generateBuyerIntelligence(input, {
+      firestoreDb: activeDb,
+      isVerifiedServerAction: !!isVerifiedServerAction,
+    });
+
+    return {
+      success: true,
+      propertyId: assessment.propertyId,
+      assessmentId: assessment.provenance.assessmentId,
+      contentHash: assessment.provenance.contentHash,
+      assessment,
     };
   });
 }

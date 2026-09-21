@@ -46,4 +46,5 @@ export * from './propertyLifecycle';
 export * from './propertyRisk';
 export * from './predictiveMaintenance';
 export * from './propertyPassport';
+export * from './buyerIntelligence';
 

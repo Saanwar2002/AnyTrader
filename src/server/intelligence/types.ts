@@ -96,7 +96,8 @@ export type TaskType =
   | 'evidence_ingestion'
   | 'quality_reprocess'
   | 'predictive_maintenance'
-  | 'property_passport';
+  | 'property_passport'
+  | 'buyer_intelligence';
 
 export type ConfidenceMethod =
   | 'deterministic_heuristic'
@@ -908,4 +909,109 @@ export interface GeneratePropertyPassportInput {
   propertyId: string;
   provenance?: Partial<Provenance>;
 }
+
+// ==========================================
+// Task 24: Buyer / Conveyancing Intelligence Types
+// ==========================================
+
+export type ConveyancingFlagCategory =
+  | 'title_risk'
+  | 'boundary_note'
+  | 'environmental_flag'
+  | 'structural_concern'
+  | 'unpermitted_work'
+  | 'compliance_gap'
+  | 'maintenance_liability'
+  | 'other';
+
+export interface ConveyancingFlag {
+  flagId: string;
+  category: ConveyancingFlagCategory;
+  title: string;
+  description: string;
+  severity: SeverityLevel;
+  evidenceIds: string[];
+  sourceRecordId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RecommendedInquiry {
+  inquiryId: string;
+  category: string;
+  question: string;
+  rationale: string;
+  urgency: UrgencyLevel;
+  evidenceIds: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface LegalDisclaimer {
+  disclaimerText: string;
+  isNonLegalAdviceNotice: boolean;
+  isNonConveyancingNotice: boolean;
+  isNonValuationNotice: boolean;
+  effectiveDate: string;
+}
+
+export interface BuyerIntelligenceRiskSummary {
+  overallRiskScore: number; // 0 - 100
+  overallSeverity: SeverityLevel;
+  activeRiskCount: number;
+  flaggedRiskCount: number;
+  risks: Array<{
+    riskId: string;
+    riskType: string;
+    description: string;
+    severity: SeverityLevel;
+    evidenceIds: string[];
+  }>;
+  evidenceIds: string[];
+}
+
+export interface BuyerIntelligenceEvidenceSummary {
+  totalEvidenceItems: number;
+  evidenceIds: string[];
+  verifiedEvidenceCount: number;
+  unverifiedEvidenceCount: number;
+  oldestEvidenceDate?: string;
+  newestEvidenceDate?: string;
+}
+
+export interface BuyerIntelligenceProvenance {
+  pipelineVersion: string;
+  schemaVersion: string;
+  generatedAt: string;
+  contentHash: string; // SHA-256 of canonical assessment
+  assessmentId: string; // e.g. bia_${propertyId}_${contentHash.slice(0, 16)}
+  passportSnapshotId?: string;
+  sourceRecordIds: string[];
+  sourceCollections: string[];
+  tenantId?: string;
+}
+
+export interface BuyerIntelligenceAssessment {
+  propertyId: string;
+  conveyancingFlags: ConveyancingFlag[];
+  recommendedInquiries: RecommendedInquiry[];
+  riskSummary: BuyerIntelligenceRiskSummary;
+  evidenceSummary: BuyerIntelligenceEvidenceSummary;
+  disclaimers: LegalDisclaimer;
+  passportSnapshotId?: string;
+  confidence: ConfidenceScores;
+  provenance: BuyerIntelligenceProvenance;
+  schemaVersion: string;
+  updatedAt: string;
+}
+
+export interface BuyerIntelligenceSnapshot extends BuyerIntelligenceAssessment {
+  snapshotId: string;
+  generatedAt: string;
+}
+
+export interface GenerateBuyerIntelligenceInput {
+  propertyId: string;
+  provenance?: Partial<Provenance>;
+  requestingUserRole?: string;
+}
+
 

@@ -1,5 +1,30 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.2 — Task 24: Buyer / Conveyancing Intelligence (September 21, 2026)
+- **1. Evidence-Backed Buyer / Conveyancing Intelligence Engine**:
+  - Built `BuyerIntelligenceService` (`src/server/intelligence/buyerIntelligence.ts`) enforcing `BUYER_INTELLIGENCE_SCHEMA_VERSION = 'v8.2-buyer-v1'` and `BUYER_INTELLIGENCE_PIPELINE_VERSION = 'v8.2.0'`.
+  - Enforces foundational invariants:
+    - **"DERIVED NON-AUTHORITATIVE ASSESSMENT (NO DIRECT CREATION OR ALTERATION OF PRIMARY PROPERTY FACTS)."**
+    - **"MANDATORY EMBEDDED NON-LEGAL / NON-CONVEYANCING / NON-VALUATION DISCLAIMERS (`STANDARD_LEGAL_DISCLAIMER`)."**
+    - **"NO AI SELF-PROMOTION & EVIDENCE-BACKED CONVEYANCING FLAGS."**
+    - **"APPEND-ONLY IMMUTABLE SNAPSHOT HISTORY (`/buyer_intelligence_history/{snapshotId}`)."**
+    - **"DETERMINISTIC CONTENT HASHING & IDEMPOTENCY."**
+    - **"FAIL-CLOSED SECURITY RULES & PROPERTY-SCOPED BOUNDED FIRESTORE QUERIES."**
+  - Synthesizes actionable buyer/conveyancer intelligence: active conveyancing flags derived from unretracted risk records, recommended technical/legal inquiries derived from component condition gaps and upcoming maintenance forecasts, and verified outcome highlights.
+- **2. Deterministic Content Hashing & Snapshot Storage**:
+  - Computes SHA-256 hashes over canonical buyer intelligence payloads and deterministic snapshot IDs (`bia_${propertyId}_${contentHash.slice(0, 16)}`).
+  - Immutable historical snapshots recorded under `/buyer_intelligence_history/{snapshotId}` and current assessment saved under `/buyer_intelligence/{propertyId}`.
+- **3. Security Rules, Indexing & Blueprint**:
+  - Secured `/buyer_intelligence/{propertyId}` and `/buyer_intelligence_history/{snapshotId}` in `firestore.rules`: client reads allowed for property owners, landlords, assigned property managers, and admins; direct client writes strictly prohibited (`allow create, update, delete: if false;`).
+  - Added composite index in `firestore.indexes.json` for `buyer_intelligence_history` (`propertyId` ASC, `generatedAt` DESC).
+  - Added blueprint entries in `firebase-blueprint.json` for `/buyer_intelligence/{id}` and `/buyer_intelligence_history/{id}`.
+- **4. Task Queue Integration & Handler Registration**:
+  - Registered `'buyer_intelligence'` task handler in `registerIntelligenceTaskHandlers` (`server.ts`).
+  - Implemented `enqueueBuyerIntelligenceTask` in `buyerIntelligence.ts` and `server.ts`.
+- **5. Comprehensive Test & Real Firebase Emulator Verification (`tests/unit/task24BuyerIntelligence.test.ts`)**:
+  - 14 tests passing (9 unit + 5 Firebase Emulator Security Rules tests).
+  - 100% test pass rate (598/598 unit tests passing across 39 test files). Clean `tsc --noEmit` typecheck (`npm run lint`), successful application build (`compile_applet`), and release audit pass.
+
 ## 🛡️ AnyTrader V8.2 — Task 23: Property Passport Projection Intelligence (September 21, 2026)
 - **1. Evidence-Backed Property Passport Projection Engine**:
   - Built `PropertyPassportService` (`src/server/intelligence/propertyPassport.ts`) enforcing `PASSPORT_SCHEMA_VERSION = 'v8.2-passport-v1'` and `PASSPORT_PIPELINE_VERSION = 'v8.2.0'`.

@@ -4329,6 +4329,18 @@
         "$ref": "#/entities/Property"
       },
       "description": "Append-only immutable historical Property Passport snapshots with cryptographic content hashes."
+    },
+    "/buyer_intelligence/{id}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Authoritative evidence-backed Buyer / Conveyancing Intelligence assessments."
+    },
+    "/buyer_intelligence_history/{id}": {
+      "schema": {
+        "$ref": "#/entities/Property"
+      },
+      "description": "Append-only immutable historical Buyer / Conveyancing Intelligence snapshots with cryptographic content hashes."
     }
   }
 }
