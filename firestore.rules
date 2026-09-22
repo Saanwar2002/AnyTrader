@@ -1314,7 +1314,6 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (
           (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
-          (resource.data.get('owner', null) != null && resource.data.owner.get('id', '') == request.auth.uid) ||
           isAdmin()
         );
       allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
@@ -1323,7 +1322,6 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (
           (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
-          (resource.data.get('owner', null) != null && resource.data.owner.get('id', '') == request.auth.uid) ||
           isAdmin()
         );
       allow create, update, delete: if false; // Append-only immutable data rights history; server Admin SDK writes only

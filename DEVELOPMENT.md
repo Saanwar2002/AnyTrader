@@ -1,6 +1,6 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 27: Data Rights & Provenance Foundation (September 22, 2026)
+## 🛡️ AnyTrader V8.3 — Task 27 & 27R: Data Rights & Provenance Foundation & Remediation (September 22, 2026)
 - **1. Server-Authoritative Data Rights Architecture (`DataRightsService`)**:
   - Implemented `DataRightsService` in `src/server/intelligence/dataRights.ts` managing authoritative data rights records and explicit purpose allocations.
   - Granular purpose distinction:
@@ -10,7 +10,10 @@
     - `third_party_sharing`: External party transmission.
     - `commercial_licensing`: Commercial dataset licensing (strictly isolated, never inferred from platform participation).
     - `export`: Data export eligibility.
-  - Enforced core invariants:
+  - Remediated Invariants (Task 27R):
+    - **"CROSS-TENANT AUTHORIZATION HARDENING"** — Security rules in `firestore.rules` for `/data_rights` and `/data_rights_history` strictly enforce `tenantId == request.auth.uid || isAdmin()`, preventing owner UIDs from bypassing tenant isolation boundaries.
+    - **"EXPLICIT TENANT-BOUND PROVENANCE"** — All provenance objects strictly require non-empty `tenantId` and reject provenance/source records with mismatched or missing tenant context.
+    - **"COMPREHENSIVE DETERMINISTIC RIGHTS HASH"** — `computeDataRightsHash` canonicalizes all 11 required state fields: `rightsId`, `tenantId`, `subject`, `owner`, `purposes`, `restrictions`, `version`, `source`, `provenance` (excluding `rightsHash`), `status`, and `effectiveAt`.
     - **"CONSERVATIVE EVALUATION: UNKNOWN != ALLOWED"** — Missing or undefined purpose permissions default to denied/false.
     - **"INTERNAL AI USE IS FIRST-CLASS BUT EXPLICIT"** — Internal AnyTrader AI Bot use is supported without implying external licensing rights.
     - **"TENANT-SCOPED & SERVER-AUTHORITATIVE"** — All rights records require mandatory `tenantId`, `subject`, `owner`, `source`, and cryptographic `rightsHash`. Client writes are completely denied.
@@ -18,12 +21,12 @@
     - **"REPRESENTATION OF REVOCATION, EXPIRATION, AND EXPLICIT RESTRICTION LISTS"** — Revoked, expired, superseded, or restricted records evaluate to denied.
 - **2. Security Rules (`firestore.rules`)**:
   - Added fail-closed security rules for `/data_rights/{rightsId}` and `/data_rights_history/{historyId}`:
-    - Read access: Authorized tenant, authorized owner, or platform admin.
+    - Read access: Authorized tenant or platform admin (`resource.data.tenantId == request.auth.uid || isAdmin()`). Owner UID alone cannot bypass tenant boundaries.
     - Write access: `allow create, update, delete: if false;` (Server Admin SDK writes only).
 - **3. Verification & CI Testing**:
-  - Unit test suite: `src/server/intelligence/dataRights.test.ts` (16 tests, 100% pass rate).
-  - Emulator security suite: `tests/unit/task27DataRightsProvenance.test.ts` (7 security vectors with `@firebase/rules-unit-testing`).
-  - 614/614 unit tests passing across 40 test files.
+  - Unit test suite: `src/server/intelligence/dataRights.test.ts` (25 tests covering all purpose matrix evaluations, restriction enforcements, tenant bindings, and hash sensitivities).
+  - Emulator security suite: `tests/unit/task27DataRightsProvenance.test.ts` (9 security vectors including adversarial cross-tenant owner isolation with `@firebase/rules-unit-testing`).
+  - 621/621 unit tests passing across 40 test files.
   - Clean `tsc --noEmit` linting, successful build compilation (`compile_applet`), and release audit pass.
 
 ## 🛡️ AnyTrader V8.2 — Task 25: Scale / Backfill / Resilience (September 22, 2026)

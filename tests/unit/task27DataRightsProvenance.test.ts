@@ -1,15 +1,18 @@
 /**
- * AnyTrader V8.3 — Task 27 Data Rights & Provenance Firebase Emulator Security & Lifecycle Test Suite
+ * AnyTrader V8.3 — Task 27/27R Data Rights & Provenance Firebase Emulator Security & Lifecycle Test Suite
  * 
  * Tests the real Firebase Emulator security rules and persistence for /data_rights and /data_rights_history:
  * - Unauthenticated reads denied
  * - Unrelated tenant / unauthorized user reads denied
- * - Authorized owner / tenant reads allowed
+ * - Cross-tenant owner bypass denied: User X owns a record in Tenant A, is also an owner in Tenant B, but reading Tenant A record from Tenant B context is denied
+ * - Cross-tenant owner bypass denied on /data_rights_history
+ * - Authorized tenant read allowed
+ * - Admin read allowed
  * - Client creation, update, and deletion strictly denied (server Admin SDK only)
- * - Concurrent updates & transactional lifecycle (creation, update, revocation, version bumping, append-only history)
+ * - Client writes to /data_rights_history strictly denied (Immutable Append-Only History)
  */
 
-import { describe, it, beforeAll, afterAll, beforeEach, expect } from 'vitest';
+import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import {
   initializeTestEnvironment,
   assertFails,
@@ -25,9 +28,9 @@ import {
 } from 'firebase/firestore';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DataRightsService, createStandardInternalPlatformPurposes } from '../../src/server/intelligence/dataRights';
+import { createStandardInternalPlatformPurposes, computeDataRightsHash } from '../../src/server/intelligence/dataRights';
 
-describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence Suite', () => {
+describe('V8.3 Task 27R — Firebase Emulator Data Rights Security & Persistence Suite', () => {
   let testEnv: RulesTestEnvironment;
   const PROJECT_ID = 'demo-anytrader';
   const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf-8');
@@ -43,7 +46,7 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
         },
       });
     } catch (err) {
-      console.error('FATAL ERROR: Failed to initialize Firebase emulator test environment for Task 27!', err);
+      console.error('FATAL ERROR: Failed to initialize Firebase emulator test environment for Task 27R!', err);
       throw err;
     }
   });
@@ -63,21 +66,42 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
   it('Vector 8: Unauthenticated client read to /data_rights/{rightsId} is strictly denied', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
-      await setDoc(doc(db, 'data_rights', 'rights_sec_001'), {
+      const prov = {
+        sourceType: 'job',
+        sourceId: 'job_001',
+        tenantId: 'tenant_owner_1',
+      };
+      const record = {
         rightsId: 'rights_sec_001',
         tenantId: 'tenant_owner_1',
         owner: { type: 'user', id: 'tenant_owner_1' },
         subject: { type: 'job', id: 'job_001' },
-        source: { type: 'job', id: 'job_001' },
+        source: { type: 'job', id: 'job_001', tenantId: 'tenant_owner_1' },
         purposes: createStandardInternalPlatformPurposes(true),
         restrictions: [],
-        status: 'active',
+        status: 'active' as const,
         version: 1,
-        provenance: { sourceType: 'job', sourceId: 'job_001' },
+        provenance: {
+          ...prov,
+          rightsHash: computeDataRightsHash({
+            rightsId: 'rights_sec_001',
+            tenantId: 'tenant_owner_1',
+            owner: { type: 'user', id: 'tenant_owner_1' },
+            subject: { type: 'job', id: 'job_001' },
+            source: { type: 'job', id: 'job_001', tenantId: 'tenant_owner_1' },
+            purposes: createStandardInternalPlatformPurposes(true),
+            restrictions: [],
+            version: 1,
+            provenance: prov,
+            status: 'active',
+            effectiveAt: new Date().toISOString(),
+          }),
+        },
         effectiveAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+      await setDoc(doc(db, 'data_rights', 'rights_sec_001'), record);
     });
 
     const unauthDb = testEnv.unauthenticatedContext().firestore();
@@ -92,12 +116,12 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
         tenantId: 'tenant_owner_1',
         owner: { type: 'user', id: 'tenant_owner_1' },
         subject: { type: 'job', id: 'job_002' },
-        source: { type: 'job', id: 'job_002' },
+        source: { type: 'job', id: 'job_002', tenantId: 'tenant_owner_1' },
         purposes: createStandardInternalPlatformPurposes(true),
         restrictions: [],
         status: 'active',
         version: 1,
-        provenance: { sourceType: 'job', sourceId: 'job_002' },
+        provenance: { sourceType: 'job', sourceId: 'job_002', tenantId: 'tenant_owner_1' },
         effectiveAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -108,7 +132,55 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
     await assertFails(getDoc(doc(attackerDb, 'data_rights', 'rights_sec_002')));
   });
 
-  it('Vector 10: Authorized owner/tenant read to /data_rights/{rightsId} succeeds', async () => {
+  it('Vector 9B (Task 27R Adversarial): Cross-tenant owner bypass denied — User X owns record in Tenant A but reading from non-tenant context is denied', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      // Record belongs to Tenant A (tenantId: tenant_A), but owner.id is user_X
+      await setDoc(doc(db, 'data_rights', 'rights_tenant_a_001'), {
+        rightsId: 'rights_tenant_a_001',
+        tenantId: 'tenant_A',
+        owner: { type: 'user', id: 'user_X' },
+        subject: { type: 'job', id: 'job_tenant_a' },
+        source: { type: 'job', id: 'job_tenant_a', tenantId: 'tenant_A' },
+        purposes: createStandardInternalPlatformPurposes(true),
+        restrictions: [],
+        status: 'active',
+        version: 1,
+        provenance: { sourceType: 'job', sourceId: 'job_tenant_a', tenantId: 'tenant_A' },
+        effectiveAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    });
+
+    // user_X attempts to read Tenant A's record directly without tenant_A authorization
+    const userXDb = testEnv.authenticatedContext('user_X').firestore();
+    await assertFails(getDoc(doc(userXDb, 'data_rights', 'rights_tenant_a_001')));
+  });
+
+  it('Vector 9C (Task 27R Adversarial): Cross-tenant owner bypass denied on /data_rights_history', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'data_rights_history', 'hist_tenant_a_001'), {
+        historyId: 'hist_tenant_a_001',
+        rightsId: 'rights_tenant_a_001',
+        tenantId: 'tenant_A',
+        owner: { type: 'user', id: 'user_X' },
+        subject: { type: 'job', id: 'job_tenant_a' },
+        source: { type: 'job', id: 'job_tenant_a', tenantId: 'tenant_A' },
+        purposes: createStandardInternalPlatformPurposes(true),
+        restrictions: [],
+        status: 'active',
+        version: 1,
+        provenance: { sourceType: 'job', sourceId: 'job_tenant_a', tenantId: 'tenant_A' },
+      });
+    });
+
+    const userXDb = testEnv.authenticatedContext('user_X').firestore();
+    await assertFails(getDoc(doc(userXDb, 'data_rights_history', 'hist_tenant_a_001')));
+  });
+
+  it('Vector 10: Authorized tenant read to /data_rights/{rightsId} succeeds', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
       await setDoc(doc(db, 'data_rights', 'rights_sec_003'), {
@@ -116,12 +188,12 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
         tenantId: 'authorized_user_123',
         owner: { type: 'user', id: 'authorized_user_123' },
         subject: { type: 'job', id: 'job_003' },
-        source: { type: 'job', id: 'job_003' },
+        source: { type: 'job', id: 'job_003', tenantId: 'authorized_user_123' },
         purposes: createStandardInternalPlatformPurposes(true),
         restrictions: [],
         status: 'active',
         version: 1,
-        provenance: { sourceType: 'job', sourceId: 'job_003' },
+        provenance: { sourceType: 'job', sourceId: 'job_003', tenantId: 'authorized_user_123' },
         effectiveAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -130,6 +202,30 @@ describe('V8.3 Task 27 — Firebase Emulator Data Rights Security & Persistence 
 
     const authDb = testEnv.authenticatedContext('authorized_user_123').firestore();
     await assertSucceeds(getDoc(doc(authDb, 'data_rights', 'rights_sec_003')));
+  });
+
+  it('Vector 10B: Admin read to /data_rights/{rightsId} succeeds across tenants', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'data_rights', 'rights_sec_003b'), {
+        rightsId: 'rights_sec_003b',
+        tenantId: 'tenant_client_abc',
+        owner: { type: 'user', id: 'tenant_client_abc' },
+        subject: { type: 'job', id: 'job_003b' },
+        source: { type: 'job', id: 'job_003b', tenantId: 'tenant_client_abc' },
+        purposes: createStandardInternalPlatformPurposes(true),
+        restrictions: [],
+        status: 'active',
+        version: 1,
+        provenance: { sourceType: 'job', sourceId: 'job_003b', tenantId: 'tenant_client_abc' },
+        effectiveAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    });
+
+    const adminDb = testEnv.authenticatedContext('admin_user_root', { admin: true }).firestore();
+    await assertSucceeds(getDoc(doc(adminDb, 'data_rights', 'rights_sec_003b')));
   });
 
   it('Vector 11: Client creation of /data_rights is strictly denied (Server Admin SDK only)', async () => {

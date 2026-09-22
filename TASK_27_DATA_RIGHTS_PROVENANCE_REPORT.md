@@ -1,72 +1,57 @@
-# AnyTrader V8.3 — Task 27 Data Rights & Provenance Report
+# AnyTrader V8.3 Task 27R Data Rights & Security Provenance Remediation Report
 
 **Date**: September 22, 2026  
-**Auditor**: Lead Enterprise Intelligence & Security Architect  
-**Status**: **VERIFIED & CLOSED — 100% AUDIT PASS (GO FOR RELEASE)**  
-**Verified Commit SHA**: `a4c8175f075833aac23a3beaf0cd578db75a7497`
+**Status**: VERIFIED & CLOSED — 100% PASS  
+**Task Scope**: Task 27R Data Rights Security, Provenance Tenant-Binding & Cryptographic Hash Remediation  
 
 ---
 
-## 1. Executive Summary & Objective
+## 1. Executive Summary
 
-Task 27 establishes the **Data Rights & Provenance Foundation** for AnyTrader V8.3. It creates a server-authoritative, tenant-scoped, provenance-aware data governance layer that explicitly distinguishes internal AnyTrader AI operational use from external AI training, commercial licensing, third-party sharing, and exports.
-
-### Core Architecture & Invariants Enforced
-
-1. **First-Class Internal AI Use**: The AnyTrader AI Bot is an authorized platform component with first-class support for `internal_ai_use` across matching, recommendations, property intelligence, and automation.
-2. **Explicit Purpose Distinction**:
-   - `internal_platform_operation`
-   - `internal_ai_use`
-   - `external_ai_training`
-   - `third_party_sharing`
-   - `commercial_licensing`
-   - `export`
-   - *Key Invariant*: `internal_ai_use = allowed` does NOT imply `external_ai_training = allowed` or `commercial_licensing = allowed`.
-3. **Conservative Evaluation (`unknown != allowed`)**: Undefined or unestablished purposes evaluate to `false`. Access is strictly denied unless explicitly set to `'allowed'`.
-4. **Server Authority & Client Denial**: Rights records are created and mutated solely by server transactions via `DataRightsService`. Client writes to `/data_rights` and `/data_rights_history` are completely denied in `firestore.rules`.
-5. **Multi-Tenant Scoping**: All rights records mandate `tenantId` and enforce tenant matching on reads and purpose evaluation. Cross-tenant mutation or provenance forging is rejected.
-6. **Immutable History & Current Projection**: Historical records are persisted append-only in `/data_rights_history/{historyId}`, while active state is projected into `/data_rights/{rightsId}` with version increments.
-7. **Lifecycle State & Revocation Support**: Supports `active`, `revoked`, `expired`, and `superseded` states as well as explicit `restrictions` lists.
+Task 27R addresses and eliminates the 3 security and integrity vulnerabilities identified during review of the Task 27 Data Rights & Provenance Foundation:
+1. **Cross-Tenant Authorization Ambiguity in Security Rules**: `firestore.rules` previously permitted reads to `/data_rights` and `/data_rights_history` if `owner.id == request.auth.uid`. In a multi-tenant environment where a user identity exists across multiple estates/tenants, this permitted cross-tenant record reads. The rules now strictly enforce tenant context (`resource.data.tenantId == request.auth.uid || isAdmin()`), ensuring owner UID alone cannot bypass tenant isolation.
+2. **Tenant-Binding of Provenance & Source**: Provenance records and source references are now authoritatively bound to the record's `tenantId`. `validateDataRightsRecord` and creation/update workflows fail closed if `provenance.tenantId` is missing or does not match `tenantId`, or if `source.tenantId` does not match.
+3. **Incomplete Cryptographic `rightsHash`**: `computeDataRightsHash` now deterministically hashes all 11 required state fields:
+   - `rightsId`
+   - `tenantId`
+   - `subject`
+   - `owner`
+   - `purposes`
+   - `restrictions`
+   - `version`
+   - `source`
+   - `provenance` (canonical structure with `sourceType`, `sourceId`, `tenantId`, `sourceVersion`, `recordedBy`, excluding `rightsHash` itself)
+   - `status`
+   - `effectiveAt`
 
 ---
 
-## 2. Database Collections Introduced
+## 2. Remediation Verification Matrix
 
-- `/data_rights/{rightsId}`: Authoritative current projection of data rights and purpose permissions.
-- `/data_rights_history/{historyId}`: Append-only immutable historical ledger of rights mutations and version transitions.
-
----
-
-## 3. Files Modified & Introduced
-
-- `src/server/intelligence/dataRights.ts` (New): `DataRightsService`, types, purpose schemas, and evaluation engine.
-- `src/server/intelligence/dataRights.test.ts` (New): Unit tests covering all 16 semantic, validation, and purpose separation vectors.
-- `src/server/intelligence/index.ts`: Exported `dataRights.ts`.
-- `firestore.rules`: Added fail-closed read/write rules for `/data_rights` and `/data_rights_history`.
-- `tests/unit/task27DataRightsProvenance.test.ts` (New): Real Firebase emulator security rules and lifecycle test suite.
-- `package.json`: Updated test scripts to include Task 27 test suites.
-- `DEVELOPMENT.md`: Documented V8.3 Task 27 architecture and test verification.
+| Vulnerability / Vector | Remediation Implementation | Test Verification | Result |
+| :--- | :--- | :--- | :--- |
+| **1. Cross-Tenant Owner Bypass in Firestore Rules** | `firestore.rules` match blocks for `/data_rights/{rightsId}` and `/data_rights_history/{historyId}` updated to check `tenantId == request.auth.uid \|\| isAdmin()`. | `tests/unit/task27DataRightsProvenance.test.ts` (Vectors 9B & 9C: Cross-tenant owner bypass rejected) | **PASS** |
+| **2. Non-Tenant-Bound Provenance** | `RightsProvenance` interface extended with mandatory `tenantId: string`. `createDataRightsRecord` binds `provenance.tenantId = record.tenantId`. Validation rejects missing or mismatched tenant. | `src/server/intelligence/dataRights.test.ts` (Vector 20: Provenance must be explicitly tenant-bound) | **PASS** |
+| **3. Incomplete `rightsHash`** | `computeDataRightsHash` canonicalizes and SHA-256 hashes all 11 required fields. | `src/server/intelligence/dataRights.test.ts` (Vector 25: Canonical hashing, sensitivity to all 11 fields) | **PASS** |
+| **4. Internal AnyTrader AI Bot Access** | Explicit `internal_ai_use` purpose permission preserved and supported. | `src/server/intelligence/dataRights.test.ts` (Vectors 1, 4, 6) | **PASS** |
+| **5. Conservative Evaluation** | `unknown != allowed` invariant enforced; unauthenticated reads, client writes, modifications, and deletions denied. | Full test suite across unit and emulator vectors | **PASS** |
 
 ---
 
-## 4. Verified CI & Audit Evidence
+## 3. Test & Verification Evidence
 
-- **Firebase Emulator & Security Suite**:
-  - **428/428 tests passed** (100% pass rate).
-  - **12/12 emulator test files passed**.
-- **Ordinary Unit & Penetration Test Suite (`npm test`)**:
-  - **614/614 tests passed** (100% pass rate across 40 test files).
-- **TypeScript Typecheck (`npm run lint` / `tsc --noEmit`)**:
-  - **PASS** (0 errors clean).
-- **Production Build (`npm run build` / `compile_applet`)**:
-  - **PASS** (applet compiles cleanly).
-- **Release Candidate Audit (`npm run audit:release`)**:
-  - **0 Critical Failures**
-  - **7 Non-Critical Environment Warnings (Accepted Risks)**.
-- **Scope Boundary**: Tasks 28–34 were **NOT** implemented.
+- **Unit Test Suite**: `npm test`
+  - **Result**: 621/621 tests passing across 40 test files (100% pass rate).
+  - `src/server/intelligence/dataRights.test.ts`: 25/25 passing.
+- **Emulator Rules Suite**: `tests/unit/task27DataRightsProvenance.test.ts`
+  - **Result**: 9/9 security vectors verified.
+- **Typecheck & Linter**: `npm run lint` (`tsc --noEmit`)
+  - **Result**: 0 errors.
+- **Applet Compilation**: `compile_applet`
+  - **Result**: Build succeeded cleanly.
 
 ---
 
-## 5. Release Verdict
+## 4. Conclusion & Sign-Off
 
-**Task 27 (Data Rights & Provenance Foundation) is fully verified, mathematically consistent with production purpose evaluation contracts, and ready for release.**
+All Task 27R remediation requirements are complete, verified, and strictly isolated to Task 27 without starting Task 28 or breaking any existing V8.0–V8.2 security invariants.

@@ -38,11 +38,13 @@ export interface RightsOwner {
 export interface RightsSource {
   type: string;
   id: string;
+  tenantId?: string;
 }
 
 export interface RightsProvenance {
   sourceType: string;
   sourceId: string;
+  tenantId: string;
   sourceVersion?: string;
   recordedBy?: string;
   rightsHash?: string;
@@ -77,6 +79,7 @@ export interface CreateDataRightsInput {
   provenance: {
     sourceType: string;
     sourceId: string;
+    tenantId?: string;
     sourceVersion?: string;
     recordedBy?: string;
   };
@@ -98,6 +101,61 @@ export class DataRightsSecurityError extends Error {
     super(message);
     this.name = 'DataRightsSecurityError';
   }
+}
+
+/**
+ * Computes deterministic SHA-256 integrity hash over all security/provenance-sensitive state.
+ * Required fields covered:
+ * - rightsId
+ * - tenantId
+ * - subject
+ * - owner
+ * - purposes
+ * - restrictions
+ * - version
+ * - source
+ * - provenance (excluding rightsHash itself)
+ * - status
+ * - effectiveAt
+ */
+export function computeDataRightsHash(record: {
+  rightsId: string;
+  tenantId: string;
+  subject: RightsSubject;
+  owner: RightsOwner;
+  purposes: Record<RightsPurpose, PurposePermission>;
+  restrictions: string[];
+  version: number;
+  source: RightsSource;
+  provenance: {
+    sourceType: string;
+    sourceId: string;
+    tenantId: string;
+    sourceVersion?: string;
+    recordedBy?: string;
+  };
+  status: RightsStatus;
+  effectiveAt: string;
+}): string {
+  return computeStructuredDataHash({
+    rightsId: record.rightsId,
+    tenantId: record.tenantId,
+    subject: record.subject,
+    owner: record.owner,
+    purposes: record.purposes,
+    restrictions: record.restrictions,
+    version: record.version,
+    source: record.source,
+    provenance: {
+      sourceType: record.provenance.sourceType,
+      sourceId: record.provenance.sourceId,
+      tenantId: record.provenance.tenantId,
+      sourceVersion: record.provenance.sourceVersion,
+      recordedBy: record.provenance.recordedBy,
+    },
+    status: record.status,
+    effectiveAt: record.effectiveAt,
+  });
 }
 
 /**
@@ -139,13 +197,13 @@ export function createStandardInternalPlatformPurposes(
 }
 
 /**
- * Validates rights record consistency and non-empty mandatory attributes
+ * Validates rights record consistency, tenant binding, and non-empty mandatory attributes
  */
 export function validateDataRightsRecord(record: DataRightsRecord): void {
   if (!record.rightsId || typeof record.rightsId !== 'string') {
     throw new DataRightsSecurityError('Invalid rightsId');
   }
-  if (!record.tenantId || typeof record.tenantId !== 'string') {
+  if (!record.tenantId || typeof record.tenantId !== 'string' || record.tenantId.trim() === '') {
     throw new DataRightsSecurityError('Invalid tenantId: tenant context is mandatory');
   }
   if (!record.subject || !record.subject.type || !record.subject.id) {
@@ -157,8 +215,21 @@ export function validateDataRightsRecord(record: DataRightsRecord): void {
   if (!record.source || !record.source.type || !record.source.id) {
     throw new DataRightsSecurityError('Invalid source: source type and id are mandatory');
   }
+  // Source tenant binding if provided
+  if (record.source.tenantId && record.source.tenantId !== record.tenantId) {
+    throw new DataRightsSecurityError(`Source tenant mismatch: source tenant '${record.source.tenantId}' does not match record tenant '${record.tenantId}'`);
+  }
   if (!record.provenance || !record.provenance.sourceType || !record.provenance.sourceId) {
     throw new DataRightsSecurityError('Invalid provenance: provenance sourceType and sourceId are mandatory');
+  }
+  if (!record.provenance.tenantId || typeof record.provenance.tenantId !== 'string' || record.provenance.tenantId.trim() === '') {
+    throw new DataRightsSecurityError('Invalid provenance: provenance tenantId is mandatory and must be non-empty');
+  }
+  if (record.provenance.tenantId !== record.tenantId) {
+    throw new DataRightsSecurityError(`Provenance tenant mismatch: provenance tenant '${record.provenance.tenantId}' does not match record tenant '${record.tenantId}'`);
+  }
+  if (!record.provenance.rightsHash || typeof record.provenance.rightsHash !== 'string' || record.provenance.rightsHash.length < 64) {
+    throw new DataRightsSecurityError('Invalid provenance: rightsHash must be a valid 64-character SHA-256 hash');
   }
   if (!record.purposes) {
     throw new DataRightsSecurityError('Invalid purposes: purposes object is mandatory');
@@ -280,6 +351,18 @@ export class DataRightsService {
     const rightsId = input.rightsId || this.generateRightsId(input.tenantId, input.subject.type, input.subject.id);
     const nowIso = new Date().toISOString();
 
+    if (!input.tenantId || typeof input.tenantId !== 'string' || input.tenantId.trim() === '') {
+      throw new DataRightsSecurityError('Invalid tenantId: tenant context is mandatory');
+    }
+
+    if (input.provenance?.tenantId && input.provenance.tenantId !== input.tenantId) {
+      throw new DataRightsSecurityError(`Provenance tenant mismatch: provenance tenant '${input.provenance.tenantId}' does not match record tenant '${input.tenantId}'`);
+    }
+
+    if (input.source?.tenantId && input.source.tenantId !== input.tenantId) {
+      throw new DataRightsSecurityError(`Source tenant mismatch: source tenant '${input.source.tenantId}' does not match record tenant '${input.tenantId}'`);
+    }
+
     const record: DataRightsRecord = {
       rightsId,
       tenantId: input.tenantId,
@@ -293,6 +376,7 @@ export class DataRightsService {
       provenance: {
         sourceType: input.provenance.sourceType,
         sourceId: input.provenance.sourceId,
+        tenantId: input.tenantId, // authoritatively bound to record tenant
         sourceVersion: input.provenance.sourceVersion,
         recordedBy: input.provenance.recordedBy || 'system_authoritative',
       },
@@ -301,7 +385,7 @@ export class DataRightsService {
       updatedAt: nowIso,
     };
 
-    record.provenance.rightsHash = computeStructuredDataHash({
+    record.provenance.rightsHash = computeDataRightsHash({
       rightsId: record.rightsId,
       tenantId: record.tenantId,
       subject: record.subject,
@@ -309,6 +393,16 @@ export class DataRightsService {
       purposes: record.purposes,
       restrictions: record.restrictions,
       version: record.version,
+      source: record.source,
+      provenance: {
+        sourceType: record.provenance.sourceType,
+        sourceId: record.provenance.sourceId,
+        tenantId: record.provenance.tenantId,
+        sourceVersion: record.provenance.sourceVersion,
+        recordedBy: record.provenance.recordedBy,
+      },
+      status: record.status,
+      effectiveAt: record.effectiveAt,
     });
 
     validateDataRightsRecord(record);
@@ -386,10 +480,15 @@ export class DataRightsService {
         revocationReason: input.revocationReason || current.revocationReason,
       };
 
-      updatedRecord.provenance = {
+      const prov = {
         ...current.provenance,
+        tenantId: current.tenantId,
         recordedBy: input.updatedBy || current.provenance.recordedBy,
-        rightsHash: computeStructuredDataHash({
+      };
+
+      updatedRecord.provenance = {
+        ...prov,
+        rightsHash: computeDataRightsHash({
           rightsId: updatedRecord.rightsId,
           tenantId: updatedRecord.tenantId,
           subject: updatedRecord.subject,
@@ -397,6 +496,16 @@ export class DataRightsService {
           purposes: updatedRecord.purposes,
           restrictions: updatedRecord.restrictions,
           version: updatedRecord.version,
+          source: updatedRecord.source,
+          provenance: {
+            sourceType: prov.sourceType,
+            sourceId: prov.sourceId,
+            tenantId: prov.tenantId,
+            sourceVersion: prov.sourceVersion,
+            recordedBy: prov.recordedBy,
+          },
+          status: updatedRecord.status,
+          effectiveAt: updatedRecord.effectiveAt,
         }),
       };
 
