@@ -34,6 +34,7 @@ import {
   taskDocumentId,
   OwnershipLostError,
 } from '../../src/server/intelligence/intelligenceTaskQueue';
+import { IntelligenceTask } from '../../src/server/intelligence/types';
 import { buildIdempotencyKey } from '../../src/server/intelligence/provenance';
 import { AICandidateSecurityError } from '../../src/server/intelligence/aiCandidateBoundary';
 import {
@@ -1199,12 +1200,28 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     expect(runDoc1?.processed).toBe(2);
     expect(runDoc1?.errors).toBe(1);
 
+    // Inspect the failed job_003 task document and verify authoritative retry state and nextAttemptAt
+    const job3TaskId = taskDocumentId(buildIdempotencyKey('job_emu_25_003', 'JOB_EXTRACTION', 'v1'));
+    const job3TaskSnap = await adminDb.collection('intelligence_tasks').doc(job3TaskId).get();
+    expect(job3TaskSnap.exists).toBe(true);
+    const job3TaskData = job3TaskSnap.data() as IntelligenceTask;
+    expect(job3TaskData.status).toBe('retrying');
+    expect(job3TaskData.attempts).toBe(1);
+    expect(job3TaskData.nextAttemptAt).toBeDefined();
+
+    // Respect real queue retry backoff: wait until nextAttemptAt is due
+    const nextAttemptTime = new Date(job3TaskData.nextAttemptAt!).getTime();
+    const waitMs = Math.max(0, nextAttemptTime - Date.now() + 50);
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+
     // Fix the handler so job 3 now succeeds
     intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
       return { processed: true, jobId: task.aggregateId, recovered: true };
     });
 
-    // Run 2: Resume from saved cursor (job_emu_25_002) -> processes job 3 through 7
+    // Run 2: Resume with the same runId from saved cursor (job_emu_25_002) -> retries job 3 and processes through 7
     const run2 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
       runId,
       batchSize: 5,
@@ -1215,7 +1232,17 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     expect(run2.processedCount).toBe(7); // 2 previous + 5 new
     expect(run2.nextCursor).toBe('job_emu_25_007');
     expect(run2.errorCount).toBe(1);
-  });
+
+    const runDoc2 = (await adminDb.collection('intelligence_backfill_runs').doc(runId).get()).data();
+    expect(runDoc2?.cursor).toBe('job_emu_25_007');
+    expect(runDoc2?.processed).toBe(7);
+    expect(runDoc2?.errors).toBe(1);
+
+    // Verify job 3 task is now succeeded
+    const job3TaskSnapAfter = await adminDb.collection('intelligence_tasks').doc(job3TaskId).get();
+    expect(job3TaskSnapAfter.data()?.status).toBe('succeeded');
+    expect(job3TaskSnapAfter.data()?.attempts).toBe(2);
+  }, 15000);
 
   it('Production Emulator Vector 11: Scale test with 250 real Firestore emulator records processed in bounded batches', async () => {
     // Bulk seed 250 records into the real Firestore emulator in chunks

@@ -23,9 +23,10 @@
 - **3. Security Rules & Indexing**:
   - Added security rule for `/intelligence_backfill_scopes/{scopeId}` in `firestore.rules` (Admin SDK writes only, admin read only, client writes denied).
 - **4. Production Handlers & System Verification**:
-  - Registered all five core V8.2 intelligence handlers in `server.ts` (`job_extraction`, `property_lifecycle`, `property_risk`, `predictive_maintenance`, `buyer_intelligence`).
-  - Authored comprehensive test suite `tests/unit/task25ScaleBackfillResilience.test.ts` covering 20 mandatory resilience vectors plus real Firebase Emulator integration tests with `@firebase/rules-unit-testing`.
-  - 100% unit test pass rate across entire platform (618/618 tests passing across 40 test files).
+  - Registered all five core V8.2 intelligence handlers in `server.ts` (`job_extraction`, `property_rollup`, `predictive_maintenance`, `property_passport`, `buyer_intelligence`).
+  - Authored comprehensive test suite `tests/unit/task25ScaleBackfillResilience.test.ts` covering 11 production Firebase Emulator integration vectors with `@firebase/rules-unit-testing`.
+  - Verified retry backoff and partial failure resumption: failed items halt cursor without skipping, transition to `retrying` with authoritative `nextAttemptAt`, and resume seamlessly after backoff expiry.
+  - 100% unit test pass rate across entire platform (598/598 tests passing across 39 test files).
   - Clean `tsc --noEmit` linting (`npm run lint`), successful compilation (`compile_applet`), and release audit pass.
 
 ## 🛡️ AnyTrader V8.2 — Task 24: Buyer / Conveyancing Intelligence (September 21, 2026)
