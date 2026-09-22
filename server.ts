@@ -5743,7 +5743,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
   // Controlled Historical Backfill (Admin Only, Dry Run By Default)
   app.post("/api/intelligence/backfill", requireAdmin, async (req, res) => {
     try {
-      const { batchSize = 50, dryRun = true, maxCostUsd = 5.0, cursor } = req.body;
+      const { batchSize = 50, dryRun = true, maxCostUsd = 5.0, cursor, collection, targetTaskType, tenantId } = req.body;
 
       if (!db) {
         return res.status(503).json({
@@ -5756,6 +5756,9 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         dryRun,
         maxCostUsd,
         cursor,
+        collection,
+        targetTaskType,
+        tenantId,
       });
 
       res.json({

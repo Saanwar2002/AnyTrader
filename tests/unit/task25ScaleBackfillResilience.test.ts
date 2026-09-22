@@ -1068,10 +1068,11 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     const runId = 'bf_run_emu_ceilings_test';
 
     // Batch size > HARD_MAX_BATCH_SIZE (500) clamped to 500
+    // Max cost = 0.00006 ($0.00005 per item -> halts after item 2 because item 3 would exceed or reach budget)
     const progress = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
       runId,
       batchSize: 99999, // Should clamp to 500
-      maxCostUsd: 0.00006, // Should stop after ~2 items
+      maxCostUsd: 0.00006, // Should halt after 2 items
       dryRun: true,
       rateLimitDelayMs: 0,
     });
@@ -1079,10 +1080,12 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     expect(progress.processedCount).toBe(2);
     expect(progress.nextCursor).toBe('job_emu_25_002');
     expect(progress.isComplete).toBe(false);
+    expect(progress.terminationReason).toBe('cost_limited');
 
     const runDoc = (await adminDb.collection('intelligence_backfill_runs').doc(runId).get()).data();
     expect(runDoc?.batchSize).toBe(HARD_MAX_BATCH_SIZE);
     expect(runDoc?.status).toBe('paused');
+    expect(runDoc?.terminationReason).toBe('cost_limited');
   });
 
   it('Production Emulator Vector 8: Duplicate active run race condition blocked via real Firestore transactional scope lock', async () => {
@@ -1108,49 +1111,66 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
   });
 
   it('Production Emulator Vector 9: Cross-tenant isolation maintained across real Firestore backfill batches', async () => {
-    // Seed 2 jobs belonging to estate tenant A and 2 jobs to estate tenant B
-    await adminDb.collection('jobs').doc('job_estate_A_1').set({
-      id: 'job_estate_A_1',
-      title: 'Estate A Leak',
-      estateId: 'estate_tenant_AAA',
-      category: 'Plumbing',
-      postcode: 'E1 6AN',
-    });
-    await adminDb.collection('jobs').doc('job_estate_B_1').set({
-      id: 'job_estate_B_1',
-      title: 'Estate B Window',
-      estateId: 'estate_tenant_BBB',
-      category: 'Glazing',
-      postcode: 'N1 7GU',
+    // Seed 3 jobs belonging to estate tenant A and 3 jobs to estate tenant B
+    for (let i = 1; i <= 3; i++) {
+      await adminDb.collection('jobs').doc(`job_tenant_A_${i}`).set({
+        id: `job_tenant_A_${i}`,
+        title: `Estate A Unit ${i} Repair`,
+        estateId: 'estate_tenant_AAA',
+        category: 'Plumbing',
+        postcode: 'E1 6AN',
+        createdAt: new Date().toISOString(),
+      });
+      await adminDb.collection('jobs').doc(`job_tenant_B_${i}`).set({
+        id: `job_tenant_B_${i}`,
+        title: `Estate B Unit ${i} Window`,
+        estateId: 'estate_tenant_BBB',
+        category: 'Glazing',
+        postcode: 'N1 7GU',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    // Register simple handler
+    intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
+      return { processed: true, id: task.aggregateId };
     });
 
-    const runId = 'bf_run_emu_tenant_isolation';
+    const runId = 'bf_run_emu_tenant_A_scoped';
+    // Run backfill scoped strictly to tenant A
     const progress = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
       runId,
       batchSize: 10,
       dryRun: false,
       rateLimitDelayMs: 0,
+      tenantId: 'estate_tenant_AAA',
     });
 
-    expect(progress.processedCount).toBeGreaterThanOrEqual(2);
+    expect(progress.processedCount).toBe(3);
+    expect(progress.isComplete).toBe(true);
 
-    const taskSnapA = await adminDb.collection('intelligence_tasks')
-      .doc(taskDocumentId(buildIdempotencyKey('job_estate_A_1', 'JOB_EXTRACTION', 'v1')))
+    // Verify tenant A tasks exist
+    const taskSnapA1 = await adminDb.collection('intelligence_tasks')
+      .doc(taskDocumentId(buildIdempotencyKey('job_tenant_A_1', 'JOB_EXTRACTION', 'v1')))
       .get();
-    const taskSnapB = await adminDb.collection('intelligence_tasks')
-      .doc(taskDocumentId(buildIdempotencyKey('job_estate_B_1', 'JOB_EXTRACTION', 'v1')))
-      .get();
+    expect(taskSnapA1.exists).toBe(true);
+    expect(taskSnapA1.data()?.status).toBe('succeeded');
 
-    expect(taskSnapA.exists).toBe(true);
-    expect(taskSnapB.exists).toBe(true);
-    expect((taskSnapA.data()?.payload as any)?.job?.jobId).toBe('job_estate_A_1');
-    expect((taskSnapB.data()?.payload as any)?.job?.jobId).toBe('job_estate_B_1');
+    // Verify tenant B tasks were NOT created (strict tenant boundary preserved)
+    const taskSnapB1 = await adminDb.collection('intelligence_tasks')
+      .doc(taskDocumentId(buildIdempotencyKey('job_tenant_B_1', 'JOB_EXTRACTION', 'v1')))
+      .get();
+    expect(taskSnapB1.exists).toBe(false);
+
+    const runDoc = (await adminDb.collection('intelligence_backfill_runs').doc(runId).get()).data();
+    expect(runDoc?.tenantId).toBe('estate_tenant_AAA');
+    expect(runDoc?.runScopeId).toBe('jobs_job_extraction_estate_tenant_AAA');
   });
 
-  it('Production Emulator Vector 10: Partial failure & resume — Failed items do NOT advance cursor and are retried on resume', async () => {
+  it('Production Emulator Vector 10: Partial failure & resume — Failed items halt batch without advancing cursor and are retried on resume', async () => {
     const runId = 'bf_run_emu_partial_failure';
 
-    // Register a handler that fails on job_emu_25_003
+    // Register a handler that fails specifically on job_emu_25_003
     intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
       if (task.aggregateId === 'job_emu_25_003') {
         throw new Error('Simulation: extraction failed on unit 3');
@@ -1158,7 +1178,7 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
       return { processed: true, jobId: task.aggregateId };
     });
 
-    // Run 1: Batch of 5 items, job 3 fails -> cursor must stop at job_emu_25_002
+    // Run 1: Batch of 5 items. job 1 & 2 succeed, job 3 fails -> batch stops immediately at job 3
     const run1 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
       runId,
       batchSize: 5,
@@ -1166,16 +1186,25 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
       rateLimitDelayMs: 0,
     });
 
-    expect(run1.processedCount).toBe(4); // 4 succeeded, 1 failed
+    // Exactly 2 succeeded, 1 failed, 0 skipped past the failure
+    expect(run1.processedCount).toBe(2);
     expect(run1.errorCount).toBe(1);
-    expect(run1.nextCursor).toBe('job_emu_25_002'); // Crucial: cursor stopped before failed item
+    expect(run1.nextCursor).toBe('job_emu_25_002'); // Invariant: cursor strictly stops at last success (before failure)
+    expect(run1.isComplete).toBe(false);
+    expect(run1.terminationReason).toBe('item_failed');
+
+    const runDoc1 = (await adminDb.collection('intelligence_backfill_runs').doc(runId).get()).data();
+    expect(runDoc1?.status).toBe('failed');
+    expect(runDoc1?.cursor).toBe('job_emu_25_002');
+    expect(runDoc1?.processed).toBe(2);
+    expect(runDoc1?.errors).toBe(1);
 
     // Fix the handler so job 3 now succeeds
     intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
       return { processed: true, jobId: task.aggregateId, recovered: true };
     });
 
-    // Run 2: Resume from saved cursor
+    // Run 2: Resume from saved cursor (job_emu_25_002) -> processes job 3 through 7
     const run2 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
       runId,
       batchSize: 5,
@@ -1183,8 +1212,9 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
       rateLimitDelayMs: 0,
     });
 
-    expect(run2.processedCount).toBe(9);
+    expect(run2.processedCount).toBe(7); // 2 previous + 5 new
     expect(run2.nextCursor).toBe('job_emu_25_007');
+    expect(run2.errorCount).toBe(1);
   });
 
   it('Production Emulator Vector 11: Scale test with 250 real Firestore emulator records processed in bounded batches', async () => {
@@ -1251,5 +1281,5 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
 
     const finalRunSnap = await adminDb.collection('intelligence_backfill_runs').doc(runId).get();
     expect(finalRunSnap.data()?.status).toBe('completed');
-  });
+  }, 30000);
 });

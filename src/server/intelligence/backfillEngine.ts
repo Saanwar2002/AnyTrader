@@ -52,7 +52,17 @@ export interface BackfillOptions {
   runId?: string;          // Optional durable run ID
   collection?: 'jobs' | 'properties'; // Target collection (default 'jobs')
   targetTaskType?: TaskType; // Optional target task type
+  tenantId?: string;       // Optional authoritative tenant / estate isolation filter
 }
+
+export type BackfillTerminationReason =
+  | 'exhausted'
+  | 'cost_limited'
+  | 'item_failed'
+  | 'batch_boundary'
+  | 'checkpoint_failed'
+  | 'cancelled'
+  | 'fatal_error';
 
 export interface BackfillRun {
   runId: string;
@@ -68,6 +78,8 @@ export interface BackfillRun {
   maxCostUsd?: number;
   rateLimitDelayMs: number;
   runScopeId?: string;
+  tenantId?: string | null;
+  terminationReason?: BackfillTerminationReason;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -83,6 +95,7 @@ export interface BackfillProgress {
   estimatedCostUsd: number;
   nextCursor?: string;
   isComplete: boolean;
+  terminationReason?: BackfillTerminationReason;
 }
 
 export class ControlledBackfillEngine {
@@ -205,6 +218,7 @@ export class ControlledBackfillEngine {
       runId = `bf_run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       collection: targetCollection = 'jobs',
       targetTaskType,
+      tenantId,
     } = options;
 
     // Enforce robust number validation & hard server-side ceilings
@@ -244,8 +258,10 @@ export class ControlledBackfillEngine {
     const runRef = firestoreDb.collection('intelligence_backfill_runs').doc(runId);
     let effectiveCursor = cursor;
 
-    // Scope locking: target collection + optional target task type
-    const runScopeId = `${targetCollection}_${targetTaskType || (targetCollection === 'properties' ? 'property_rollup' : 'job_extraction')}`;
+    // Scope locking: target collection + optional target task type + optional tenantId
+    const effectiveTaskType: TaskType = targetTaskType || (targetCollection === 'properties' ? 'property_rollup' : 'job_extraction');
+    const tenantSuffix = tenantId ? `_${tenantId}` : '';
+    const runScopeId = `${targetCollection}_${effectiveTaskType}${tenantSuffix}`;
     const scopeLockRef = firestoreDb.collection('intelligence_backfill_scopes').doc(runScopeId);
 
     // 1. Transactional check: Prevent duplicate concurrent active runs for the same scope
@@ -263,6 +279,7 @@ export class ControlledBackfillEngine {
           activeRunId: runId,
           status: 'running',
           collection: targetCollection,
+          tenantId: tenantId || null,
           updatedAt: nowIso,
         }, { merge: true });
       });
@@ -291,6 +308,7 @@ export class ControlledBackfillEngine {
           maxCostUsd: Math.min(maxCostUsd, existingData.maxCostUsd ?? HARD_MAX_COST_USD),
           rateLimitDelayMs,
           runScopeId,
+          tenantId: tenantId || existingData.tenantId || null,
           updatedAt: nowIso,
         });
       } else {
@@ -308,6 +326,7 @@ export class ControlledBackfillEngine {
           maxCostUsd,
           rateLimitDelayMs,
           runScopeId,
+          tenantId: tenantId || null,
           createdAt: nowIso,
           updatedAt: nowIso,
         }, { merge: true });
@@ -322,6 +341,16 @@ export class ControlledBackfillEngine {
 
     try {
       let query: any = firestoreDb.collection(targetCollection);
+
+      // Apply authoritative tenant isolation filter if tenantId is provided
+      if (tenantId) {
+        if (targetCollection === 'jobs') {
+          query = query.where('estateId', '==', tenantId);
+        } else if (targetCollection === 'properties') {
+          query = query.where('estateId', '==', tenantId);
+        }
+      }
+
       if (typeof query.orderBy === 'function') {
         query = query.orderBy('__name__');
       }
@@ -344,8 +373,10 @@ export class ControlledBackfillEngine {
 
       if (!snapshot || !snapshot.docs || snapshot.docs.length === 0) {
         progress.isComplete = true;
+        progress.terminationReason = 'exhausted';
         await runRef.update({
           status: 'completed',
+          terminationReason: 'exhausted',
           completedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -355,18 +386,27 @@ export class ControlledBackfillEngine {
         return progress;
       }
 
+      let terminationReason: BackfillTerminationReason = 'batch_boundary';
+      let shouldHaltBatch = false;
+
       for (const doc of snapshot.docs) {
         const docId = doc.id;
         const docData = doc.data() as any;
 
-        progress.totalScanned += 1;
+        // Verify tenant match if tenantId specified (defense-in-depth)
+        if (tenantId && docData.estateId && docData.estateId !== tenantId) {
+          continue;
+        }
 
+        // Check cost ceiling before processing item
         if (progress.estimatedCostUsd >= maxCostUsd) {
-          progress.isComplete = false;
+          terminationReason = 'cost_limited';
+          shouldHaltBatch = true;
           break;
         }
 
-        const effectiveTaskType: TaskType = targetTaskType || (targetCollection === 'properties' ? 'property_rollup' : 'job_extraction');
+        progress.totalScanned += 1;
+
         const idempotencyKey = buildIdempotencyKey(docId, effectiveTaskType.toUpperCase(), 'v1');
 
         // Check idempotency against queue
@@ -375,7 +415,7 @@ export class ControlledBackfillEngine {
           progress.skippedIdempotentCount += 1;
           progress.nextCursor = docId;
 
-          // Save checkpoint: must not be swallowed (fail-closed)
+          // Save checkpoint: fail-closed if persistence fails
           await runRef.update({
             cursor: docId,
             scanned: progress.totalScanned,
@@ -426,42 +466,75 @@ export class ControlledBackfillEngine {
               progress.estimatedCostUsd += 0.00005;
               itemSucceeded = true;
             } else {
-              // Task failed: do NOT bypass task system with direct extraction!
-              // Crucial: Cursor must NOT advance beyond failed docId
+              // Task failed: Halting rule — cursor MUST NOT advance beyond failed docId
               progress.errorCount += 1;
               itemSucceeded = false;
+              terminationReason = 'item_failed';
+              shouldHaltBatch = true;
             }
           } catch {
             progress.errorCount += 1;
             itemSucceeded = false;
+            terminationReason = 'item_failed';
+            shouldHaltBatch = true;
           }
         }
 
-        // Advance cursor ONLY if item succeeded (processed or idempotent skip)
         if (itemSucceeded) {
           progress.nextCursor = docId;
+          // Save durable checkpoint only for confirmed successful item
+          await runRef.update({
+            cursor: docId,
+            scanned: progress.totalScanned,
+            processed: progress.processedCount,
+            skipped: progress.skippedIdempotentCount,
+            errors: progress.errorCount,
+            estimatedCostUsd: progress.estimatedCostUsd,
+            updatedAt: new Date().toISOString(),
+          });
+        } else {
+          // Record error counts in run record WITHOUT advancing cursor
+          await runRef.update({
+            cursor: progress.nextCursor || null,
+            scanned: progress.totalScanned,
+            processed: progress.processedCount,
+            skipped: progress.skippedIdempotentCount,
+            errors: progress.errorCount,
+            estimatedCostUsd: progress.estimatedCostUsd,
+            updatedAt: new Date().toISOString(),
+          });
+          // Stop batch immediately so later items cannot skip past this failure
+          break;
         }
-
-        // Save durable checkpoint after item handled: cursor only reflects latest succeeded docId
-        await runRef.update({
-          cursor: progress.nextCursor || null,
-          scanned: progress.totalScanned,
-          processed: progress.processedCount,
-          skipped: progress.skippedIdempotentCount,
-          errors: progress.errorCount,
-          estimatedCostUsd: progress.estimatedCostUsd,
-          updatedAt: new Date().toISOString(),
-        });
 
         if (rateLimitDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, rateLimitDelayMs));
         }
+
+        if (shouldHaltBatch) {
+          break;
+        }
       }
 
-      progress.isComplete = snapshot.docs.length < batchSize;
+      // Determine completion status:
+      // A run is ONLY 'completed' if all documents in collection were naturally exhausted
+      // (i.e. snapshot had fewer docs than batchSize AND processing did not stop due to cost or failure).
+      if (!shouldHaltBatch && snapshot.docs.length < batchSize) {
+        progress.isComplete = true;
+        terminationReason = 'exhausted';
+      } else {
+        progress.isComplete = false;
+      }
+
+      progress.terminationReason = terminationReason;
+
+      const finalStatus = progress.isComplete
+        ? 'completed'
+        : (terminationReason === 'item_failed' ? 'failed' : 'paused');
 
       await runRef.update({
-        status: progress.isComplete ? 'completed' : 'paused',
+        status: finalStatus,
+        terminationReason,
         cursor: progress.nextCursor || null,
         completedAt: progress.isComplete ? new Date().toISOString() : undefined,
         updatedAt: new Date().toISOString(),
@@ -473,7 +546,7 @@ export class ControlledBackfillEngine {
         } catch {}
       } else {
         try {
-          await scopeLockRef.set({ status: 'paused', activeRunId: runId, updatedAt: new Date().toISOString() }, { merge: true });
+          await scopeLockRef.set({ status: finalStatus, activeRunId: runId, updatedAt: new Date().toISOString() }, { merge: true });
         } catch {}
       }
 
@@ -483,6 +556,7 @@ export class ControlledBackfillEngine {
       try {
         await runRef.update({
           status: 'failed',
+          terminationReason: 'fatal_error',
           lastError: (err as Error).message || 'Unknown backfill failure',
           updatedAt: new Date().toISOString(),
         });
