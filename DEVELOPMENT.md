@@ -1,5 +1,31 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Task 27: Data Rights & Provenance Foundation (September 22, 2026)
+- **1. Server-Authoritative Data Rights Architecture (`DataRightsService`)**:
+  - Implemented `DataRightsService` in `src/server/intelligence/dataRights.ts` managing authoritative data rights records and explicit purpose allocations.
+  - Granular purpose distinction:
+    - `internal_platform_operation`: Operational platform mechanics.
+    - `internal_ai_use`: Internal AI Bot assistance, matching, understanding, property intelligence, and operational automation.
+    - `external_ai_training`: External model training (strictly isolated, never inferred from internal AI use).
+    - `third_party_sharing`: External party transmission.
+    - `commercial_licensing`: Commercial dataset licensing (strictly isolated, never inferred from platform participation).
+    - `export`: Data export eligibility.
+  - Enforced core invariants:
+    - **"CONSERVATIVE EVALUATION: UNKNOWN != ALLOWED"** — Missing or undefined purpose permissions default to denied/false.
+    - **"INTERNAL AI USE IS FIRST-CLASS BUT EXPLICIT"** — Internal AnyTrader AI Bot use is supported without implying external licensing rights.
+    - **"TENANT-SCOPED & SERVER-AUTHORITATIVE"** — All rights records require mandatory `tenantId`, `subject`, `owner`, `source`, and cryptographic `rightsHash`. Client writes are completely denied.
+    - **"IMMUTABLE APPEND-ONLY HISTORY (`/data_rights_history`) & CURRENT PROJECTION (`/data_rights`)"** — Transactional mutations bump versions and create immutable historical snapshots.
+    - **"REPRESENTATION OF REVOCATION, EXPIRATION, AND EXPLICIT RESTRICTION LISTS"** — Revoked, expired, superseded, or restricted records evaluate to denied.
+- **2. Security Rules (`firestore.rules`)**:
+  - Added fail-closed security rules for `/data_rights/{rightsId}` and `/data_rights_history/{historyId}`:
+    - Read access: Authorized tenant, authorized owner, or platform admin.
+    - Write access: `allow create, update, delete: if false;` (Server Admin SDK writes only).
+- **3. Verification & CI Testing**:
+  - Unit test suite: `src/server/intelligence/dataRights.test.ts` (16 tests, 100% pass rate).
+  - Emulator security suite: `tests/unit/task27DataRightsProvenance.test.ts` (7 security vectors with `@firebase/rules-unit-testing`).
+  - 614/614 unit tests passing across 40 test files.
+  - Clean `tsc --noEmit` linting, successful build compilation (`compile_applet`), and release audit pass.
+
 ## 🛡️ AnyTrader V8.2 — Task 25: Scale / Backfill / Resilience (September 22, 2026)
 - **1. Resumable Firestore Backfill Engine (`ControlledBackfillEngine`)**:
   - Implemented `ControlledBackfillEngine.executeFirestoreBackfill()` in `src/server/intelligence/backfillEngine.ts` supporting durable state persistence in `/intelligence_backfill_runs/{runId}`.

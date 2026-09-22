@@ -1310,5 +1310,23 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable buyer intelligence snapshot history; server Admin SDK writes only
     }
+    match /data_rights/{rightsId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          (resource.data.get('owner', null) != null && resource.data.owner.get('id', '') == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+    match /data_rights_history/{historyId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          (resource.data.get('owner', null) != null && resource.data.owner.get('id', '') == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable data rights history; server Admin SDK writes only
+    }
   }
 }
