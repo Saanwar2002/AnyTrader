@@ -600,10 +600,10 @@ export class IntelligenceTaskQueue {
             if (!isExpired) return null;
 
             const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
-            const updates: Partial<IntelligenceTask> = {
+            const updates: Record<string, any> = {
               status: nextStatus,
-              nextAttemptAt: nextStatus === 'retrying' ? nowIso : undefined,
-              nextRetryAt: nextStatus === 'retrying' ? nowIso : undefined,
+              nextAttemptAt: nextStatus === 'retrying' ? nowIso : null,
+              nextRetryAt: nextStatus === 'retrying' ? nowIso : null,
               lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
               errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
               leaseId: undefined,
@@ -613,7 +613,7 @@ export class IntelligenceTaskQueue {
             };
 
             transaction.update(taskRef, updates);
-            return { ...task, ...updates };
+            return { ...task, ...updates } as IntelligenceTask;
           });
 
           if (recoveredTask) {
@@ -808,10 +808,12 @@ export class IntelligenceTaskQueue {
         }
         const data = docSnap.data() as IntelligenceTask;
 
+        const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= Date.now() : false;
         if (
           data.status !== 'processing' ||
           data.workerId !== effectiveWorkerId ||
-          data.leaseId !== activeLeaseId
+          data.leaseId !== activeLeaseId ||
+          isLeaseExpired
         ) {
           throw new OwnershipLostError(taskId, effectiveWorkerId);
         }
@@ -845,8 +847,8 @@ export class IntelligenceTaskQueue {
       this.tasks.set(taskId, task);
       return task;
     } catch (err) {
-      if (err instanceof OwnershipLostError) {
-        console.warn(`[IntelligenceTaskQueue] ${err.message}`);
+      if (err instanceof OwnershipLostError || (err as any)?.name === 'OwnershipLostError') {
+        console.warn(`[IntelligenceTaskQueue] ${(err as any).message}`);
         return (await this.getTaskAsync(taskId)) || task;
       }
 
@@ -907,10 +909,12 @@ export class IntelligenceTaskQueue {
           }
           const data = docSnap.data() as IntelligenceTask;
 
+          const isLeaseExpired = data.leaseExpiresAt ? new Date(data.leaseExpiresAt).getTime() <= Date.now() : false;
           if (
             data.status !== 'processing' ||
             data.workerId !== effectiveWorkerId ||
-            data.leaseId !== activeLeaseId
+            data.leaseId !== activeLeaseId ||
+            isLeaseExpired
           ) {
             console.warn(`[IntelligenceTaskQueue] Worker '${effectiveWorkerId}' lost ownership for task '${taskId}' during failure finalization. Aborting state write.`);
             throw new OwnershipLostError(taskId, effectiveWorkerId);
@@ -935,7 +939,7 @@ export class IntelligenceTaskQueue {
           });
         });
       } catch (finalErr) {
-        if (finalErr instanceof OwnershipLostError) {
+        if (finalErr instanceof OwnershipLostError || (finalErr as any)?.name === 'OwnershipLostError') {
           console.warn(`[IntelligenceTaskQueue] ${finalErr.message}`);
           task = (await this.getTaskAsync(taskId)) || task;
           return task;

@@ -29,20 +29,23 @@
 import { buildIdempotencyKey } from './provenance';
 import { JobSourceInput } from './jobIntelligence';
 import { intelligenceTaskQueue } from './intelligenceTaskQueue';
+import { TaskType } from './types';
 
 export interface BackfillOptions {
-  batchSize: number;       // Default 100
-  dryRun: boolean;         // Default true (safe mode)
+  batchSize?: number;       // Default 100
+  dryRun?: boolean;         // Default true (safe mode)
   maxCostUsd?: number;     // Stop if estimated cost exceeds this amount
   cursor?: string;         // Checkpoint cursor for resumable execution (e.g. jobId)
   rateLimitDelayMs?: number; // Throttle between items (ms)
   runId?: string;          // Optional durable run ID
+  collection?: 'jobs' | 'properties'; // Target collection (default 'jobs')
+  targetTaskType?: TaskType; // Optional target task type
 }
 
 export interface BackfillRun {
   runId: string;
   status: 'dry_run' | 'running' | 'paused' | 'completed' | 'failed';
-  collection: 'jobs';
+  collection: 'jobs' | 'properties' | string;
   batchSize: number;
   cursor?: string | null;
   scanned: number;
@@ -187,6 +190,8 @@ export class ControlledBackfillEngine {
       cursor,
       rateLimitDelayMs = 20,
       runId = `bf_run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      collection: targetCollection = 'jobs',
+      targetTaskType,
     } = options;
 
     const progress: BackfillProgress = {
@@ -209,41 +214,69 @@ export class ControlledBackfillEngine {
 
     const nowIso = new Date().toISOString();
     const runRef = firestoreDb.collection('intelligence_backfill_runs').doc(runId);
+    let effectiveCursor = cursor;
 
-    // 1. Initialize durable run record
+    // 1. Initialize durable run record or resume existing run
     try {
-      await runRef.set({
-        runId,
-        status: dryRun ? 'dry_run' : 'running',
-        collection: 'jobs',
-        batchSize,
-        cursor: cursor || null,
-        scanned: 0,
-        processed: 0,
-        skipped: 0,
-        errors: 0,
-        estimatedCostUsd: 0,
-        maxCostUsd,
-        rateLimitDelayMs,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      }, { merge: true });
+      const existingSnap = typeof runRef.get === 'function' ? await runRef.get() : null;
+      if (existingSnap && existingSnap.exists) {
+        const existingData = existingSnap.data() as BackfillRun;
+        if (!effectiveCursor && existingData.cursor) {
+          effectiveCursor = existingData.cursor;
+        }
+        progress.totalScanned = existingData.scanned || 0;
+        progress.processedCount = existingData.processed || 0;
+        progress.skippedIdempotentCount = existingData.skipped || 0;
+        progress.errorCount = existingData.errors || 0;
+        progress.estimatedCostUsd = existingData.estimatedCostUsd || 0;
+
+        await runRef.update({
+          status: dryRun ? 'dry_run' : 'running',
+          batchSize,
+          maxCostUsd: maxCostUsd ?? existingData.maxCostUsd,
+          rateLimitDelayMs,
+          updatedAt: nowIso,
+        });
+      } else {
+        await runRef.set({
+          runId,
+          status: dryRun ? 'dry_run' : 'running',
+          collection: targetCollection,
+          batchSize,
+          cursor: effectiveCursor || null,
+          scanned: 0,
+          processed: 0,
+          skipped: 0,
+          errors: 0,
+          estimatedCostUsd: 0,
+          maxCostUsd,
+          rateLimitDelayMs,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        }, { merge: true });
+      }
     } catch (runErr) {
       console.error(`[BackfillEngine] Failed to initialize durable backfill run record ${runId}:`, runErr);
-      throw new Error(`[BackfillEngine] Checkpoint initialization failed for run '${runId}': ${(runErr as Error)?.message || runErr}`);
+      throw runErr;
     }
 
     try {
-      let query: any = firestoreDb.collection('jobs');
+      let query: any = firestoreDb.collection(targetCollection);
       if (typeof query.orderBy === 'function') {
         query = query.orderBy('__name__');
       }
       query = query.limit(batchSize);
 
-      if (cursor) {
-        const cursorDoc = await firestoreDb.collection('jobs').doc(cursor).get();
+      if (effectiveCursor) {
+        const cursorDoc = await firestoreDb.collection(targetCollection).doc(effectiveCursor).get();
         if (cursorDoc && cursorDoc.exists) {
           query = query.startAfter(cursorDoc);
+        } else if (typeof query.startAfter === 'function') {
+          try {
+            query = query.startAfter(effectiveCursor);
+          } catch {
+            // startAfter with string id fallback if supported
+          }
         }
       }
 
@@ -261,36 +294,27 @@ export class ControlledBackfillEngine {
       }
 
       for (const doc of snapshot.docs) {
-        const jobId = doc.id;
-        const jobData = doc.data() as any;
-        const jobInput: JobSourceInput = {
-          jobId,
-          title: jobData.title || '',
-          description: jobData.description || '',
-          category: jobData.category || '',
-          postcode: jobData.postcode || '',
-          createdAt: typeof jobData.createdAt === 'string' ? jobData.createdAt : undefined,
-          photos: Array.isArray(jobData.photos) ? jobData.photos : undefined,
-          documents: Array.isArray(jobData.documents) ? jobData.documents : undefined,
-        };
+        const docId = doc.id;
+        const docData = doc.data() as any;
 
         if (progress.estimatedCostUsd >= maxCostUsd) {
-          progress.nextCursor = jobId;
+          progress.nextCursor = docId;
           progress.isComplete = false;
           break;
         }
 
-        const idempotencyKey = buildIdempotencyKey(jobId, 'JOB_ANALYSIS_COMPLETED', 'v1');
+        const effectiveTaskType: TaskType = targetTaskType || (targetCollection === 'properties' ? 'property_rollup' : 'job_extraction');
+        const idempotencyKey = buildIdempotencyKey(docId, effectiveTaskType.toUpperCase(), 'v1');
 
         // Check idempotency against queue
         const existingTask = await intelligenceTaskQueue.getByIdempotencyKeyAsync(idempotencyKey);
         if (existingTask && existingTask.status === 'succeeded') {
           progress.skippedIdempotentCount += 1;
-          progress.nextCursor = jobId;
+          progress.nextCursor = docId;
 
-          // Save checkpoint: must not be swallowed
+          // Save checkpoint: must not be swallowed (fail-closed)
           await runRef.update({
-            cursor: jobId,
+            cursor: docId,
             scanned: progress.totalScanned,
             skipped: progress.skippedIdempotentCount,
             updatedAt: new Date().toISOString(),
@@ -305,12 +329,29 @@ export class ControlledBackfillEngine {
         } else {
           try {
             // Task-First: Enqueue task into queue first
+            let taskPayload: Record<string, unknown>;
+            if (targetCollection === 'properties') {
+              taskPayload = { property: { propertyId: docId, ...docData }, isBackfill: true };
+            } else {
+              const jobInput: JobSourceInput = {
+                jobId: docId,
+                title: docData.title || '',
+                description: docData.description || '',
+                category: docData.category || '',
+                postcode: docData.postcode || '',
+                createdAt: typeof docData.createdAt === 'string' ? docData.createdAt : undefined,
+                photos: Array.isArray(docData.photos) ? docData.photos : undefined,
+                documents: Array.isArray(docData.documents) ? docData.documents : undefined,
+              };
+              taskPayload = { job: jobInput, isBackfill: true };
+            }
+
             const task = await intelligenceTaskQueue.enqueueTaskAsync(
-              'job_extraction',
-              'job',
-              jobId,
+              effectiveTaskType,
+              targetCollection === 'properties' ? 'property' : 'job',
+              docId,
               idempotencyKey,
-              { job: jobInput, isBackfill: true }
+              taskPayload
             );
 
             const executed = await intelligenceTaskQueue.executeTask(task.taskId);
@@ -326,11 +367,12 @@ export class ControlledBackfillEngine {
           }
         }
 
-        // Save durable checkpoint after item handled: must not be swallowed
+        // Save durable checkpoint after item handled: must not be swallowed (fail-closed)
         await runRef.update({
-          cursor: jobId,
+          cursor: docId,
           scanned: progress.totalScanned,
           processed: progress.processedCount,
+          skipped: progress.skippedIdempotentCount,
           errors: progress.errorCount,
           estimatedCostUsd: progress.estimatedCostUsd,
           updatedAt: new Date().toISOString(),
@@ -340,7 +382,7 @@ export class ControlledBackfillEngine {
           await new Promise((resolve) => setTimeout(resolve, rateLimitDelayMs));
         }
 
-        progress.nextCursor = jobId;
+        progress.nextCursor = docId;
       }
 
       progress.isComplete = snapshot.docs.length < batchSize;

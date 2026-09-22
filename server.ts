@@ -166,7 +166,9 @@ export function registerIntelligenceTaskHandlers(overrideDb?: any): void {
     !overrideDb &&
     intelligenceTaskQueue.hasHandler("job_extraction") &&
     intelligenceTaskQueue.hasHandler("property_rollup") &&
-    intelligenceTaskQueue.hasHandler("predictive_maintenance")
+    intelligenceTaskQueue.hasHandler("predictive_maintenance") &&
+    intelligenceTaskQueue.hasHandler("property_passport") &&
+    intelligenceTaskQueue.hasHandler("buyer_intelligence")
   ) {
     return;
   }
