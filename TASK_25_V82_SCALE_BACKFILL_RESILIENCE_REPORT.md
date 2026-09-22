@@ -33,12 +33,18 @@ Task 25 implements **Scale, Backfill, and Resilience** across the AnyTrader V8.2
 
 - **`src/server/intelligence/backfillEngine.ts`**:
   - Implemented collection targeting (`jobs`, `properties`, and custom collections).
+  - Hardened with server-side hard ceilings `HARD_MAX_BATCH_SIZE` (500) and `HARD_MAX_COST_USD` (100.0).
+  - Enforced transactional scope locking via `intelligence_backfill_scopes` collection and `DuplicateActiveRunError` defense.
+  - Refactored cursor advancement to only advance upon confirmed successful task processing (or idempotent skip).
   - Built resumable batch execution reading existing durable run data and starting from `effectiveCursor`.
   - Added fail-closed checkpoint updates on every item with updated cursor, scan count, processed count, skipped count, and estimated cost.
-  - Implemented budget cap checks (`maxCostUsd`) with clean `completed` exit when budget reached.
+  - Implemented budget cap checks (`maxCostUsd`) with clean `paused` exit when budget reached.
   - Implemented live execution path enqueuing real tasks into `intelligence_tasks` with deterministic idempotency keys.
   - Built `dry_run` calculation mode projecting document counts and costs.
   - Preserved raw initialization errors for strict fail-closed contract compliance.
+
+- **`firestore.rules`**:
+  - Added `/intelligence_backfill_scopes/{scopeId}` rule (Admin SDK writes only, admin read only, client writes denied).
 
 - **`src/server/intelligence/intelligenceTaskQueue.ts`**:
   - Hardened `completeTaskAsync` and `failTaskAsync` with transactional lease ownership verification (`verifyTaskLease`).
@@ -55,8 +61,10 @@ Task 25 implements **Scale, Backfill, and Resilience** across the AnyTrader V8.2
     5. `buyer_intelligence`
 
 - **`tests/unit/task25ScaleBackfillResilience.test.ts`**:
-  - Authored comprehensive test suite covering all 20 mandatory resilience vectors.
-  - Implemented serialized transactional mock store (`txMutex`) reflecting production Firestore transaction semantics.
+  - Authored comprehensive test suite covering all 20 mandatory resilience vectors plus server-side ceilings and scope locking.
+  - Integrated real production Firebase Emulator suite using `@firebase/rules-unit-testing` and `initializeTestEnvironment`.
+  - Verified batch execution against live emulator Firestore, cursor resumption across batches, and strict security rule write denials on backfill collections.
+  - Implemented serialized transactional mock store (`txMutex`) reflecting production Firestore transaction semantics for isolated circuit breaker tests.
   - Verified lease loss defense, stale recovery, budget limits, resumability, and snapshot deduplication.
 
 ---

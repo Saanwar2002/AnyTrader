@@ -31,10 +31,22 @@ import { JobSourceInput } from './jobIntelligence';
 import { intelligenceTaskQueue } from './intelligenceTaskQueue';
 import { TaskType } from './types';
 
+export const HARD_MAX_BATCH_SIZE = 500;
+export const HARD_MAX_COST_USD = 100.0;
+
+export class DuplicateActiveRunError extends Error {
+  constructor(public readonly runScopeId: string, public readonly activeRunId: string) {
+    super(
+      `[BackfillEngine] Another active backfill run '${activeRunId}' is already running for scope '${runScopeId}'. Concurrent runs for the same target are forbidden.`
+    );
+    this.name = 'DuplicateActiveRunError';
+  }
+}
+
 export interface BackfillOptions {
-  batchSize?: number;       // Default 100
+  batchSize?: number;       // Default 100, clamped to HARD_MAX_BATCH_SIZE (500)
   dryRun?: boolean;         // Default true (safe mode)
-  maxCostUsd?: number;     // Stop if estimated cost exceeds this amount
+  maxCostUsd?: number;     // Stop if estimated cost exceeds this amount, clamped to HARD_MAX_COST_USD (100.0)
   cursor?: string;         // Checkpoint cursor for resumable execution (e.g. jobId)
   rateLimitDelayMs?: number; // Throttle between items (ms)
   runId?: string;          // Optional durable run ID
@@ -55,6 +67,7 @@ export interface BackfillRun {
   estimatedCostUsd: number;
   maxCostUsd?: number;
   rateLimitDelayMs: number;
+  runScopeId?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -184,15 +197,19 @@ export class ControlledBackfillEngine {
     options: BackfillOptions
   ): Promise<BackfillProgress> {
     const {
-      batchSize = 100,
+      batchSize: rawBatchSize = 100,
       dryRun = true,
-      maxCostUsd = 10.0,
+      maxCostUsd: rawMaxCostUsd = 10.0,
       cursor,
       rateLimitDelayMs = 20,
       runId = `bf_run_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       collection: targetCollection = 'jobs',
       targetTaskType,
     } = options;
+
+    // Enforce hard server-side ceilings
+    const batchSize = Math.max(1, Math.min(Number(rawBatchSize) || 100, HARD_MAX_BATCH_SIZE));
+    const maxCostUsd = Math.max(0.0001, Math.min(Number(rawMaxCostUsd) || 10.0, HARD_MAX_COST_USD));
 
     const progress: BackfillProgress = {
       runId,
@@ -216,7 +233,31 @@ export class ControlledBackfillEngine {
     const runRef = firestoreDb.collection('intelligence_backfill_runs').doc(runId);
     let effectiveCursor = cursor;
 
-    // 1. Initialize durable run record or resume existing run
+    // Scope locking: target collection + optional target task type
+    const runScopeId = `${targetCollection}_${targetTaskType || (targetCollection === 'properties' ? 'property_rollup' : 'job_extraction')}`;
+    const scopeLockRef = firestoreDb.collection('intelligence_backfill_scopes').doc(runScopeId);
+
+    // 1. Transactional check: Prevent duplicate concurrent active runs for the same scope
+    if (typeof firestoreDb.runTransaction === 'function') {
+      await firestoreDb.runTransaction(async (tx: any) => {
+        const lockSnap = await tx.get(scopeLockRef);
+        if (lockSnap && lockSnap.exists) {
+          const lockData = lockSnap.data() as any;
+          if (lockData.status === 'running' && lockData.activeRunId !== runId) {
+            throw new DuplicateActiveRunError(runScopeId, lockData.activeRunId);
+          }
+        }
+        tx.set(scopeLockRef, {
+          scopeId: runScopeId,
+          activeRunId: runId,
+          status: 'running',
+          collection: targetCollection,
+          updatedAt: nowIso,
+        }, { merge: true });
+      });
+    }
+
+    // 2. Initialize durable run record or resume existing run
     try {
       const existingSnap = typeof runRef.get === 'function' ? await runRef.get() : null;
       if (existingSnap && existingSnap.exists) {
@@ -229,12 +270,16 @@ export class ControlledBackfillEngine {
         progress.skippedIdempotentCount = existingData.skipped || 0;
         progress.errorCount = existingData.errors || 0;
         progress.estimatedCostUsd = existingData.estimatedCostUsd || 0;
+        if (existingData.cursor) {
+          progress.nextCursor = existingData.cursor;
+        }
 
         await runRef.update({
           status: dryRun ? 'dry_run' : 'running',
           batchSize,
-          maxCostUsd: maxCostUsd ?? existingData.maxCostUsd,
+          maxCostUsd: Math.min(maxCostUsd, existingData.maxCostUsd ?? HARD_MAX_COST_USD),
           rateLimitDelayMs,
+          runScopeId,
           updatedAt: nowIso,
         });
       } else {
@@ -251,12 +296,16 @@ export class ControlledBackfillEngine {
           estimatedCostUsd: 0,
           maxCostUsd,
           rateLimitDelayMs,
+          runScopeId,
           createdAt: nowIso,
           updatedAt: nowIso,
         }, { merge: true });
       }
     } catch (runErr) {
       console.error(`[BackfillEngine] Failed to initialize durable backfill run record ${runId}:`, runErr);
+      try {
+        await scopeLockRef.set({ status: 'failed', activeRunId: null, updatedAt: new Date().toISOString() }, { merge: true });
+      } catch {}
       throw runErr;
     }
 
@@ -281,15 +330,17 @@ export class ControlledBackfillEngine {
       }
 
       const snapshot = await query.get();
-      progress.totalScanned = snapshot.docs.length;
 
-      if (snapshot.empty) {
+      if (!snapshot || !snapshot.docs || snapshot.docs.length === 0) {
         progress.isComplete = true;
         await runRef.update({
           status: 'completed',
           completedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
+        try {
+          await scopeLockRef.set({ status: 'completed', activeRunId: null, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch {}
         return progress;
       }
 
@@ -297,8 +348,9 @@ export class ControlledBackfillEngine {
         const docId = doc.id;
         const docData = doc.data() as any;
 
+        progress.totalScanned += 1;
+
         if (progress.estimatedCostUsd >= maxCostUsd) {
-          progress.nextCursor = docId;
           progress.isComplete = false;
           break;
         }
@@ -323,9 +375,12 @@ export class ControlledBackfillEngine {
           continue;
         }
 
+        let itemSucceeded = false;
+
         if (dryRun) {
           progress.processedCount += 1;
           progress.estimatedCostUsd += 0.00005;
+          itemSucceeded = true;
         } else {
           try {
             // Task-First: Enqueue task into queue first
@@ -358,18 +413,27 @@ export class ControlledBackfillEngine {
             if (executed.status === 'succeeded') {
               progress.processedCount += 1;
               progress.estimatedCostUsd += 0.00005;
+              itemSucceeded = true;
             } else {
               // Task failed: do NOT bypass task system with direct extraction!
+              // Crucial: Cursor must NOT advance beyond failed docId
               progress.errorCount += 1;
+              itemSucceeded = false;
             }
           } catch {
             progress.errorCount += 1;
+            itemSucceeded = false;
           }
         }
 
-        // Save durable checkpoint after item handled: must not be swallowed (fail-closed)
+        // Advance cursor ONLY if item succeeded (processed or idempotent skip)
+        if (itemSucceeded) {
+          progress.nextCursor = docId;
+        }
+
+        // Save durable checkpoint after item handled: cursor only reflects latest succeeded docId
         await runRef.update({
-          cursor: docId,
+          cursor: progress.nextCursor || null,
           scanned: progress.totalScanned,
           processed: progress.processedCount,
           skipped: progress.skippedIdempotentCount,
@@ -381,8 +445,6 @@ export class ControlledBackfillEngine {
         if (rateLimitDelayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, rateLimitDelayMs));
         }
-
-        progress.nextCursor = docId;
       }
 
       progress.isComplete = snapshot.docs.length < batchSize;
@@ -394,6 +456,16 @@ export class ControlledBackfillEngine {
         updatedAt: new Date().toISOString(),
       });
 
+      if (progress.isComplete) {
+        try {
+          await scopeLockRef.set({ status: 'completed', activeRunId: null, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch {}
+      } else {
+        try {
+          await scopeLockRef.set({ status: 'paused', activeRunId: runId, updatedAt: new Date().toISOString() }, { merge: true });
+        } catch {}
+      }
+
       return progress;
     } catch (err) {
       console.error('[BackfillEngine] Firestore backfill execution error:', err);
@@ -403,6 +475,7 @@ export class ControlledBackfillEngine {
           lastError: (err as Error).message || 'Unknown backfill failure',
           updatedAt: new Date().toISOString(),
         });
+        await scopeLockRef.set({ status: 'failed', activeRunId: null, updatedAt: new Date().toISOString() }, { merge: true });
       } catch (updateErr) {
         console.warn(`[BackfillEngine] Could not record failed status for run ${runId}:`, updateErr);
       }

@@ -1214,6 +1214,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update, delete: if false; // Operational state: only trusted server Admin SDK writes
     }
+    match /intelligence_backfill_scopes/{scopeId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false; // Operational state: only trusted server Admin SDK writes
+    }
     match /intelligence_processing_runs/{runId} {
       allow read: if isAdmin();
       allow create, update, delete: if false; // Execution records are immutable audit trails; clients cannot create, update, or delete processing runs

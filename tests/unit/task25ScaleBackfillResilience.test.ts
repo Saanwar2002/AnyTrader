@@ -1,33 +1,32 @@
 /**
  * AnyTrader V8.2 — Task 25 Scale / Backfill / Resilience Test Suite
  * 
- * Verifies 20 Mandatory Vectors:
- * Vector 1: Production backfill exclusively routes to executeFirestoreBackfill and rejects legacy array-based executeBackfill under NODE_ENV=production.
- * Vector 2: Production backfill uses bounded query with limit(batchSize), never reading entire collection into memory or performing unbounded collection.get().
- * Vector 3: Durable backfill run document initialized in /intelligence_backfill_runs/{runId} with initial state (status, cursor, batchSize, etc.).
- * Vector 4: Durable checkpoints written to /intelligence_backfill_runs/{runId} on every processed item and fail-closed if checkpoint write fails.
- * Vector 5: Resumability: Process restart / resume with existing runId continues from the persisted checkpoint cursor without reprocessing earlier items.
- * Vector 6: Dry-run mode (dryRun: true) scans and simulates without enqueuing live execution writes or mutating source records.
- * Vector 7: Live backfill enqueues tasks via intelligenceTaskQueue using the Task-First pattern with deterministic idempotency keys.
- * Vector 8: Skipped idempotent items: Tasks already succeeded are recognized, counted as skippedIdempotentCount, and checkpointed without redundant execution.
- * Vector 9: Cost cap enforcement (maxCostUsd): Backfill stops gracefully with status 'paused' and preserves nextCursor when cost limit reached.
- * Vector 10: Rate limit throttle (rateLimitDelayMs): Engine respects delay between successive document batches / tasks.
- * Vector 11: Completion detection: When query returns empty or < batchSize, run transitions to 'completed' with completedAt timestamp.
- * Vector 12: Failure handling: Backfill run transitions to 'failed' with lastError if an unrecoverable batch error occurs.
- * Vector 13: Task Queue: Atomic claim via transaction prevents concurrent workers from double-claiming the same task.
- * Vector 14: Task Queue: Worker lease expiration — stale lease recovery resets task to 'retrying' or 'dead_letter'.
- * Vector 15: Task Queue: Worker losing lease during execution (lease timeout or stolen lease) MUST NOT finalize the task (throws OwnershipLostError).
- * Vector 16: Task Queue: Retryable error (e.g. transient 503 / timeout / 429) transitions task to 'retrying' with exponential backoff timestamp.
- * Vector 17: Task Queue: Terminal / Non-retryable error (e.g. AICandidateSecurityError, lineage validation, missing evidence, missing handler) transitions task directly to 'dead_letter'.
- * Vector 18: Task Queue: Retries do NOT create duplicate immutable historical snapshots (idempotent snapshot writes in history collections).
- * Vector 19: Task Queue: Max retry exhaustion transitions task to 'dead_letter' after reaching maxAttempts.
- * Vector 20: Concurrent workers: Multiple workers operating on the queue process disjoint tasks without race conditions or state corruption.
+ * Includes:
+ * SECTION 1: Unit & Deterministic Logic Tests (Mock Store & Circuit Breakers)
+ * SECTION 2: Real Production Firebase Emulator Integration Tests (initializeTestEnvironment & real Firestore Admin DB)
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import * as admin from 'firebase-admin';
+import {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+  RulesTestEnvironment,
+} from '@firebase/rules-unit-testing';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import * as fs from 'fs';
+import * as path from 'path';
+
 import {
   ControlledBackfillEngine,
   controlledBackfillEngine,
+  DuplicateActiveRunError,
+  HARD_MAX_BATCH_SIZE,
+  HARD_MAX_COST_USD,
 } from '../../src/server/intelligence/backfillEngine';
 import {
   IntelligenceTaskQueue,
@@ -47,14 +46,16 @@ import {
   PropertyPassportService,
 } from '../../src/server/intelligence/propertyPassport';
 import { setGlobalIntelligenceDb } from '../../src/server/intelligence/immutableStore';
+import { registerIntelligenceTaskHandlers } from '../../server';
 
 // =========================================================================
-// In-Memory Mock Store with Full Query, Limit, StartAfter, and Transaction Semantics
+// In-Memory Mock Store for Deterministic Circuit Breaker & Unit Tests
 // =========================================================================
 function createMockFirestoreDb(initialData: {
   jobs?: Record<string, any>;
   properties?: Record<string, any>;
   intelligence_backfill_runs?: Record<string, any>;
+  intelligence_backfill_scopes?: Record<string, any>;
   intelligence_tasks?: Record<string, any>;
   intelligence_processing_runs?: Record<string, any>;
   buyer_intelligence?: Record<string, any>;
@@ -64,6 +65,7 @@ function createMockFirestoreDb(initialData: {
     jobs: new Map(Object.entries(initialData.jobs || {})),
     properties: new Map(Object.entries(initialData.properties || {})),
     intelligence_backfill_runs: new Map(Object.entries(initialData.intelligence_backfill_runs || {})),
+    intelligence_backfill_scopes: new Map(Object.entries(initialData.intelligence_backfill_scopes || {})),
     intelligence_tasks: new Map(Object.entries(initialData.intelligence_tasks || {})),
     intelligence_processing_runs: new Map(Object.entries(initialData.intelligence_processing_runs || {})),
     buyer_intelligence: new Map(Object.entries(initialData.buyer_intelligence || {})),
@@ -195,11 +197,13 @@ function createMockFirestoreDb(initialData: {
   };
 }
 
-describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vectors)', () => {
+// =========================================================================
+// SECTION 1: Unit & Logic Tests (Mock Store & Circuit Breakers)
+// =========================================================================
+describe('Task 25 — Scale / Backfill / Resilience Unit & Circuit Breaker Tests', () => {
   let mockDb: any;
 
   beforeEach(() => {
-    // Populate 15 sample jobs (job_001 to job_015)
     const initialJobs: Record<string, any> = {};
     for (let i = 1; i <= 15; i++) {
       const id = `job_${String(i).padStart(3, '0')}`;
@@ -223,20 +227,15 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     vi.restoreAllMocks();
   });
 
-  // =========================================================================
-  // VECTOR 1: Production Backfill Route Enforcement
-  // =========================================================================
   it('Vector 1: Production backfill exclusively routes to executeFirestoreBackfill and rejects legacy array-based executeBackfill under NODE_ENV=production', async () => {
     const originalEnv = process.env.NODE_ENV;
     try {
       process.env.NODE_ENV = 'production';
 
-      // 1. Direct legacy call must throw hard
       await expect(
         controlledBackfillEngine.executeBackfill([], { batchSize: 10, dryRun: true })
       ).rejects.toThrow(/legacy array-based method and is strictly forbidden in production/i);
 
-      // 2. Production executeFirestoreBackfill runs successfully
       const progress = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
         batchSize: 5,
         dryRun: true,
@@ -248,10 +247,7 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     }
   });
 
-  // =========================================================================
-  // VECTOR 2: Bounded Batch Querying (limit)
-  // =========================================================================
-  it('Vector 2: Production backfill uses bounded query with limit(batchSize), never reading entire collection into memory or performing unbounded collection.get()', async () => {
+  it('Vector 2: Production backfill uses bounded query with limit(batchSize), clamping to HARD_MAX_BATCH_SIZE', async () => {
     const collectionSpy = vi.spyOn(mockDb, 'collection');
 
     const progress = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
@@ -260,17 +256,56 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     });
 
     expect(collectionSpy).toHaveBeenCalledWith('jobs');
-    // Scanned count strictly equals batchSize, not total collection count (15)
     expect(progress.totalScanned).toBe(4);
     expect(progress.processedCount).toBe(4);
     expect(progress.nextCursor).toBe('job_004');
     expect(progress.isComplete).toBe(false);
   });
 
-  // =========================================================================
-  // VECTOR 3: Durable Backfill Run Document Initialization
-  // =========================================================================
-  it('Vector 3: Durable backfill run document initialized in /intelligence_backfill_runs/{runId} with initial state (status, cursor, batchSize, etc.)', async () => {
+  it('Vector 2B: Hard ceilings enforce server-side clamping of batchSize and maxCostUsd', async () => {
+    const runId = 'bf_run_ceilings_test';
+    await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
+      runId,
+      batchSize: 999999, // Should clamp to HARD_MAX_BATCH_SIZE (500)
+      maxCostUsd: 999999, // Should clamp to HARD_MAX_COST_USD (100)
+      dryRun: true,
+    });
+
+    const runDoc = mockDb._store.intelligence_backfill_runs.get(runId);
+    expect(runDoc.batchSize).toBe(HARD_MAX_BATCH_SIZE);
+    expect(runDoc.maxCostUsd).toBe(HARD_MAX_COST_USD);
+  });
+
+  it('Vector 2C: Transactional protection against duplicate active backfill runs for the same scope', async () => {
+    const runId1 = 'bf_run_scope_active_1';
+    const runId2 = 'bf_run_scope_active_2';
+
+    // Run 1 starts on jobs
+    await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
+      runId: runId1,
+      batchSize: 2,
+      dryRun: true,
+    });
+
+    // Mark run 1 as currently running in scope lock
+    mockDb._store.intelligence_backfill_scopes.set('jobs_job_extraction', {
+      scopeId: 'jobs_job_extraction',
+      activeRunId: runId1,
+      status: 'running',
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Run 2 attempts to run on the same scope simultaneously
+    await expect(
+      controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
+        runId: runId2,
+        batchSize: 2,
+        dryRun: true,
+      })
+    ).rejects.toThrow(DuplicateActiveRunError);
+  });
+
+  it('Vector 3: Durable backfill run document initialized in /intelligence_backfill_runs/{runId} with initial state', async () => {
     const runId = 'bf_run_init_verification_v3';
 
     await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
@@ -292,13 +327,9 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(runDoc.status).toBe('paused');
   });
 
-  // =========================================================================
-  // VECTOR 4: Durable Checkpoint Persistence (Fail-Closed)
-  // =========================================================================
   it('Vector 4: Durable checkpoints written to /intelligence_backfill_runs/{runId} on every processed item and fail-closed if checkpoint write fails', async () => {
     const runId = 'bf_run_fail_closed_checkpoint';
 
-    // Mock doc update to throw on second checkpoint
     let updateCount = 0;
     const originalDoc = mockDb.collection('intelligence_backfill_runs').doc(runId);
     const faultyDoc = {
@@ -325,7 +356,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       return originalCollection(name);
     };
 
-    // Engine must fail closed and rethrow hard error rather than proceeding
     await expect(
       controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
         runId,
@@ -336,13 +366,9 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     ).rejects.toThrow(/Failed to write durable backfill checkpoint/i);
   });
 
-  // =========================================================================
-  // VECTOR 5: Resumability Across Process Restarts
-  // =========================================================================
   it('Vector 5: Resumability: Process restart / resume with existing runId continues from the persisted checkpoint cursor without reprocessing earlier items', async () => {
     const runId = 'bf_run_resumable_v5';
 
-    // Run 1: Processes first 5 items (job_001 to job_005)
     const run1 = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
       runId,
       batchSize: 5,
@@ -352,7 +378,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(run1.nextCursor).toBe('job_005');
     expect(run1.processedCount).toBe(5);
 
-    // Simulate process restart: instantiate a new engine instance and resume
     const freshEngine = new ControlledBackfillEngine();
     const run2 = await freshEngine.executeFirestoreBackfill(mockDb, {
       runId,
@@ -361,21 +386,16 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       rateLimitDelayMs: 0,
     });
 
-    // Run 2 continued from job_005 and processed job_006 to job_010
     expect(run2.nextCursor).toBe('job_010');
-    expect(run2.processedCount).toBe(10); // Cumulative counter preserved
+    expect(run2.processedCount).toBe(10);
     expect(run2.totalScanned).toBe(5);
     expect(run2.isComplete).toBe(false);
 
-    // Verify in Firestore document
     const persisted = mockDb._store.intelligence_backfill_runs.get(runId);
     expect(persisted.cursor).toBe('job_010');
     expect(persisted.processed).toBe(10);
   });
 
-  // =========================================================================
-  // VECTOR 6: Dry-Run Mode Safety
-  // =========================================================================
   it('Vector 6: Dry-run mode (dryRun: true) scans and simulates without enqueuing live execution writes or mutating source records', async () => {
     const runId = 'bf_run_dry_run_v6';
 
@@ -387,20 +407,14 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     });
 
     expect(progress.processedCount).toBe(3);
-    // In dry-run mode, NO live tasks should be enqueued in intelligence_tasks
     expect(mockDb._store.intelligence_tasks.size).toBe(0);
-    // Source jobs remain completely untouched
     const job1 = mockDb._store.jobs.get('job_001');
     expect(job1.processedAt).toBeUndefined();
   });
 
-  // =========================================================================
-  // VECTOR 7: Live Backfill Task-First Pattern
-  // =========================================================================
   it('Vector 7: Live backfill enqueues tasks via intelligenceTaskQueue using the Task-First pattern with deterministic idempotency keys', async () => {
     const runId = 'bf_run_live_task_first_v7';
 
-    // Register a mock handler for job_extraction
     intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
       return { extracted: true, jobId: task.aggregateId };
     });
@@ -413,7 +427,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     });
 
     expect(progress.processedCount).toBe(2);
-    // Live tasks must be persisted in /intelligence_tasks with status succeeded
     expect(mockDb._store.intelligence_tasks.size).toBe(2);
 
     const tasks = Array.from(mockDb._store.intelligence_tasks.values());
@@ -421,13 +434,9 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(tasks.every((t: any) => t.idempotencyKey.includes('JOB_EXTRACTION'))).toBe(true);
   });
 
-  // =========================================================================
-  // VECTOR 8: Skipped Idempotent Items
-  // =========================================================================
   it('Vector 8: Skipped idempotent items: Tasks already succeeded are recognized, counted as skippedIdempotentCount, and checkpointed without redundant execution', async () => {
     const runId = 'bf_run_idempotency_skip_v8';
 
-    // Pre-seed job_001 task as already succeeded using deterministic idempotency key
     const idempotencyKey = buildIdempotencyKey('job_001', 'JOB_EXTRACTION', 'v1');
     const taskId = taskDocumentId(idempotencyKey);
     mockDb._store.intelligence_tasks.set(taskId, {
@@ -450,17 +459,13 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     });
 
     expect(progress.skippedIdempotentCount).toBe(1);
-    expect(progress.processedCount).toBe(1); // Only job_002 was executed
-    expect(handlerSpy).toHaveBeenCalledTimes(1); // job_001 was NOT re-executed
+    expect(progress.processedCount).toBe(1);
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
   });
 
-  // =========================================================================
-  // VECTOR 9: Cost Cap Enforcement
-  // =========================================================================
   it('Vector 9: Cost cap enforcement (maxCostUsd): Backfill stops gracefully with status paused and preserves nextCursor when cost limit reached', async () => {
     const runId = 'bf_run_cost_cap_v9';
 
-    // Set maxCostUsd so low that processing 2 items (0.00005 each) exceeds 0.00006
     const progress = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
       runId,
       batchSize: 5,
@@ -469,7 +474,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       rateLimitDelayMs: 0,
     });
 
-    // Should halt after 2 items
     expect(progress.processedCount).toBe(2);
     expect(progress.nextCursor).toBe('job_003');
     expect(progress.isComplete).toBe(false);
@@ -478,9 +482,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(runDoc.status).toBe('paused');
   });
 
-  // =========================================================================
-  // VECTOR 10: Rate Limit Throttle
-  // =========================================================================
   it('Vector 10: Rate limit throttle (rateLimitDelayMs): Engine respects delay between successive document batches / tasks', async () => {
     const runId = 'bf_run_rate_limit_v10';
     const startTime = Date.now();
@@ -489,21 +490,16 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       runId,
       batchSize: 3,
       dryRun: true,
-      rateLimitDelayMs: 30, // 30ms throttle per item
+      rateLimitDelayMs: 30,
     });
 
     const elapsed = Date.now() - startTime;
-    // For 3 items with 30ms each, elapsed must be at least ~60-90ms
     expect(elapsed).toBeGreaterThanOrEqual(60);
   });
 
-  // =========================================================================
-  // VECTOR 11: Completion Detection
-  // =========================================================================
   it('Vector 11: Completion detection: When query returns empty or < batchSize, run transitions to completed with completedAt timestamp', async () => {
     const runId = 'bf_run_completion_v11';
 
-    // Request batchSize 20 which exceeds available 15 items
     const progress = await controlledBackfillEngine.executeFirestoreBackfill(mockDb, {
       runId,
       batchSize: 20,
@@ -520,13 +516,9 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(runDoc.completedAt).toBeDefined();
   });
 
-  // =========================================================================
-  // VECTOR 12: Failure Handling
-  // =========================================================================
   it('Vector 12: Failure handling: Backfill run transitions to failed with lastError if an unrecoverable batch error occurs', async () => {
     const runId = 'bf_run_unrecoverable_failure_v12';
 
-    // Cause an unrecoverable error during Firestore query
     const faultyDb = {
       ...mockDb,
       collection: (name: string) => {
@@ -558,9 +550,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(runDoc.lastError).toMatch(/DATABASE_INTERNAL_CORRUPTION/i);
   });
 
-  // =========================================================================
-  // VECTOR 13: Task Queue Atomic Claiming
-  // =========================================================================
   it('Vector 13: Task Queue: Atomic claim via transaction prevents concurrent workers from double-claiming the same task', async () => {
     const taskId = 'task_atomic_claim_race_v13';
     mockDb._store.intelligence_tasks.set(taskId, {
@@ -578,13 +567,11 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     const queue2 = new IntelligenceTaskQueue(5, 60000, 'worker_node_2');
     queue2.setFirestoreDb(mockDb);
 
-    // Two workers attempt to claim simultaneously
     const [claimedWorker1, claimedWorker2] = await Promise.all([
       queue1.claimTaskTransactional(taskId, 'worker_node_1', 30000),
       queue2.claimTaskTransactional(taskId, 'worker_node_2', 30000),
     ]);
 
-    // Exactly one worker must win the claim
     expect(
       (claimedWorker1 && !claimedWorker2) || (!claimedWorker1 && claimedWorker2)
     ).toBe(true);
@@ -595,12 +582,9 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(['worker_node_1', 'worker_node_2']).toContain(taskInDb.workerId);
   });
 
-  // =========================================================================
-  // VECTOR 14: Worker Lease Expiration & Stale Recovery
-  // =========================================================================
   it('Vector 14: Task Queue: Worker lease expiration — stale lease recovery resets task to retrying or dead_letter', async () => {
     const taskId = 'task_stale_lease_recovery_v14';
-    const expiredTimestamp = new Date(Date.now() - 60000).toISOString(); // Expired 1 min ago
+    const expiredTimestamp = new Date(Date.now() - 60000).toISOString();
 
     mockDb._store.intelligence_tasks.set(taskId, {
       taskId,
@@ -624,14 +608,10 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(recovered[0].leaseId).toBeFalsy();
     expect(recovered[0].workerId).toBeFalsy();
 
-    // Verify task state in Firestore
     const taskInDb = mockDb._store.intelligence_tasks.get(taskId);
     expect(taskInDb.status).toBe('retrying');
   });
 
-  // =========================================================================
-  // VECTOR 15: Worker Lease Ownership Verification
-  // =========================================================================
   it('Vector 15: Task Queue: Worker losing lease during execution (lease timeout or stolen lease) MUST NOT finalize the task (throws OwnershipLostError)', async () => {
     const taskId = 'task_lease_loss_defense_v15';
     const nowIso = new Date().toISOString();
@@ -649,9 +629,7 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     const queue = new IntelligenceTaskQueue(5, 60000, 'worker_slow');
     queue.setFirestoreDb(mockDb);
 
-    // Register a handler that simulates lease theft mid-flight
     queue.registerHandler('job_extraction', async () => {
-      // While handler is executing, lease is expired / stolen by another worker
       const taskDoc = mockDb._store.intelligence_tasks.get(taskId);
       mockDb._store.intelligence_tasks.set(taskId, {
         ...taskDoc,
@@ -661,17 +639,12 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       return { success: true };
     });
 
-    // executeTask must catch OwnershipLostError and NOT finalize with succeeded status
     const resultTask = await queue.executeTask(taskId, 'worker_slow');
     expect(resultTask.status).not.toBe('succeeded');
-    // Task remains owned by the usurper, not overwritten by slow worker
     const taskInDb = mockDb._store.intelligence_tasks.get(taskId);
     expect(taskInDb.workerId).toBe('worker_fast_usurper');
   });
 
-  // =========================================================================
-  // VECTOR 16: Retryable Error Classification & Exponential Backoff
-  // =========================================================================
   it('Vector 16: Task Queue: Retryable error (e.g. transient 503 / timeout / 429) transitions task to retrying with exponential backoff timestamp', async () => {
     const taskId = 'task_retryable_error_v16';
     mockDb._store.intelligence_tasks.set(taskId, {
@@ -687,7 +660,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     const queue = new IntelligenceTaskQueue(5, 60000, 'worker_resilience');
     queue.setFirestoreDb(mockDb);
 
-    // Register a handler that throws a transient 503 error
     queue.registerHandler('job_extraction', async () => {
       const err: any = new Error('Service Unavailable: Gemini upstream 503 overload');
       err.status = 503;
@@ -701,9 +673,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(new Date(result.nextAttemptAt!).getTime()).toBeGreaterThan(Date.now());
   });
 
-  // =========================================================================
-  // VECTOR 17: Terminal / Non-Retryable Error to dead_letter
-  // =========================================================================
   it('Vector 17: Task Queue: Terminal / Non-retryable error (e.g. AICandidateSecurityError, lineage validation, missing evidence, missing handler) transitions task directly to dead_letter', async () => {
     const taskId = 'task_terminal_security_error_v17';
     mockDb._store.intelligence_tasks.set(taskId, {
@@ -718,20 +687,16 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     const queue = new IntelligenceTaskQueue(5, 60000, 'worker_security');
     queue.setFirestoreDb(mockDb);
 
-    // Register handler that throws AICandidateSecurityError (terminal violation)
     queue.registerHandler('job_extraction', async () => {
       throw new AICandidateSecurityError('Untrusted AI candidate attempted privilege escalation on propertyId');
     });
 
     const result = await queue.executeTask(taskId, 'worker_security');
     expect(result.status).toBe('dead_letter');
-    expect(result.attempts).toBe(1); // Sent to dead_letter immediately without wasting retries
+    expect(result.attempts).toBe(1);
     expect(result.error?.classification).toBe('NON_RETRYABLE');
   });
 
-  // =========================================================================
-  // VECTOR 18: Retries Do NOT Duplicate Immutable Historical Snapshots
-  // =========================================================================
   it('Vector 18: Task Queue: Retries do NOT create duplicate immutable historical snapshots (idempotent snapshot writes in history collections)', async () => {
     const propId = 'prop_idempotency_v18';
     mockDb._store.properties.set(propId, {
@@ -744,28 +709,21 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     const buyerService = new BuyerIntelligenceService();
     buyerService.setFirestoreDb(mockDb);
 
-    // Run assessment generation pass 1
     const pass1 = await buyerService.generateBuyerIntelligence({ propertyId: propId }, { firestoreDb: mockDb });
     const assessmentId = pass1.provenance.assessmentId;
 
     const initialHistorySize = mockDb._store.buyer_intelligence_history.size;
     expect(initialHistorySize).toBe(1);
 
-    // Simulate task retry: re-run derivation with exact same deterministic parameters
     const pass2 = await buyerService.generateBuyerIntelligence({ propertyId: propId }, { firestoreDb: mockDb });
     expect(pass2.provenance.assessmentId).toBe(assessmentId);
 
-    // Immutable historical snapshots MUST NOT be duplicated
     expect(mockDb._store.buyer_intelligence_history.size).toBe(initialHistorySize);
     expect(mockDb._store.buyer_intelligence_history.has(assessmentId)).toBe(true);
   });
 
-  // =========================================================================
-  // VECTOR 19: Max Retries Exhaustion to dead_letter
-  // =========================================================================
   it('Vector 19: Task Queue: Max retry exhaustion transitions task to dead_letter after reaching maxAttempts', async () => {
     const taskId = 'task_exhaustion_v19';
-    // Pre-seed task at attempt 2 with maxAttempts 3
     mockDb._store.intelligence_tasks.set(taskId, {
       taskId,
       status: 'retrying',
@@ -788,9 +746,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
     expect(result.errorCode).toBe('MAX_RETRIES_EXCEEDED');
   });
 
-  // =========================================================================
-  // VECTOR 20: Concurrent Disjoint Task Processing
-  // =========================================================================
   it('Vector 20: Concurrent workers: Multiple workers operating on the queue process disjoint tasks without race conditions or state corruption', async () => {
     const queue = new IntelligenceTaskQueue(5, 60000, 'worker_pool');
     queue.setFirestoreDb(mockDb);
@@ -801,7 +756,6 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       return { done: true };
     });
 
-    // Seed 4 pending tasks
     for (let i = 1; i <= 4; i++) {
       const id = `task_concurrent_${i}`;
       mockDb._store.intelligence_tasks.set(id, {
@@ -817,18 +771,177 @@ describe('V8.2 Task 25 — Scale / Backfill / Resilience Suite (20 Mandatory Vec
       });
     }
 
-    // Trigger worker tick to process all runnable tasks concurrently
     await queue.workerTick();
 
     expect(executedTasks.length).toBe(4);
-    // All 4 tasks should be unique (no duplicates or overlaps)
     const uniqueExecuted = new Set(executedTasks);
     expect(uniqueExecuted.size).toBe(4);
 
-    // All tasks must have succeeded in the store
     for (let i = 1; i <= 4; i++) {
       const task = mockDb._store.intelligence_tasks.get(`task_concurrent_${i}`);
       expect(task.status).toBe('succeeded');
     }
+  });
+});
+
+// =========================================================================
+// SECTION 2: Real Production Firebase Emulator Integration Tests
+// =========================================================================
+describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator Integration Tests', () => {
+  const PROJECT_ID = 'demo-anytrader';
+  let testEnv: RulesTestEnvironment;
+  let adminApp: admin.app.App;
+  let adminDb: admin.firestore.Firestore;
+
+  beforeAll(async () => {
+    process.env.FIREBASE_STORAGE_EMULATOR_HOST = '127.0.0.1:9199';
+    process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8088';
+
+    try {
+      const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        firestore: { rules, host: '127.0.0.1', port: 8088 },
+      });
+
+      if (admin.apps.length > 0) {
+        await Promise.all(admin.apps.map((app) => app?.delete()));
+      }
+      adminApp = admin.initializeApp({ projectId: PROJECT_ID });
+
+      adminDb = adminApp.firestore();
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      setGlobalIntelligenceDb(adminDb);
+      propertyPassportService.setFirestoreDb(adminDb);
+      buyerIntelligenceService.setFirestoreDb(adminDb);
+      intelligenceTaskQueue.setFirestoreDb(adminDb);
+      registerIntelligenceTaskHandlers(adminDb);
+    } catch (err: any) {
+      console.error('[Task25 Test Setup] Real Firebase emulator error:', err);
+      throw new Error(`[Task25 Test Setup] Failed to initialize real Firebase emulator environment: ${err?.message || err}`);
+    }
+  });
+
+  afterAll(async () => {
+    if (testEnv) {
+      await testEnv.cleanup();
+    }
+    if (adminApp) {
+      await adminApp.delete();
+    }
+  });
+
+  beforeEach(async () => {
+    await testEnv.clearFirestore();
+
+    // Seed 10 test jobs in the real Firestore emulator
+    for (let i = 1; i <= 10; i++) {
+      const jobId = `job_emu_25_${String(i).padStart(3, '0')}`;
+      await adminDb.collection('jobs').doc(jobId).set({
+        id: jobId,
+        title: `Job ${i} Pipe Fix`,
+        description: `Fix leaking copper pipe unit ${i}`,
+        category: 'Plumbing',
+        postcode: 'SW1A 1AA',
+        createdAt: new Date(Date.now() - i * 3600000).toISOString(),
+      });
+    }
+  });
+
+  it('Production Emulator Vector 1: Real backfill against Firestore emulator executes in batches and persists durable runs & tasks', async () => {
+    const runId = 'bf_run_emu_batch_1';
+
+    const progress = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 5,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+
+    expect(progress.processedCount).toBe(5);
+    expect(progress.totalScanned).toBe(5);
+    expect(progress.nextCursor).toBe('job_emu_25_005');
+    expect(progress.isComplete).toBe(false);
+
+    // Verify durable run record in real emulator
+    const runDocSnap = await adminDb.collection('intelligence_backfill_runs').doc(runId).get();
+    expect(runDocSnap.exists).toBe(true);
+    const runDoc = runDocSnap.data();
+    expect(runDoc?.status).toBe('paused');
+    expect(runDoc?.cursor).toBe('job_emu_25_005');
+    expect(runDoc?.processed).toBe(5);
+
+    // Verify scope lock in real emulator
+    const scopeSnap = await adminDb.collection('intelligence_backfill_scopes').doc('jobs_job_extraction').get();
+    expect(scopeSnap.exists).toBe(true);
+    expect(scopeSnap.data()?.status).toBe('paused');
+    expect(scopeSnap.data()?.activeRunId).toBe(runId);
+  });
+
+  it('Production Emulator Vector 2: Resuming backfill continues from saved cursor and finishes remaining items to completed state', async () => {
+    const runId = 'bf_run_emu_resume_2';
+
+    // Batch 1: first 6 items
+    const run1 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 6,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+    expect(run1.nextCursor).toBe('job_emu_25_006');
+    expect(run1.processedCount).toBe(6);
+
+    // Batch 2: next 6 items (should process remaining 4 items and complete)
+    const run2 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 6,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+    expect(run2.nextCursor).toBe('job_emu_25_010');
+    expect(run2.processedCount).toBe(10);
+    expect(run2.isComplete).toBe(true);
+
+    const runDocSnap = await adminDb.collection('intelligence_backfill_runs').doc(runId).get();
+    expect(runDocSnap.data()?.status).toBe('completed');
+    expect(runDocSnap.data()?.completedAt).toBeDefined();
+
+    const scopeSnap = await adminDb.collection('intelligence_backfill_scopes').doc('jobs_job_extraction').get();
+    expect(scopeSnap.data()?.status).toBe('completed');
+    expect(scopeSnap.data()?.activeRunId).toBeNull();
+  });
+
+  it('Production Emulator Vector 3: Security rules strictly deny unauthenticated and non-admin client writes to backfill collections', async () => {
+    const unauthDb = testEnv.unauthenticatedContext().firestore();
+    const userDb = testEnv.authenticatedContext('user_homeowner_123').firestore();
+
+    // Denial on intelligence_backfill_runs
+    await assertFails(
+      setDoc(doc(unauthDb, 'intelligence_backfill_runs', 'hacked_run'), {
+        status: 'running',
+      })
+    );
+    await assertFails(
+      setDoc(doc(userDb, 'intelligence_backfill_runs', 'hacked_run'), {
+        status: 'running',
+      })
+    );
+
+    // Denial on intelligence_backfill_scopes
+    await assertFails(
+      setDoc(doc(unauthDb, 'intelligence_backfill_scopes', 'jobs_job_extraction'), {
+        status: 'running',
+      })
+    );
+    await assertFails(
+      setDoc(doc(userDb, 'intelligence_backfill_scopes', 'jobs_job_extraction'), {
+        status: 'running',
+      })
+    );
   });
 });

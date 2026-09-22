@@ -118,6 +118,21 @@ describe('V8.1 Task 5 — Durable Firestore-Backed Backfill Path & Isolation', (
           };
         }
 
+        // Mock backfill scopes collection
+        if (name === 'intelligence_backfill_scopes') {
+          const scopes = new Map<string, any>();
+          return {
+            doc(id: string) {
+              return {
+                id,
+                get: async () => ({ exists: scopes.has(id), data: () => scopes.get(id) }),
+                set: async (d: any) => scopes.set(id, d),
+                update: async (d: any) => scopes.set(id, { ...scopes.get(id), ...d }),
+              };
+            },
+          };
+        }
+
         // Mock tasks collection for intelligenceTaskQueue
         if (name === 'intelligence_tasks') {
           const tasks = new Map<string, any>();

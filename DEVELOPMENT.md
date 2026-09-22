@@ -3,6 +3,9 @@
 ## 🛡️ AnyTrader V8.2 — Task 25: Scale / Backfill / Resilience (September 22, 2026)
 - **1. Resumable Firestore Backfill Engine (`ControlledBackfillEngine`)**:
   - Implemented `ControlledBackfillEngine.executeFirestoreBackfill()` in `src/server/intelligence/backfillEngine.ts` supporting durable state persistence in `/intelligence_backfill_runs/{runId}`.
+  - Hardened with server-side hard limits: `HARD_MAX_BATCH_SIZE = 500` and `HARD_MAX_COST_USD = 100.0` with automatic clamping.
+  - Implemented transactional scope locking via `intelligence_backfill_scopes` collection, throwing `DuplicateActiveRunError` on concurrent backfill attempts for the same scope.
+  - Enforced cursor advancement ONLY upon verified successful processing (or idempotent skipping) of tasks, preventing state corruption on partial batch failures.
   - Core invariants:
     - **"DURABLE CHECKPOINTS WRITTEN TO `/intelligence_backfill_runs/{runId}` ON EVERY PROCESSED ITEM."**
     - **"FAIL-CLOSED CHECKPOINTING — FAILS CLOSED AND DOES NOT SWALLOW ERRORS IF RUN INITIALIZATION OR CHECKPOINT WRITES FAIL."**
@@ -17,9 +20,11 @@
     - `recoverStaleTasksAsync()` atomically identifies expired leases, clears active worker/lease IDs, and resets status to `retrying` (or `dead_letter` if `attempts >= maxAttempts`).
     - Task retries with exponential backoff on transient errors up to `maxAttempts`.
     - Deterministic idempotency keys prevent duplicate immutable snapshots on replay.
-- **3. Production Handlers & System Verification**:
+- **3. Security Rules & Indexing**:
+  - Added security rule for `/intelligence_backfill_scopes/{scopeId}` in `firestore.rules` (Admin SDK writes only, admin read only, client writes denied).
+- **4. Production Handlers & System Verification**:
   - Registered all five core V8.2 intelligence handlers in `server.ts` (`job_extraction`, `property_lifecycle`, `property_risk`, `predictive_maintenance`, `buyer_intelligence`).
-  - Authored comprehensive test suite `tests/unit/task25ScaleBackfillResilience.test.ts` covering 20 mandatory resilience vectors (100% pass rate).
+  - Authored comprehensive test suite `tests/unit/task25ScaleBackfillResilience.test.ts` covering 20 mandatory resilience vectors plus real Firebase Emulator integration tests with `@firebase/rules-unit-testing`.
   - 100% unit test pass rate across entire platform (618/618 tests passing across 40 test files).
   - Clean `tsc --noEmit` linting (`npm run lint`), successful compilation (`compile_applet`), and release audit pass.
 
