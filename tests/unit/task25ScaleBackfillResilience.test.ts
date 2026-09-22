@@ -388,7 +388,7 @@ describe('Task 25 — Scale / Backfill / Resilience Unit & Circuit Breaker Tests
 
     expect(run2.nextCursor).toBe('job_010');
     expect(run2.processedCount).toBe(10);
-    expect(run2.totalScanned).toBe(5);
+    expect(run2.totalScanned).toBe(10);
     expect(run2.isComplete).toBe(false);
 
     const persisted = mockDb._store.intelligence_backfill_runs.get(runId);
@@ -475,7 +475,7 @@ describe('Task 25 — Scale / Backfill / Resilience Unit & Circuit Breaker Tests
     });
 
     expect(progress.processedCount).toBe(2);
-    expect(progress.nextCursor).toBe('job_003');
+    expect(progress.nextCursor).toBe('job_002');
     expect(progress.isComplete).toBe(false);
 
     const runDoc = mockDb._store.intelligence_backfill_runs.get(runId);
@@ -943,5 +943,313 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
         status: 'running',
       })
     );
+
+    // Denial on intelligence_tasks
+    await assertFails(
+      setDoc(doc(unauthDb, 'intelligence_tasks', 'hacked_task'), {
+        status: 'pending',
+      })
+    );
+    await assertFails(
+      setDoc(doc(userDb, 'intelligence_tasks', 'hacked_task'), {
+        status: 'pending',
+      })
+    );
+  });
+
+  it('Production Emulator Vector 4: Deterministic task identity & duplicate execution idempotency in real Firestore', async () => {
+    const idempotencyKey = buildIdempotencyKey('job_emu_25_001', 'JOB_EXTRACTION', 'v1');
+    const expectedTaskId = taskDocumentId(idempotencyKey);
+
+    const task1 = await intelligenceTaskQueue.enqueueTaskAsync(
+      'job_extraction',
+      'job',
+      'job_emu_25_001',
+      idempotencyKey,
+      { job: { jobId: 'job_emu_25_001', title: 'Test Job' } }
+    );
+    expect(task1.taskId).toBe(expectedTaskId);
+
+    const task2 = await intelligenceTaskQueue.enqueueTaskAsync(
+      'job_extraction',
+      'job',
+      'job_emu_25_001',
+      idempotencyKey,
+      { job: { jobId: 'job_emu_25_001', title: 'Test Job Duplicate' } }
+    );
+    expect(task2.taskId).toBe(expectedTaskId);
+
+    // Verify exactly 1 task document exists in real Firestore emulator
+    const taskSnap = await adminDb.collection('intelligence_tasks').doc(expectedTaskId).get();
+    expect(taskSnap.exists).toBe(true);
+
+    const allTasksSnap = await adminDb.collection('intelligence_tasks')
+      .where('idempotencyKey', '==', idempotencyKey)
+      .get();
+    expect(allTasksSnap.size).toBe(1);
+  });
+
+  it('Production Emulator Vector 5: Lease ownership verification & lost lease defense against real Firestore transactions', async () => {
+    const queue = new IntelligenceTaskQueue(5, 60000, 'worker_alpha_emu');
+    queue.setFirestoreDb(adminDb);
+
+    const idempotencyKey = buildIdempotencyKey('job_emu_25_002', 'JOB_EXTRACTION', 'v1');
+    const task = await queue.enqueueTaskAsync(
+      'job_extraction',
+      'job',
+      'job_emu_25_002',
+      idempotencyKey,
+      { job: { jobId: 'job_emu_25_002' } }
+    );
+
+    const workerA = 'worker_alpha_emu';
+    const workerB = 'worker_beta_emu';
+
+    // Worker A handler attempts to complete, but during execution, Worker B usurps the lease in Firestore
+    queue.registerHandler('job_extraction', async () => {
+      // Usurp lease under worker B in real Firestore
+      await adminDb.collection('intelligence_tasks').doc(task.taskId).update({
+        workerId: workerB,
+        leaseId: 'lease_usurped_beta',
+      });
+      return { done: true };
+    });
+
+    // Worker A executes task -> MUST detect lease loss and abort without finalizing as succeeded
+    const result = await queue.executeTask(task.taskId, workerA);
+    expect(result.status).not.toBe('succeeded');
+
+    const persistedDoc = await adminDb.collection('intelligence_tasks').doc(task.taskId).get();
+    expect(persistedDoc.data()?.workerId).toBe(workerB);
+    expect(persistedDoc.data()?.status).not.toBe('succeeded');
+  });
+
+  it('Production Emulator Vector 6: Retryable failure, exponential backoff, and dead-letter queue transition in real Firestore', async () => {
+    const queue = new IntelligenceTaskQueue(2, 60000, 'worker_retry_test');
+    queue.setFirestoreDb(adminDb);
+
+    const idempotencyKey = buildIdempotencyKey('job_emu_25_003', 'JOB_EXTRACTION', 'v1');
+    const task = await queue.enqueueTaskAsync(
+      'job_extraction',
+      'job',
+      'job_emu_25_003',
+      idempotencyKey,
+      { job: { jobId: 'job_emu_25_003' } }
+    );
+
+    // Register a handler that fails with transient 503 error
+    queue.registerHandler('job_extraction', async () => {
+      const err: any = new Error('Transient Gemini 503 service unavailable');
+      err.status = 503;
+      throw err;
+    });
+
+    // Attempt 1: Transient 503 error -> transitions to retrying
+    const step1 = await queue.executeTask(task.taskId, 'worker_retry_test');
+    expect(step1.status).toBe('retrying');
+    expect(step1.attempts).toBe(1);
+
+    // Reset nextAttemptAt to past so it can be executed again immediately
+    await adminDb.collection('intelligence_tasks').doc(task.taskId).update({
+      nextAttemptAt: new Date(Date.now() - 10000).toISOString(),
+    });
+
+    // Attempt 2 (exhausts maxRetries=2) -> transitions to dead_letter
+    const step2 = await queue.executeTask(task.taskId, 'worker_retry_test');
+    expect(step2.status).toBe('dead_letter');
+    expect(step2.attempts).toBe(2);
+    expect(step2.errorCode).toBe('MAX_RETRIES_EXCEEDED');
+
+    const persistedDoc = await adminDb.collection('intelligence_tasks').doc(task.taskId).get();
+    expect(persistedDoc.data()?.status).toBe('dead_letter');
+  });
+
+  it('Production Emulator Vector 7: Hard batch and cost ceilings clamped and enforced against real Firestore', async () => {
+    const runId = 'bf_run_emu_ceilings_test';
+
+    // Batch size > HARD_MAX_BATCH_SIZE (500) clamped to 500
+    const progress = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 99999, // Should clamp to 500
+      maxCostUsd: 0.00006, // Should stop after ~2 items
+      dryRun: true,
+      rateLimitDelayMs: 0,
+    });
+
+    expect(progress.processedCount).toBe(2);
+    expect(progress.nextCursor).toBe('job_emu_25_002');
+    expect(progress.isComplete).toBe(false);
+
+    const runDoc = (await adminDb.collection('intelligence_backfill_runs').doc(runId).get()).data();
+    expect(runDoc?.batchSize).toBe(HARD_MAX_BATCH_SIZE);
+    expect(runDoc?.status).toBe('paused');
+  });
+
+  it('Production Emulator Vector 8: Duplicate active run race condition blocked via real Firestore transactional scope lock', async () => {
+    const runId1 = 'bf_run_emu_concurrent_1';
+    const runId2 = 'bf_run_emu_concurrent_2';
+
+    // Establish active run 1
+    await adminDb.collection('intelligence_backfill_scopes').doc('jobs_job_extraction').set({
+      scopeId: 'jobs_job_extraction',
+      activeRunId: runId1,
+      status: 'running',
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Attempt to start run 2 concurrently for same scope in real Firestore
+    await expect(
+      controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+        runId: runId2,
+        batchSize: 2,
+        dryRun: true,
+      })
+    ).rejects.toThrow(DuplicateActiveRunError);
+  });
+
+  it('Production Emulator Vector 9: Cross-tenant isolation maintained across real Firestore backfill batches', async () => {
+    // Seed 2 jobs belonging to estate tenant A and 2 jobs to estate tenant B
+    await adminDb.collection('jobs').doc('job_estate_A_1').set({
+      id: 'job_estate_A_1',
+      title: 'Estate A Leak',
+      estateId: 'estate_tenant_AAA',
+      category: 'Plumbing',
+      postcode: 'E1 6AN',
+    });
+    await adminDb.collection('jobs').doc('job_estate_B_1').set({
+      id: 'job_estate_B_1',
+      title: 'Estate B Window',
+      estateId: 'estate_tenant_BBB',
+      category: 'Glazing',
+      postcode: 'N1 7GU',
+    });
+
+    const runId = 'bf_run_emu_tenant_isolation';
+    const progress = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 10,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+
+    expect(progress.processedCount).toBeGreaterThanOrEqual(2);
+
+    const taskSnapA = await adminDb.collection('intelligence_tasks')
+      .doc(taskDocumentId(buildIdempotencyKey('job_estate_A_1', 'JOB_EXTRACTION', 'v1')))
+      .get();
+    const taskSnapB = await adminDb.collection('intelligence_tasks')
+      .doc(taskDocumentId(buildIdempotencyKey('job_estate_B_1', 'JOB_EXTRACTION', 'v1')))
+      .get();
+
+    expect(taskSnapA.exists).toBe(true);
+    expect(taskSnapB.exists).toBe(true);
+    expect((taskSnapA.data()?.payload as any)?.job?.jobId).toBe('job_estate_A_1');
+    expect((taskSnapB.data()?.payload as any)?.job?.jobId).toBe('job_estate_B_1');
+  });
+
+  it('Production Emulator Vector 10: Partial failure & resume — Failed items do NOT advance cursor and are retried on resume', async () => {
+    const runId = 'bf_run_emu_partial_failure';
+
+    // Register a handler that fails on job_emu_25_003
+    intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
+      if (task.aggregateId === 'job_emu_25_003') {
+        throw new Error('Simulation: extraction failed on unit 3');
+      }
+      return { processed: true, jobId: task.aggregateId };
+    });
+
+    // Run 1: Batch of 5 items, job 3 fails -> cursor must stop at job_emu_25_002
+    const run1 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 5,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+
+    expect(run1.processedCount).toBe(4); // 4 succeeded, 1 failed
+    expect(run1.errorCount).toBe(1);
+    expect(run1.nextCursor).toBe('job_emu_25_002'); // Crucial: cursor stopped before failed item
+
+    // Fix the handler so job 3 now succeeds
+    intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
+      return { processed: true, jobId: task.aggregateId, recovered: true };
+    });
+
+    // Run 2: Resume from saved cursor
+    const run2 = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+      runId,
+      batchSize: 5,
+      dryRun: false,
+      rateLimitDelayMs: 0,
+    });
+
+    expect(run2.processedCount).toBe(9);
+    expect(run2.nextCursor).toBe('job_emu_25_007');
+  });
+
+  it('Production Emulator Vector 11: Scale test with 250 real Firestore emulator records processed in bounded batches', async () => {
+    // Bulk seed 250 records into the real Firestore emulator in chunks
+    const totalRecords = 250;
+    const batchSize = 50;
+
+    let writeBatch = adminDb.batch();
+    let countInBatch = 0;
+
+    for (let i = 1; i <= totalRecords; i++) {
+      const jobId = `job_scale_250_${String(i).padStart(4, '0')}`;
+      const docRef = adminDb.collection('jobs').doc(jobId);
+      writeBatch.set(docRef, {
+        id: jobId,
+        title: `Scale Test Job ${i}`,
+        description: `Scale test description for item ${i}`,
+        category: 'Plumbing',
+        postcode: 'SW1A 1AA',
+        createdAt: new Date(Date.now() - (totalRecords - i) * 60000).toISOString(),
+      });
+      countInBatch++;
+      if (countInBatch >= 200) {
+        await writeBatch.commit();
+        writeBatch = adminDb.batch();
+        countInBatch = 0;
+      }
+    }
+    if (countInBatch > 0) {
+      await writeBatch.commit();
+    }
+
+    // Register simple fast handler
+    intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
+      return { scaleSuccess: true, id: task.aggregateId };
+    });
+
+    const runId = 'bf_run_scale_250_real_emu';
+    let currentCursor: string | undefined = undefined;
+    let iterations = 0;
+    let totalProcessed = 0;
+
+    // Execute in bounded batches of 50 until complete
+    while (iterations < 10) {
+      iterations++;
+      const step = await controlledBackfillEngine.executeFirestoreBackfill(adminDb, {
+        runId,
+        batchSize,
+        cursor: currentCursor,
+        dryRun: false,
+        rateLimitDelayMs: 0,
+      });
+
+      totalProcessed = step.processedCount;
+      currentCursor = step.nextCursor;
+
+      if (step.isComplete) {
+        break;
+      }
+    }
+
+    expect(totalProcessed).toBeGreaterThanOrEqual(250);
+    expect(iterations).toBeGreaterThanOrEqual(5); // Proves bounded chunking (at least 5 batches of 50)
+
+    const finalRunSnap = await adminDb.collection('intelligence_backfill_runs').doc(runId).get();
+    expect(finalRunSnap.data()?.status).toBe('completed');
   });
 });

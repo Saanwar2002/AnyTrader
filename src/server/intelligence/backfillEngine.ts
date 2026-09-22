@@ -207,9 +207,20 @@ export class ControlledBackfillEngine {
       targetTaskType,
     } = options;
 
-    // Enforce hard server-side ceilings
-    const batchSize = Math.max(1, Math.min(Number(rawBatchSize) || 100, HARD_MAX_BATCH_SIZE));
-    const maxCostUsd = Math.max(0.0001, Math.min(Number(rawMaxCostUsd) || 10.0, HARD_MAX_COST_USD));
+    // Enforce robust number validation & hard server-side ceilings
+    const parsedBatch = typeof rawBatchSize === 'number' ? rawBatchSize : Number(rawBatchSize);
+    const safeBatchSize = !Number.isFinite(parsedBatch) || parsedBatch <= 0
+      ? 100
+      : Math.min(Math.max(1, Math.floor(parsedBatch)), HARD_MAX_BATCH_SIZE);
+
+    const parsedCost = typeof rawMaxCostUsd === 'number' ? rawMaxCostUsd : Number(rawMaxCostUsd);
+    if (!Number.isFinite(parsedCost) || parsedCost < 0) {
+      throw new Error('[BackfillEngine] Invalid maxCostUsd: must be a finite positive number');
+    }
+    const safeMaxCostUsd = Math.min(parsedCost, HARD_MAX_COST_USD);
+
+    const batchSize = safeBatchSize;
+    const maxCostUsd = safeMaxCostUsd;
 
     const progress: BackfillProgress = {
       runId,
