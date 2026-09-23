@@ -677,6 +677,7 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
         originType: 'customer_or_subject_data',
       });
       expect(customerEval.eligible).toBe(false);
+      expect(customerEval.reason).toBe('blocked_by_origin');
 
       // Supplier doc externally blocked
       const supplierEval = await archiveService.evaluateComponentEligibility({
@@ -687,6 +688,7 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
         originType: 'third_party_data',
       });
       expect(supplierEval.eligible).toBe(false);
+      expect(supplierEval.reason).toBe('blocked_by_origin');
     });
 
     it('revoked rights block future use across all purposes', async () => {
@@ -833,6 +835,7 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
           originType: 'customer_or_subject_data',
         });
         expect(evalCompExternal.eligible).toBe(false);
+        expect(evalCompExternal.reason).toBe('blocked_by_origin');
       });
     });
   });

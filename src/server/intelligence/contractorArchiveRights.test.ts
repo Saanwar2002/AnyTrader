@@ -241,7 +241,7 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
       expect(ARCHIVE_COMPONENT_CATEGORIES).toContain('certificate');
     });
 
-    it('mixed-origin archive blocks external use for customer and third-party data', async () => {
+    it('mixed-origin archive blocks external use for customer and third-party data (blocked_by_origin)', async () => {
       const reg = await archiveService.registerArchiveRights({
         tenantId: 'contractor_mixed',
         contractorUid: 'contractor_mixed',
@@ -273,7 +273,8 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
         'customer_gas_meter_photo'
       );
 
-      // Evaluating customer data for external AI training is blocked
+      // archive_mixed_origin_customer_data_external_blocked:
+      // Evaluating customer data for external AI training is blocked by origin
       const evalCustomerExternal = await archiveService.evaluateComponentEligibility({
         tenantId: 'contractor_mixed',
         archiveId: reg.archiveId,
@@ -282,9 +283,10 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
         originType: 'customer_or_subject_data',
       });
       expect(evalCustomerExternal.eligible).toBe(false);
-      expect(['unknown', 'blocked_by_origin']).toContain(evalCustomerExternal.reason);
+      expect(evalCustomerExternal.reason).toBe('blocked_by_origin');
 
-      // Evaluating third-party data for commercial licensing is blocked
+      // archive_mixed_origin_third_party_data_external_blocked:
+      // Evaluating third-party data for commercial licensing is blocked by origin
       const thirdPartyDocId = computeArchiveComponentId(
         'contractor_mixed',
         reg.archiveId,
@@ -298,6 +300,7 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
         originType: 'third_party_data',
       });
       expect(evalThirdPartyCommercial.eligible).toBe(false);
+      expect(evalThirdPartyCommercial.reason).toBe('blocked_by_origin');
     });
 
     it('rejects invalid origin types or categories with validation error', async () => {

@@ -254,16 +254,17 @@ export class ContractorArchiveRightsService {
     const archiveId = computeContractorArchiveId(input.tenantId, input.archiveReference);
     const allowInternalAi = input.allowInternalAi !== false;
 
-    // Build conservative purpose map
-    const purposes = createDefaultContractorArchivePurposes(allowInternalAi, input.purposes);
-
-    // CRITICAL RIGHTS RULE: External AI training or commercial licensing cannot be inferred from upload or internal AI
-    if (purposes.internal_ai_use === 'allowed' && !input.purposes?.external_ai_training) {
-      purposes.external_ai_training = 'unknown';
-    }
-    if (purposes.internal_ai_use === 'allowed' && !input.purposes?.commercial_licensing) {
-      purposes.commercial_licensing = 'unknown';
-    }
+    // Build conservative purpose map: external purposes cannot be manufactured as 'allowed' via arbitrary registration payload
+    const purposes: Record<RightsPurpose, PurposePermission> = {
+      internal_platform_operation: input.purposes?.internal_platform_operation ?? 'allowed',
+      internal_ai_use: input.allowInternalAi === false || input.purposes?.internal_ai_use === 'denied'
+        ? 'denied'
+        : (input.purposes?.internal_ai_use ?? (allowInternalAi ? 'allowed' : 'denied')),
+      external_ai_training: input.purposes?.external_ai_training === 'denied' ? 'denied' : 'unknown',
+      third_party_sharing: input.purposes?.third_party_sharing === 'denied' ? 'denied' : 'unknown',
+      commercial_licensing: input.purposes?.commercial_licensing === 'denied' ? 'denied' : 'unknown',
+      export: input.purposes?.export === 'denied' ? 'denied' : 'unknown',
+    };
 
     const restrictions = [...(input.restrictions || [])];
     if (input.allowInternalAi === false && !restrictions.includes('restrict_internal_ai_use')) {
@@ -298,34 +299,28 @@ export class ContractorArchiveRightsService {
 
     let provenanceNode: ProvenanceNode | undefined;
     if (input.linkProvenance !== false) {
-      try {
-        provenanceNode = await this.provService.createNode({
+      // Must NOT swallow errors! If provenance node creation fails, throw immediately (fail closed)
+      provenanceNode = await this.provService.createNode({
+        tenantId: input.tenantId,
+        nodeType: 'source',
+        sourceType: 'contractor_archive',
+        sourceId: archiveId,
+        sourceVersion: 1,
+        rightsReference: {
+          rightsId: rightsRecord.rightsId,
           tenantId: input.tenantId,
-          nodeType: 'source',
-          sourceType: 'contractor_archive',
-          sourceId: archiveId,
-          sourceVersion: 1,
-          rightsReference: {
-            rightsId: rightsRecord.rightsId,
-            tenantId: input.tenantId,
-            status: rightsRecord.status,
-          },
-          metadata: {
-            archiveReference: input.archiveReference,
-            contractorUid: input.contractorUid,
-            componentCount: input.components?.length || 0,
-            hasMixedOrigins: (input.components || []).some(
-              (c) => c.originType !== 'contractor_owned'
-            ),
-          },
-          createdBy: input.recordedBy || 'contractor_archive_boundary',
-        });
-      } catch (err) {
-        // If provenance node already exists or throws, re-throw if security error
-        if (err instanceof ContractorArchiveSecurityError) {
-          throw err;
-        }
-      }
+          status: rightsRecord.status,
+        },
+        metadata: {
+          archiveReference: input.archiveReference,
+          contractorUid: input.contractorUid,
+          componentCount: input.components?.length || 0,
+          hasMixedOrigins: (input.components || []).some(
+            (c) => c.originType !== 'contractor_owned'
+          ),
+        },
+        createdBy: input.recordedBy || 'contractor_archive_boundary',
+      });
     }
 
     // Register component rights if mixed-origin components were provided
@@ -375,37 +370,26 @@ export class ContractorArchiveRightsService {
 
     const componentId = computeArchiveComponentId(tenantId, archiveId, component.componentKey);
 
-    // Component-level conservative purposes
+    // Component-level conservative purposes: external purposes cannot be manufactured as 'allowed'
     const compPurposes: Record<RightsPurpose, PurposePermission> = {
       internal_platform_operation: component.purposes?.internal_platform_operation ?? 'allowed',
-      internal_ai_use: component.purposes?.internal_ai_use ?? 'allowed',
-      external_ai_training: component.purposes?.external_ai_training ?? 'unknown',
-      third_party_sharing: component.purposes?.third_party_sharing ?? 'unknown',
-      commercial_licensing: component.purposes?.commercial_licensing ?? 'unknown',
-      export: component.purposes?.export ?? 'unknown',
+      internal_ai_use: component.purposes?.internal_ai_use === 'denied'
+        ? 'denied'
+        : (component.purposes?.internal_ai_use ?? 'allowed'),
+      external_ai_training: component.purposes?.external_ai_training === 'denied' ? 'denied' : 'unknown',
+      third_party_sharing: component.purposes?.third_party_sharing === 'denied' ? 'denied' : 'unknown',
+      commercial_licensing: component.purposes?.commercial_licensing === 'denied' ? 'denied' : 'unknown',
+      export: component.purposes?.export === 'denied' ? 'denied' : 'unknown',
     };
 
     // MIXED-ORIGIN INVARIANT:
     // If component origin is NOT contractor-owned (e.g. customer data, third-party data, unknown origin),
-    // external AI training, commercial licensing, third-party sharing, and export MUST NEVER be automatically allowed!
+    // external AI training, commercial licensing, third-party sharing, and export MUST NEVER be allowed!
     if (component.originType !== 'contractor_owned') {
-      if (!component.purposes?.external_ai_training || component.purposes.external_ai_training === 'allowed') {
-        // Customer or third-party data cannot be automatically licensed for external AI without verified subject consent
-        if (component.purposes?.external_ai_training === 'allowed') {
-          // Keep explicit if verified, but if unverified default to denied/unknown
-        } else {
-          compPurposes.external_ai_training = 'unknown';
-        }
-      }
-      if (!component.purposes?.commercial_licensing) {
-        compPurposes.commercial_licensing = 'unknown';
-      }
-      if (!component.purposes?.third_party_sharing) {
-        compPurposes.third_party_sharing = 'unknown';
-      }
-      if (!component.purposes?.export) {
-        compPurposes.export = 'unknown';
-      }
+      compPurposes.external_ai_training = component.purposes?.external_ai_training === 'denied' ? 'denied' : 'unknown';
+      compPurposes.third_party_sharing = component.purposes?.third_party_sharing === 'denied' ? 'denied' : 'unknown';
+      compPurposes.commercial_licensing = component.purposes?.commercial_licensing === 'denied' ? 'denied' : 'unknown';
+      compPurposes.export = component.purposes?.export === 'denied' ? 'denied' : 'unknown';
     }
 
     const compRestrictions = [...(component.restrictions || [])];
@@ -442,46 +426,43 @@ export class ContractorArchiveRightsService {
 
     let provenanceNode: ProvenanceNode | undefined;
     if (input.linkProvenance !== false) {
-      try {
-        provenanceNode = await this.provService.createNode({
+      // Must NOT swallow errors! If provenance node or edge creation fails, throw immediately (fail closed)
+      provenanceNode = await this.provService.createNode({
+        tenantId,
+        nodeType: 'observation',
+        sourceType: 'contractor_archive_component',
+        sourceId: componentId,
+        sourceVersion: 1,
+        rightsReference: {
+          rightsId: rightsRecord.rightsId,
           tenantId,
-          nodeType: 'observation',
-          sourceType: 'contractor_archive_component',
-          sourceId: componentId,
-          sourceVersion: 1,
-          rightsReference: {
-            rightsId: rightsRecord.rightsId,
-            tenantId,
-            status: rightsRecord.status,
-          },
-          metadata: {
-            archiveId,
-            componentKey: component.componentKey,
-            originType: component.originType,
-            category: component.category,
-            contentHash: component.contentHash,
-          },
-          createdBy: input.recordedBy || 'contractor_archive_component_boundary',
-        });
-
-        // Link component to parent archive node in provenance graph
-        const archiveNodeId = this.provService.computeNodeId(
-          tenantId,
-          'source',
-          'contractor_archive',
+          status: rightsRecord.status,
+        },
+        metadata: {
           archiveId,
-          1
-        );
-        await this.provService.createEdge({
-          tenantId,
-          fromNodeId: archiveNodeId,
-          toNodeId: provenanceNode.nodeId,
-          relationType: 'OBSERVED_FROM',
-          createdBy: input.recordedBy || 'contractor_archive_component_boundary',
-        });
-      } catch {
-        // Continue if edge/node creation was already registered
-      }
+          componentKey: component.componentKey,
+          originType: component.originType,
+          category: component.category,
+          contentHash: component.contentHash,
+        },
+        createdBy: input.recordedBy || 'contractor_archive_component_boundary',
+      });
+
+      // Link component to parent archive node in provenance graph
+      const archiveNodeId = this.provService.computeNodeId(
+        tenantId,
+        'source',
+        'contractor_archive',
+        archiveId,
+        1
+      );
+      await this.provService.createEdge({
+        tenantId,
+        fromNodeId: archiveNodeId,
+        toNodeId: provenanceNode.nodeId,
+        relationType: 'OBSERVED_FROM',
+        createdBy: input.recordedBy || 'contractor_archive_component_boundary',
+      });
     }
 
     return {
@@ -729,6 +710,28 @@ export class ContractorArchiveRightsService {
         componentId,
         rightsId: rights.rightsId,
         details: `Component rights status is '${rights.status}'`,
+      };
+    }
+
+    // Mixed-origin external purpose safety gate on component record:
+    const effectiveOrigin = originType || (rights.owner?.type === 'contractor' ? 'contractor_owned' : 'unknown_origin');
+    if (
+      effectiveOrigin !== 'contractor_owned' &&
+      (purpose === 'external_ai_training' ||
+        purpose === 'commercial_licensing' ||
+        purpose === 'third_party_sharing' ||
+        purpose === 'export')
+    ) {
+      return {
+        eligible: false,
+        reason: 'blocked_by_origin',
+        purpose,
+        tenantId,
+        archiveId,
+        componentId,
+        rightsId: rights.rightsId,
+        originType: effectiveOrigin,
+        details: `Mixed-origin component of type '${effectiveOrigin}' is blocked from external purpose '${purpose}' by origin`,
       };
     }
 
