@@ -1326,5 +1326,37 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable data rights history; server Admin SDK writes only
     }
+
+    // ==========================================
+    // V8.3 TASK 28 — EVIDENCE & DATA PROVENANCE GRAPH
+    // Strict Tenant-Bound Security & Append-Only Immutability
+    // Client writes strictly DENIED; Server Admin SDK writes only
+    // ==========================================
+    match /provenance_nodes/{nodeId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /provenance_edges/{edgeId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /provenance_events/{eventId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable provenance event history; server Admin SDK writes only
+    }
   }
 }

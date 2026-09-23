@@ -3895,6 +3895,60 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "postcodeArea", "isPublicPassport"]
+    },
+    "ProvenanceNode": {
+      "title": "ProvenanceNode",
+      "description": "Server-authoritative provenance graph node capturing data lineage across source, evidence, observation, extraction, intelligence, and projection.",
+      "type": "object",
+      "properties": {
+        "nodeId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "nodeType": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "sourceVersion": { "type": "string" },
+        "contentHash": { "type": "string" },
+        "schemaVersion": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "status": { "type": "string" },
+        "rightsReference": { "type": "object" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["nodeId", "tenantId", "nodeType", "sourceType", "sourceId", "contentHash", "schemaVersion", "createdAt", "status"]
+    },
+    "ProvenanceEdge": {
+      "title": "ProvenanceEdge",
+      "description": "Server-authoritative directed edge linking provenance nodes within the same tenant partition.",
+      "type": "object",
+      "properties": {
+        "edgeId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "fromNodeId": { "type": "string" },
+        "toNodeId": { "type": "string" },
+        "relationType": { "type": "string" },
+        "sourceVersion": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "metadata": { "type": "object" }
+      },
+      "required": ["edgeId", "tenantId", "fromNodeId", "toNodeId", "relationType", "createdAt"]
+    },
+    "ProvenanceEvent": {
+      "title": "ProvenanceEvent",
+      "description": "Append-only immutable provenance audit event capturing graph operations.",
+      "type": "object",
+      "properties": {
+        "eventId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "eventType": { "type": "string" },
+        "nodeId": { "type": "string" },
+        "edgeId": { "type": "string" },
+        "payload": { "type": "object" },
+        "eventHash": { "type": "string" },
+        "recordedAt": { "type": "string" }
+      },
+      "required": ["eventId", "tenantId", "eventType", "payload", "eventHash", "recordedAt"]
     }
   },
   "firestore": {
@@ -4341,6 +4395,24 @@
         "$ref": "#/entities/Property"
       },
       "description": "Append-only immutable historical Buyer / Conveyancing Intelligence snapshots with cryptographic content hashes."
+    },
+    "/provenance_nodes/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProvenanceNode"
+      },
+      "description": "Server-authoritative provenance graph nodes capturing data lineage across source, evidence, observation, extraction, intelligence, and projection."
+    },
+    "/provenance_edges/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProvenanceEdge"
+      },
+      "description": "Server-authoritative directed edges linking provenance nodes within the same tenant partition."
+    },
+    "/provenance_events/{id}": {
+      "schema": {
+        "$ref": "#/entities/ProvenanceEvent"
+      },
+      "description": "Append-only immutable provenance audit events capturing graph mutations."
     }
   }
 }
