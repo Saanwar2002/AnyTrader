@@ -3949,6 +3949,45 @@
         "recordedAt": { "type": "string" }
       },
       "required": ["eventId", "tenantId", "eventType", "payload", "eventHash", "recordedAt"]
+    },
+    "DataRightsRecord": {
+      "title": "DataRightsRecord",
+      "description": "Server-authoritative data rights record establishing purpose permissions, restrictions, and tenant boundaries.",
+      "type": "object",
+      "properties": {
+        "rightsId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "owner": { "type": "object" },
+        "subject": { "type": "object" },
+        "source": { "type": "object" },
+        "purposes": { "type": "object" },
+        "restrictions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "status": { "type": "string" },
+        "schemaVersion": { "type": "string" },
+        "contentHash": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "version": { "type": "integer" }
+      },
+      "required": ["rightsId", "tenantId", "owner", "subject", "source", "purposes", "status", "schemaVersion", "contentHash", "createdAt", "updatedAt", "version"]
+    },
+    "DataRightsHistory": {
+      "title": "DataRightsHistory",
+      "description": "Append-only immutable audit history for data rights records.",
+      "type": "object",
+      "properties": {
+        "historyId": { "type": "string" },
+        "rightsId": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "action": { "type": "string" },
+        "snapshot": { "type": "object" },
+        "timestamp": { "type": "string" },
+        "actor": { "type": "string" }
+      },
+      "required": ["historyId", "rightsId", "tenantId", "action", "snapshot", "timestamp", "actor"]
     }
   },
   "firestore": {
@@ -4413,6 +4452,18 @@
         "$ref": "#/entities/ProvenanceEvent"
       },
       "description": "Append-only immutable provenance audit events capturing graph mutations."
+    },
+    "/data_rights/{id}": {
+      "schema": {
+        "$ref": "#/entities/DataRightsRecord"
+      },
+      "description": "Server-authoritative data rights records enforcing tenant boundaries, purpose permissions, and restrictions."
+    },
+    "/data_rights_history/{id}": {
+      "schema": {
+        "$ref": "#/entities/DataRightsHistory"
+      },
+      "description": "Append-only immutable historical data rights audit records with cryptographic snapshots."
     }
   }
 }

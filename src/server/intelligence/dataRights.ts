@@ -314,13 +314,13 @@ export function canUseDataForPurpose(
  * Authoritative Server Data Rights Service
  */
 export class DataRightsService {
-  private db: admin.firestore.Firestore | null = null;
+  private db: admin.firestore.Firestore | any = null;
 
-  constructor(db?: admin.firestore.Firestore) {
+  constructor(db?: admin.firestore.Firestore | any) {
     if (db) this.db = db;
   }
 
-  public setFirestoreDb(db: admin.firestore.Firestore) {
+  public setFirestoreDb(db: admin.firestore.Firestore | any) {
     this.db = db;
   }
 

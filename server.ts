@@ -58,7 +58,11 @@ import {
   BuyerIntelligenceService,
   buyerIntelligenceService,
   GenerateBuyerIntelligenceInput,
-  enqueueBuyerIntelligenceTask
+  enqueueBuyerIntelligenceTask,
+  ContractorArchiveRightsService,
+  contractorArchiveRightsService,
+  ContractorArchiveSecurityError,
+  ContractorArchiveValidationError,
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -5767,6 +5771,159 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         progress,
       });
     } catch (err: any) {
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // ==========================================
+  // V8.3 TASK 29 — CONTRACTOR ARCHIVE RIGHTS BOUNDARY
+  // Server-Authoritative Boundary & Purpose Eligibility
+  // ==========================================
+
+  // Register Contractor Archive Rights Boundary
+  app.post("/api/intelligence/contractor-archives/register", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const {
+        archiveReference,
+        title,
+        description,
+        allowInternalAi,
+        purposes,
+        restrictions,
+        components,
+        linkProvenance,
+      } = req.body || {};
+
+      if (!archiveReference || typeof archiveReference !== "string") {
+        return res.status(400).json({ error: "Missing or invalid archiveReference" });
+      }
+
+      // Enforce strict tenant binding (tenantId === authenticated user UID)
+      const tenantId = user.uid;
+      const contractorUid = user.uid;
+
+      if (db) {
+        contractorArchiveRightsService.setFirestoreDb(db);
+      }
+
+      const outcome = await contractorArchiveRightsService.registerArchiveRights({
+        tenantId,
+        contractorUid,
+        archiveReference,
+        title,
+        description,
+        allowInternalAi,
+        purposes,
+        restrictions,
+        components,
+        linkProvenance,
+        recordedBy: user.uid,
+      });
+
+      res.status(201).json({
+        success: true,
+        archiveId: outcome.archiveId,
+        rightsId: outcome.rightsRecord.rightsId,
+        rightsRecord: outcome.rightsRecord,
+        provenanceNodeId: outcome.provenanceNode?.nodeId,
+        componentCount: outcome.componentRights?.length || 0,
+      });
+    } catch (err: any) {
+      if (err instanceof ContractorArchiveSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof ContractorArchiveValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Evaluate Contractor Archive Eligibility
+  app.post("/api/intelligence/contractor-archives/:archiveId/evaluate", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { archiveId } = req.params;
+      const { purpose, componentId, originType } = req.body || {};
+
+      if (!purpose || typeof purpose !== "string") {
+        return res.status(400).json({ error: "Missing required 'purpose' field" });
+      }
+
+      if (db) {
+        contractorArchiveRightsService.setFirestoreDb(db);
+      }
+
+      const tenantId = user.uid;
+      const isAdmin = user.isAdmin === true || user.role === "admin";
+
+      let result;
+      if (componentId) {
+        result = await contractorArchiveRightsService.evaluateComponentEligibility({
+          tenantId,
+          archiveId,
+          componentId,
+          purpose: purpose as any,
+          originType,
+          requestedByUid: user.uid,
+          isAdmin,
+        });
+      } else {
+        result = await contractorArchiveRightsService.evaluateArchiveEligibility({
+          tenantId,
+          archiveId,
+          purpose: purpose as any,
+          requestedByUid: user.uid,
+          isAdmin,
+        });
+      }
+
+      res.json({
+        success: true,
+        result,
+      });
+    } catch (err: any) {
+      if (err instanceof ContractorArchiveSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Revoke Contractor Archive Rights
+  app.post("/api/intelligence/contractor-archives/:archiveId/revoke", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { archiveId } = req.params;
+      const { reason } = req.body || {};
+
+      if (!reason || typeof reason !== "string") {
+        return res.status(400).json({ error: "Missing required 'reason' field" });
+      }
+
+      if (db) {
+        contractorArchiveRightsService.setFirestoreDb(db);
+      }
+
+      const tenantId = user.uid;
+      const outcome = await contractorArchiveRightsService.revokeArchiveRights(
+        tenantId,
+        archiveId,
+        reason,
+        user.uid
+      );
+
+      res.json({
+        success: true,
+        archiveId,
+        status: outcome.status,
+        revocationReason: outcome.revocationReason,
+      });
+    } catch (err: any) {
+      if (err instanceof ContractorArchiveSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
       sendHttpError(res, err, req);
     }
   });

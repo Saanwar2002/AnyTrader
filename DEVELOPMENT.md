@@ -1,5 +1,35 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Task 29: Contractor Archive Rights Boundary (September 23, 2026)
+- **1. Server-Authoritative Contractor Archive Rights Service (`ContractorArchiveRightsService`)**:
+  - Implemented `ContractorArchiveRightsService` in `src/server/intelligence/contractorArchiveRights.ts` managing historical contractor archives and portfolio data rights boundaries.
+  - **Canonical Tenant Model Invariant**: Strict UID-as-tenant (`tenantId === request.auth.uid`). All contractor archives, components, and purpose authorizations are strictly tenant-isolated.
+  - **Fail-Closed Purpose Authorization (`unknown != allowed`)**:
+    - Unset or unknown permissions are strictly denied for execution across all external operations.
+    - Explicitly blocks external AI model training (`external_ai_training`), commercial licensing (`commercial_licensing`), third-party data sharing (`third_party_sharing`), and bulk data export (`export`) when undefined or unknown.
+    - Preserves AnyTrader internal AI Bot operations (`internal_ai_use: 'allowed'`) by default when configured.
+    - Uploading or owning an archive never confers commercial licensing or external distribution rights.
+  - **Mixed-Origin Component Safety**:
+    - Distinguishes contractor-owned material from embedded customer/subject data (`customer_or_subject_data`) and third-party documents (`third_party_data`).
+    - Possession of an archive does NOT grant rights to license or export embedded third-party or customer data.
+  - **Cryptographic & Deterministic Identifiers**:
+    - Deterministic Archive ID: `carch_${SHA256(tenantId : archiveReference)[0..24]}`.
+    - Deterministic Component ID: `ccomp_${SHA256(tenantId : archiveId : componentKey)[0..24]}`.
+    - Content hashing for components and archives with immutable audit snapshots.
+  - **Lineage & Task 28 Provenance Integration**:
+    - Creates source provenance nodes in `/provenance_nodes` referencing registered archive data rights.
+    - Automatically links archive components to parent archives via `OBSERVED_FROM` provenance edges.
+  - **Endpoints (`server.ts`)**:
+    - `POST /api/intelligence/contractor-archives/register`: Server-authoritative archive rights registration with provenance linking.
+    - `POST /api/intelligence/contractor-archives/:archiveId/evaluate`: Authoritative purpose and component eligibility evaluation.
+    - `POST /api/intelligence/contractor-archives/:archiveId/revoke`: Immediate archive rights revocation with historical audit event logging.
+- **2. Testing & Verification**:
+  - Unit test suite: `src/server/intelligence/contractorArchiveRights.test.ts` (18/18 tests passing, 100% clean).
+  - Emulator security suite: `tests/unit/task29ContractorArchiveRights.test.ts` (7 security vectors: unauthenticated defense, cross-tenant isolation, cross-UID owner bypass defense, client write denial, mixed-origin component protection, purpose boundary defense, production path verification).
+  - Total test suite: 664/664 passing across 42 test files.
+  - Lint: 0 TypeScript errors (`tsc --noEmit` clean).
+  - Applet compilation: Clean build.
+
 ## 🛡️ AnyTrader V8.3 — Task 28: Evidence & Data Provenance Graph (September 23, 2026)
 - **1. Server-Authoritative Evidence & Data Provenance Graph (`ProvenanceGraphService`)**:
   - Implemented `ProvenanceGraphService` in `src/server/intelligence/provenanceGraph.ts` managing the Directed Acyclic Graph (DAG) across the 6-stage lifecycle:

@@ -379,6 +379,39 @@ export class ProvenanceGraphService {
     this.db = db || null;
   }
 
+  public setFirestoreDb(db: admin.firestore.Firestore | any): void {
+    this.db = db;
+  }
+
+  public computeNodeId(
+    tenantId: string,
+    nodeType: ProvenanceNodeType,
+    sourceType: string,
+    sourceId: string,
+    sourceVersion: string | number = '1',
+    schemaVersion: string = PROVENANCE_SCHEMA_VERSION
+  ): string {
+    return computeProvenanceNodeId(tenantId, nodeType, sourceType, sourceId, sourceVersion, schemaVersion);
+  }
+
+  public computeEdgeId(
+    tenantId: string,
+    fromNodeId: string,
+    toNodeId: string,
+    relationType: ProvenanceRelationType
+  ): string {
+    return computeProvenanceEdgeId(tenantId, fromNodeId, toNodeId, relationType);
+  }
+
+  public computeEventId(
+    tenantId: string,
+    eventType: ProvenanceEventType,
+    targetId: string,
+    timestamp: string
+  ): string {
+    return computeProvenanceEventId(tenantId, eventType, targetId, timestamp);
+  }
+
   private getDb(): admin.firestore.Firestore {
     if (this.db) {
       return this.db;
@@ -1123,3 +1156,5 @@ export class ProvenanceGraphService {
     }
   }
 }
+
+export const provenanceGraphService = new ProvenanceGraphService();
