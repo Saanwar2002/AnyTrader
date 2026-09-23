@@ -366,4 +366,90 @@ describe('V8.3 Task 27 / 27R — Data Rights & Provenance Foundation Unit & Sema
       expect(h1).not.toBe(hEffective);
     });
   });
+
+  describe('Vectors 26–30: Canonical Tenant Model & Authorization Invariants', () => {
+    it('Vector 26: Owner UID cannot bypass tenant boundary (cross-UID owner bypass denied)', () => {
+      // Record belongs to Tenant A (tenant_A), but owner.id is user_X
+      const recordInTenantA: DataRightsRecord = {
+        ...baseRecord,
+        tenantId: 'tenant_A',
+        owner: { type: 'user', id: 'user_X' },
+        provenance: {
+          ...baseRecord.provenance,
+          tenantId: 'tenant_A',
+        },
+      };
+
+      // User X (authenticated as user_X, whose tenant is user_X) evaluates purpose
+      // Expected result: DENIED (false) because record tenant is tenant_A != user_X
+      const allowedForUserX = canUseDataForPurpose(recordInTenantA, 'internal_ai_use', 'user_X');
+      expect(allowedForUserX).toBe(false);
+
+      // Legitimate tenant A access succeeds
+      const allowedForTenantA = canUseDataForPurpose(recordInTenantA, 'internal_ai_use', 'tenant_A');
+      expect(allowedForTenantA).toBe(true);
+    });
+
+    it('Vector 27: Client-supplied tenant substitution in source or provenance is strictly rejected', () => {
+      // Attacker attempts to forge record with mismatched source tenant
+      const spoofedSourceRecord = {
+        ...baseRecord,
+        tenantId: 'tenant_A',
+        source: { type: 'job', id: 'job_001', tenantId: 'tenant_B' },
+        provenance: { ...baseRecord.provenance, tenantId: 'tenant_A' },
+      };
+      expect(() => validateDataRightsRecord(spoofedSourceRecord)).toThrow(DataRightsSecurityError);
+
+      // Attacker attempts to forge record with mismatched provenance tenant
+      const spoofedProvRecord = {
+        ...baseRecord,
+        tenantId: 'tenant_A',
+        source: { type: 'job', id: 'job_001', tenantId: 'tenant_A' },
+        provenance: { ...baseRecord.provenance, tenantId: 'tenant_B' },
+      };
+      expect(() => validateDataRightsRecord(spoofedProvRecord)).toThrow(DataRightsSecurityError);
+    });
+
+    it('Vector 28: Historical rights records retain identical strict tenant boundary invariant', () => {
+      // Historical snapshot belonging to Tenant A with User X as owner
+      const historicalSnapshot: DataRightsRecord = {
+        ...baseRecord,
+        tenantId: 'tenant_A',
+        owner: { type: 'user', id: 'user_X' },
+        status: 'active',
+        provenance: {
+          ...baseRecord.provenance,
+          tenantId: 'tenant_A',
+        },
+      };
+
+      // Caller User X attempting to evaluate historical record under User X tenant context
+      expect(canUseDataForPurpose(historicalSnapshot, 'internal_platform_operation', 'user_X')).toBe(false);
+
+      // Authorized Tenant A evaluating historical record succeeds
+      expect(canUseDataForPurpose(historicalSnapshot, 'internal_platform_operation', 'tenant_A')).toBe(true);
+    });
+
+    it('Vector 29: Fail-closed evaluation on missing tenant context or mismatched caller context', () => {
+      const record = { ...baseRecord, tenantId: 'tenant_valid_123' };
+      // Mismatched expectedTenantId fails closed
+      expect(canUseDataForPurpose(record, 'internal_platform_operation', 'intruder_tenant')).toBe(false);
+      // Empty tenant context in validation throws error
+      expect(() => validateDataRightsRecord({ ...record, tenantId: '   ' })).toThrow(DataRightsSecurityError);
+    });
+
+    it('Vector 30: Platform operational access is strictly bounded to authorized tenant context', () => {
+      const standardPurposes = createStandardInternalPlatformPurposes(true);
+      const record: DataRightsRecord = {
+        ...baseRecord,
+        tenantId: 'tenant_legit_456',
+        purposes: standardPurposes,
+      };
+
+      // Correct tenant context: permitted
+      expect(canUseDataForPurpose(record, 'internal_platform_operation', 'tenant_legit_456')).toBe(true);
+      // Foreign tenant context: denied
+      expect(canUseDataForPurpose(record, 'internal_platform_operation', 'foreign_tenant_789')).toBe(false);
+    });
+  });
 });
