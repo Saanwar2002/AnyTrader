@@ -309,6 +309,62 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
       expect(evalThirdPartyCommercial.reason).toBe('blocked_by_origin');
     });
 
+    it('handles contractor components with and without contentHash without undefined values', async () => {
+      const reg = await archiveService.registerArchiveRights({
+        tenantId: 'contractor_hash_test',
+        contractorUid: 'contractor_hash_test',
+        archiveReference: 'hash_and_no_hash_archive',
+        components: [
+          {
+            componentKey: 'comp_with_hash',
+            originType: 'contractor_owned',
+            category: 'photograph',
+            contentHash: 'sha256:abcd1234ef567890',
+          },
+          {
+            componentKey: 'comp_without_hash',
+            originType: 'contractor_owned',
+            category: 'measurement',
+            // contentHash omitted
+          },
+        ],
+      });
+
+      expect(reg.componentRights?.length).toBe(2);
+
+      // Verify component WITH contentHash preserves it exactly
+      const compWithHashRes = await archiveService.registerComponentRights({
+        tenantId: 'contractor_hash_test',
+        archiveId: reg.archiveId,
+        component: {
+          componentKey: 'standalone_with_hash',
+          originType: 'contractor_owned',
+          category: 'photograph',
+          contentHash: 'sha256:exact_hash_value',
+        },
+      });
+      expect(compWithHashRes.provenanceNode?.metadata?.contentHash).toBe('sha256:exact_hash_value');
+      expect(Object.prototype.hasOwnProperty.call(compWithHashRes.provenanceNode?.metadata, 'contentHash')).toBe(true);
+
+      // Verify component WITHOUT contentHash omits the field entirely (never undefined)
+      const compWithoutHashRes = await archiveService.registerComponentRights({
+        tenantId: 'contractor_hash_test',
+        archiveId: reg.archiveId,
+        component: {
+          componentKey: 'standalone_without_hash',
+          originType: 'contractor_owned',
+          category: 'photograph',
+          // contentHash omitted
+        },
+      });
+      expect(compWithoutHashRes.provenanceNode?.metadata?.contentHash).toBeUndefined();
+      expect(Object.prototype.hasOwnProperty.call(compWithoutHashRes.provenanceNode?.metadata, 'contentHash')).toBe(false);
+      // Ensure no undefined values exist anywhere in metadata
+      for (const [key, value] of Object.entries(compWithoutHashRes.provenanceNode?.metadata || {})) {
+        expect(value).not.toBeUndefined();
+      }
+    });
+
     it('rejects invalid origin types or categories with validation error', async () => {
       await expect(
         archiveService.registerComponentRights({

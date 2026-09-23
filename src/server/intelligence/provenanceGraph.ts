@@ -236,6 +236,24 @@ export class ProvenanceIntegrityError extends Error {
 /**
  * Computes deterministic node ID from primary semantic identity keys
  */
+/**
+ * Recursively strips undefined keys from objects so Firestore never rejects documents
+ */
+export function cleanUndefinedValues<T extends Record<string, any>>(obj?: T): T | undefined {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = cleanUndefinedValues(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return Object.keys(result).length > 0 ? (result as T) : undefined;
+}
+
 export function computeProvenanceNodeId(
   tenantId: string,
   nodeType: ProvenanceNodeType,
@@ -304,7 +322,7 @@ export function computeProvenanceContentHash(payload: {
           status: payload.rightsReference.status || 'active',
         }
       : null,
-    metadata: payload.metadata || {},
+    metadata: cleanUndefinedValues(payload.metadata) || {},
   };
   return computeStructuredDataHash(canonicalObject);
 }
@@ -471,6 +489,7 @@ export class ProvenanceGraphService {
       await this.assertAuthoritativeRightsExists(db, params.rightsReference.rightsId, params.tenantId);
     }
 
+    const cleanedMetadata = cleanUndefinedValues(params.metadata);
     const node: ProvenanceNode = {
       nodeId,
       tenantId: params.tenantId,
@@ -484,7 +503,7 @@ export class ProvenanceGraphService {
       createdBy,
       status: params.status || 'active',
       ...(params.rightsReference ? { rightsReference: params.rightsReference } : {}),
-      ...(params.metadata ? { metadata: params.metadata } : {}),
+      ...(cleanedMetadata ? { metadata: cleanedMetadata } : {}),
     };
 
     // Execute atomic check-and-insert
@@ -567,6 +586,7 @@ export class ProvenanceGraphService {
     const toNodeRef = db.collection('provenance_nodes').doc(params.toNodeId);
     const edgeRef = db.collection('provenance_edges').doc(edgeId);
 
+    const cleanedEdgeMetadata = cleanUndefinedValues(params.metadata);
     const edge: ProvenanceEdge = {
       edgeId,
       tenantId: params.tenantId,
@@ -576,7 +596,7 @@ export class ProvenanceGraphService {
       sourceVersion: params.sourceVersion ?? '1',
       createdAt: now,
       createdBy,
-      ...(params.metadata ? { metadata: params.metadata } : {}),
+      ...(cleanedEdgeMetadata ? { metadata: cleanedEdgeMetadata } : {}),
     };
 
     await db.runTransaction(async (transaction: any) => {

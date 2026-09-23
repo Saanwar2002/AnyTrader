@@ -837,6 +837,51 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
         });
         expect(evalCompExternal.eligible).toBe(false);
         expect(evalCompExternal.reason).toBe('blocked_by_origin');
+
+        // 10. Verify component provenance nodes in Firestore (WITH and WITHOUT contentHash)
+        const roofTileCompId = computeArchiveComponentId(
+          tenantId,
+          outcome.archiveId,
+          'roof_tile_photo_1'
+        );
+        const provGraphService = new ProvenanceGraphService(emulatorDb);
+        const roofTileNodeId = provGraphService.computeNodeId(
+          tenantId,
+          'observation',
+          'contractor_archive_component',
+          roofTileCompId,
+          '1'
+        );
+        const roofTileNodeDoc = await emulatorDb.collection('provenance_nodes').doc(roofTileNodeId).get();
+        expect(roofTileNodeDoc.exists).toBe(true);
+        expect(roofTileNodeDoc.data()?.tenantId).toBe(tenantId);
+        // Ensure no undefined values exist and contentHash is absent (not undefined)
+        expect(roofTileNodeDoc.data()?.metadata?.contentHash).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty.call(roofTileNodeDoc.data()?.metadata || {}, 'contentHash')).toBe(false);
+
+        // 11. Register component WITH explicit contentHash and verify preservation
+        const withHashRes = await prodArchiveService.registerComponentRights({
+          tenantId,
+          archiveId: outcome.archiveId,
+          component: {
+            componentKey: 'roof_tile_photo_with_hash',
+            originType: 'contractor_owned',
+            category: 'photograph',
+            contentHash: 'sha256:roof_tile_exact_hash_987',
+          },
+          linkProvenance: true,
+          recordedBy: 'system_production_path',
+        });
+        const withHashNodeId = provGraphService.computeNodeId(
+          tenantId,
+          'observation',
+          'contractor_archive_component',
+          withHashRes.componentId,
+          '1'
+        );
+        const withHashNodeDoc = await emulatorDb.collection('provenance_nodes').doc(withHashNodeId).get();
+        expect(withHashNodeDoc.exists).toBe(true);
+        expect(withHashNodeDoc.data()?.metadata?.contentHash).toBe('sha256:roof_tile_exact_hash_987');
       });
     });
   });

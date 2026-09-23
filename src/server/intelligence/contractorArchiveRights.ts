@@ -455,7 +455,7 @@ export class ContractorArchiveRightsService {
           componentKey: component.componentKey,
           originType: component.originType,
           category: component.category,
-          contentHash: component.contentHash,
+          ...(component.contentHash ? { contentHash: component.contentHash } : {}),
         },
         createdBy: input.recordedBy || 'contractor_archive_component_boundary',
       });
