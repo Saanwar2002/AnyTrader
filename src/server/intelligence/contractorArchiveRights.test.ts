@@ -267,6 +267,12 @@ describe('V8.3 Task 29 — Contractor Archive Rights Boundary Unit Tests', () =>
 
       expect(reg.componentRights?.length).toBe(3);
 
+      // Verify provenance sourceVersion is non-undefined and deterministic
+      expect(reg.rightsRecord.provenance.sourceVersion).toBe('1');
+      expect(reg.componentRights?.[0].provenance.sourceVersion).toBe('1');
+      expect(reg.componentRights?.[1].provenance.sourceVersion).toBe('1');
+      expect(reg.componentRights?.[2].provenance.sourceVersion).toBe('1');
+
       const customerPhotoId = computeArchiveComponentId(
         'contractor_mixed',
         reg.archiveId,

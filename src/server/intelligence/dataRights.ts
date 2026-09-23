@@ -377,7 +377,9 @@ export class DataRightsService {
         sourceType: input.provenance.sourceType,
         sourceId: input.provenance.sourceId,
         tenantId: input.tenantId, // authoritatively bound to record tenant
-        sourceVersion: input.provenance.sourceVersion,
+        sourceVersion: input.provenance.sourceVersion !== undefined && input.provenance.sourceVersion !== null && String(input.provenance.sourceVersion).trim() !== ''
+          ? String(input.provenance.sourceVersion)
+          : '1',
         recordedBy: input.provenance.recordedBy || 'system_authoritative',
       },
       effectiveAt: input.effectiveAt || nowIso,

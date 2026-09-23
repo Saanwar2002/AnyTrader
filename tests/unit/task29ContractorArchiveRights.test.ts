@@ -778,6 +778,7 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
         expect(storedRightsDoc.exists).toBe(true);
         expect(storedRightsDoc.data()?.tenantId).toBe(tenantId);
         expect(storedRightsDoc.data()?.status).toBe('active');
+        expect(storedRightsDoc.data()?.provenance?.sourceVersion).toBe('1');
 
         // 5. Validate historical rights persistence in live Firestore emulator (/data_rights_history)
         const historySnap = await emulatorDb

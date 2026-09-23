@@ -87,6 +87,7 @@ export interface RegisterContractorArchiveInput {
   title?: string;
   description?: string;
   allowInternalAi?: boolean;
+  sourceVersion?: string | number;
   purposes?: Partial<Record<RightsPurpose, PurposePermission>>;
   restrictions?: string[];
   components?: ArchiveComponentSpec[];
@@ -98,6 +99,7 @@ export interface RegisterArchiveComponentInput {
   tenantId: string;
   archiveId: string;
   component: ArchiveComponentSpec;
+  sourceVersion?: string | number;
   linkProvenance?: boolean;
   recordedBy?: string;
 }
@@ -272,6 +274,10 @@ export class ContractorArchiveRightsService {
     }
 
     // Register archive rights record via authoritative DataRightsService
+    const archiveSourceVersion = input.sourceVersion !== undefined && input.sourceVersion !== null && String(input.sourceVersion).trim() !== ''
+      ? String(input.sourceVersion)
+      : '1';
+
     const rightsRecord = await this.rightsService.createDataRightsRecord({
       tenantId: input.tenantId,
       subject: {
@@ -293,6 +299,7 @@ export class ContractorArchiveRightsService {
         sourceType: 'contractor_archive',
         sourceId: archiveId,
         tenantId: input.tenantId,
+        sourceVersion: archiveSourceVersion,
         recordedBy: input.recordedBy || 'contractor_archive_boundary',
       },
     });
@@ -305,7 +312,7 @@ export class ContractorArchiveRightsService {
         nodeType: 'source',
         sourceType: 'contractor_archive',
         sourceId: archiveId,
-        sourceVersion: 1,
+        sourceVersion: Number(archiveSourceVersion) || 1,
         rightsReference: {
           rightsId: rightsRecord.rightsId,
           tenantId: input.tenantId,
@@ -399,6 +406,10 @@ export class ContractorArchiveRightsService {
       compRestrictions.push('third_party_copyright_protected');
     }
 
+    const compSourceVersion = input.sourceVersion !== undefined && input.sourceVersion !== null && String(input.sourceVersion).trim() !== ''
+      ? String(input.sourceVersion)
+      : '1';
+
     const rightsRecord = await this.rightsService.createDataRightsRecord({
       tenantId,
       subject: {
@@ -420,6 +431,7 @@ export class ContractorArchiveRightsService {
         sourceType: 'contractor_archive_component',
         sourceId: componentId,
         tenantId,
+        sourceVersion: compSourceVersion,
         recordedBy: input.recordedBy || 'contractor_archive_component_boundary',
       },
     });
@@ -432,7 +444,7 @@ export class ContractorArchiveRightsService {
         nodeType: 'observation',
         sourceType: 'contractor_archive_component',
         sourceId: componentId,
-        sourceVersion: 1,
+        sourceVersion: Number(compSourceVersion) || 1,
         rightsReference: {
           rightsId: rightsRecord.rightsId,
           tenantId,
