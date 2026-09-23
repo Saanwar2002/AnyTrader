@@ -33,7 +33,6 @@ import {
 } from './provenanceGraph';
 import {
   createStandardInternalPlatformPurposes,
-  createRestrictedExternalTrainingPurposes,
   DataRightsRecord,
 } from './dataRights';
 

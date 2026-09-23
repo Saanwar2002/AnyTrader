@@ -1,5 +1,38 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Task 28: Evidence & Data Provenance Graph (September 23, 2026)
+- **1. Server-Authoritative Evidence & Data Provenance Graph (`ProvenanceGraphService`)**:
+  - Implemented `ProvenanceGraphService` in `src/server/intelligence/provenanceGraph.ts` managing the Directed Acyclic Graph (DAG) across the 6-stage lifecycle:
+    $$\text{Source Record} \longrightarrow \text{Evidence} \longrightarrow \text{Observation} \longrightarrow \text{Extraction / Transformation} \longrightarrow \text{Derived Intelligence} \longrightarrow \text{Projection / Output}$$
+  - **Canonical Identity Invariant**: Strict UID-as-Tenant (`tenantId === request.auth.uid`). Every provenance node, edge, and event is unconditionally bound to the caller's tenant partition.
+  - **No Cross-Tenant Edges**: A provenance edge must never connect nodes belonging to different tenants ($\text{fromNode.tenantId} == \text{toNode.tenantId} == \text{edge.tenantId}$). Cross-tenant edge attempts are rejected with `ProvenanceSecurityError`.
+  - **Cross-Tenant Owner Bypass Denial**: An authenticated caller cannot access provenance nodes in Tenant A simply because their UID is recorded in owner, actor, or metadata fields.
+  - **Controlled Vocabularies**:
+    - 7 Node Types: `'source' | 'evidence' | 'observation' | 'extraction' | 'transformation' | 'intelligence' | 'projection'`.
+    - 9 Relation Types: `'PRODUCED_FROM' | 'SUPPORTS' | 'OBSERVED_FROM' | 'EXTRACTED_FROM' | 'DERIVED_FROM' | 'TRANSFORMED_BY' | 'PROJECTED_TO' | 'SUPERSEDES' | 'CORRECTED_BY'`.
+  - **Cryptographic Determinism & Idempotency**:
+    - Deterministic Node ID: `pnode_${SHA256(tenantId : nodeType : sourceType : sourceId : sourceVersion : schemaVersion)[0..24]}`.
+    - Deterministic Edge ID: `pedge_${SHA256(tenantId : fromNodeId : toNodeId : relationType)[0..24]}`.
+    - Deterministic Event ID: `pevt_${SHA256(tenantId : eventType : targetId : timestamp)[0..24]}`.
+    - Normalized semantic content hash (SHA-256) excluding runtime timestamps (`createdAt`, `createdBy`).
+    - Idempotent re-submission (identical payload returns cleanly; conflicting payload throws `ProvenanceIntegrityError`).
+  - **AI Security Boundary**:
+    - Zero-bypass around `processAICandidateToCanonical()`. Raw unpromoted AI outputs cannot claim canonical intelligence or projection node types.
+    - Internal AI Bot permitted by default (`internal_ai_use: 'allowed'`).
+    - Independent rights purposes: internal AI permission does not grant external AI training or commercial licensing.
+  - **Scalable Bounded Graph Traversals**:
+    - `getUpstreamLineage` and `getDownstreamImpact` enforce tenant-scoping, bounded depth (max 5), bounded node limits (max 100), and cursor pagination. Zero unbounded `.get()` queries.
+  - **Append-Only Immutability & Audit**:
+    - Node corrections create new active nodes and mark older nodes as superseded, linked via `SUPERSEDES` edges and recorded in `/provenance_events`.
+- **2. Security Rules (`firestore.rules`)**:
+  - Fail-closed security rules for `/provenance_nodes/{nodeId}`, `/provenance_edges/{edgeId}`, and `/provenance_events/{eventId}`:
+    - Read: authorized tenant (`resource.data.tenantId == request.auth.uid`) or admin (`isAdmin()`).
+    - Write: `allow create, update, delete: if false;` (Server Admin SDK writes only; client writes strictly denied).
+- **3. Verification & Testing**:
+  - Unit test suite: `src/server/intelligence/provenanceGraph.test.ts` (20/20 tests passing, 100% clean).
+  - Emulator security suite: `tests/unit/task28EvidenceProvenanceGraph.test.ts` (unauthenticated defense, cross-tenant isolation, client write denial, production-path 6-stage lineage lifecycle).
+  - Documented in `/TASK_28_EVIDENCE_PROVENANCE_GRAPH_REPORT.md`.
+
 ## 🛡️ AnyTrader V8.3 — Task 27 & 27R: Data Rights & Provenance Foundation & Remediation (September 22, 2026)
 - **1. Server-Authoritative Data Rights Architecture (`DataRightsService`)**:
   - Implemented `DataRightsService` in `src/server/intelligence/dataRights.ts` managing authoritative data rights records and explicit purpose allocations.

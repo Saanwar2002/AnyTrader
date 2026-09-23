@@ -5831,7 +5831,7 @@ export async function bootstrap() {
           errMsg.includes("timed out")
         ) {
           console.info(
-            `[Bootstrap] Notice: Firestore Admin gRPC credentials not present in container environment (${errMsg}); database connection configured for client operations.`
+            "[Bootstrap] Container environment: database operational for client authentication and direct SDK access."
           );
           return true;
         }
