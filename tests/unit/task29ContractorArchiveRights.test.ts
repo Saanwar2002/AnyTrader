@@ -413,316 +413,349 @@ describe('V8.3 Task 29 — Firebase Emulator Contractor Archive Rights Boundary 
   // 6. PURPOSE DECISION BOUNDARY & UNKNOWN != ALLOWED
   // ---------------------------------------------------------------------------
   describe('Security Vector 6: Authoritative Purpose Decision Boundary', () => {
-    let archiveService: ContractorArchiveRightsService;
-
-    beforeEach(async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        archiveService = new ContractorArchiveRightsService(db);
-      });
-    });
-
     it('allows internal AI when explicitly allowed', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_001',
-        contractorUid: 'contractor_purp_001',
-        archiveReference: 'archive_ai_ok',
-        allowInternalAi: true,
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_001',
+          contractorUid: 'contractor_purp_001',
+          archiveReference: 'archive_ai_ok',
+          allowInternalAi: true,
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_001',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_001',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        expect(res.eligible).toBe(true);
+        expect(res.reason).toBe('allowed');
       });
-      expect(res.eligible).toBe(true);
-      expect(res.reason).toBe('allowed');
     });
 
     it('denies internal AI when explicitly denied', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_002',
-        contractorUid: 'contractor_purp_002',
-        archiveReference: 'archive_no_ai',
-        allowInternalAi: false,
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_002',
+          contractorUid: 'contractor_purp_002',
+          archiveReference: 'archive_no_ai',
+          allowInternalAi: false,
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_002',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_002',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        expect(res.eligible).toBe(false);
+        expect(['denied', 'blocked_by_restriction']).toContain(res.reason);
       });
-      expect(res.eligible).toBe(false);
-      expect(['denied', 'blocked_by_restriction']).toContain(res.reason);
     });
 
     it('denies internal AI when permission is unknown', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_003',
-        contractorUid: 'contractor_purp_003',
-        archiveReference: 'archive_unknown_ai',
-        purposes: { internal_ai_use: 'unknown' },
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_003',
+          contractorUid: 'contractor_purp_003',
+          archiveReference: 'archive_unknown_ai',
+          purposes: { internal_ai_use: 'unknown' },
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_003',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_003',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('unknown');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('unknown');
     });
 
     it('denies external AI training when denied', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_004',
-        contractorUid: 'contractor_purp_004',
-        archiveReference: 'archive_ext_denied',
-        purposes: { external_ai_training: 'denied' },
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_004',
+          contractorUid: 'contractor_purp_004',
+          archiveReference: 'archive_ext_denied',
+          purposes: { external_ai_training: 'denied' },
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_004',
-        archiveId: reg.archiveId,
-        purpose: 'external_ai_training',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_004',
+          archiveId: reg.archiveId,
+          purpose: 'external_ai_training',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('denied');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('denied');
     });
 
     it('denies external AI training when unknown (unknown != allowed)', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_005',
-        contractorUid: 'contractor_purp_005',
-        archiveReference: 'archive_ext_unknown',
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_005',
+          contractorUid: 'contractor_purp_005',
+          archiveReference: 'archive_ext_unknown',
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_005',
-        archiveId: reg.archiveId,
-        purpose: 'external_ai_training',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_005',
+          archiveId: reg.archiveId,
+          purpose: 'external_ai_training',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('unknown');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('unknown');
     });
 
     it('denies commercial licensing when denied', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_006',
-        contractorUid: 'contractor_purp_006',
-        archiveReference: 'archive_comm_denied',
-        purposes: { commercial_licensing: 'denied' },
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_006',
+          contractorUid: 'contractor_purp_006',
+          archiveReference: 'archive_comm_denied',
+          purposes: { commercial_licensing: 'denied' },
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_006',
-        archiveId: reg.archiveId,
-        purpose: 'commercial_licensing',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_006',
+          archiveId: reg.archiveId,
+          purpose: 'commercial_licensing',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('denied');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('denied');
     });
 
     it('denies commercial licensing when unknown', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_007',
-        contractorUid: 'contractor_purp_007',
-        archiveReference: 'archive_comm_unknown',
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_007',
+          contractorUid: 'contractor_purp_007',
+          archiveReference: 'archive_comm_unknown',
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_007',
-        archiveId: reg.archiveId,
-        purpose: 'commercial_licensing',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_007',
+          archiveId: reg.archiveId,
+          purpose: 'commercial_licensing',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('unknown');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('unknown');
     });
 
     it('denies third-party sharing when unknown', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_008',
-        contractorUid: 'contractor_purp_008',
-        archiveReference: 'archive_tp_unknown',
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_008',
+          contractorUid: 'contractor_purp_008',
+          archiveReference: 'archive_tp_unknown',
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_008',
-        archiveId: reg.archiveId,
-        purpose: 'third_party_sharing',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_008',
+          archiveId: reg.archiveId,
+          purpose: 'third_party_sharing',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('unknown');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('unknown');
     });
 
     it('denies export when unknown', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_009',
-        contractorUid: 'contractor_purp_009',
-        archiveReference: 'archive_exp_unknown',
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_009',
+          contractorUid: 'contractor_purp_009',
+          archiveReference: 'archive_exp_unknown',
+        });
 
-      const res = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_009',
-        archiveId: reg.archiveId,
-        purpose: 'export',
+        const res = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_009',
+          archiveId: reg.archiveId,
+          purpose: 'export',
+        });
+        expect(res.eligible).toBe(false);
+        expect(res.reason).toBe('unknown');
       });
-      expect(res.eligible).toBe(false);
-      expect(res.reason).toBe('unknown');
     });
 
     it('verifies that internal AI permission does not grant external AI training', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_010',
-        contractorUid: 'contractor_purp_010',
-        archiveReference: 'archive_ai_isolation',
-        allowInternalAi: true,
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_010',
+          contractorUid: 'contractor_purp_010',
+          archiveReference: 'archive_ai_isolation',
+          allowInternalAi: true,
+        });
 
-      const internalEval = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_010',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
-      });
-      const externalEval = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_010',
-        archiveId: reg.archiveId,
-        purpose: 'external_ai_training',
-      });
+        const internalEval = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_010',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        const externalEval = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_010',
+          archiveId: reg.archiveId,
+          purpose: 'external_ai_training',
+        });
 
-      expect(internalEval.eligible).toBe(true);
-      expect(externalEval.eligible).toBe(false);
+        expect(internalEval.eligible).toBe(true);
+        expect(externalEval.eligible).toBe(false);
+      });
     });
 
     it('verifies that internal AI permission does not grant commercial licensing', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_011',
-        contractorUid: 'contractor_purp_011',
-        archiveReference: 'archive_comm_isolation',
-        allowInternalAi: true,
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_011',
+          contractorUid: 'contractor_purp_011',
+          archiveReference: 'archive_comm_isolation',
+          allowInternalAi: true,
+        });
 
-      const internalEval = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_011',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
-      });
-      const commercialEval = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_011',
-        archiveId: reg.archiveId,
-        purpose: 'commercial_licensing',
-      });
+        const internalEval = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_011',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        const commercialEval = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_011',
+          archiveId: reg.archiveId,
+          purpose: 'commercial_licensing',
+        });
 
-      expect(internalEval.eligible).toBe(true);
-      expect(commercialEval.eligible).toBe(false);
+        expect(internalEval.eligible).toBe(true);
+        expect(commercialEval.eligible).toBe(false);
+      });
     });
 
     it('verifies that archive upload/ownership does not grant commercial rights', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_012',
-        contractorUid: 'contractor_purp_012',
-        archiveReference: 'contractor_owned_photos_2026',
-        title: 'Complete Bathroom Refits 2026',
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_012',
+          contractorUid: 'contractor_purp_012',
+          archiveReference: 'contractor_owned_photos_2026',
+          title: 'Complete Bathroom Refits 2026',
+        });
 
-      // Contractor is registered as owner in rights record
-      expect(reg.rightsRecord.owner.id).toBe('contractor_purp_012');
+        // Contractor is registered as owner in rights record
+        expect(reg.rightsRecord.owner.id).toBe('contractor_purp_012');
 
-      // However, commercial licensing must NOT be granted
-      const commEval = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_012',
-        archiveId: reg.archiveId,
-        purpose: 'commercial_licensing',
+        // However, commercial licensing must NOT be granted
+        const commEval = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_012',
+          archiveId: reg.archiveId,
+          purpose: 'commercial_licensing',
+        });
+        expect(commEval.eligible).toBe(false);
+        expect(commEval.reason).toBe('unknown');
       });
-      expect(commEval.eligible).toBe(false);
-      expect(commEval.reason).toBe('unknown');
     });
 
     it('mixed-origin archive with unknown embedded rights remains externally blocked', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_013',
-        contractorUid: 'contractor_purp_013',
-        archiveReference: 'mixed_origin_portfolio',
-        components: [
-          {
-            componentKey: 'customer_house_facade',
-            originType: 'customer_or_subject_data',
-            category: 'photograph',
-          },
-          {
-            componentKey: 'supplier_specification_sheet',
-            originType: 'third_party_data',
-            category: 'report',
-          },
-        ],
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_013',
+          contractorUid: 'contractor_purp_013',
+          archiveReference: 'mixed_origin_portfolio',
+          components: [
+            {
+              componentKey: 'customer_house_facade',
+              originType: 'customer_or_subject_data',
+              category: 'photograph',
+            },
+            {
+              componentKey: 'supplier_specification_sheet',
+              originType: 'third_party_data',
+              category: 'report',
+            },
+          ],
+        });
 
-      const customerCompId = computeArchiveComponentId(
-        'contractor_purp_013',
-        reg.archiveId,
-        'customer_house_facade'
-      );
-      const supplierCompId = computeArchiveComponentId(
-        'contractor_purp_013',
-        reg.archiveId,
-        'supplier_specification_sheet'
-      );
+        const customerCompId = computeArchiveComponentId(
+          'contractor_purp_013',
+          reg.archiveId,
+          'customer_house_facade'
+        );
+        const supplierCompId = computeArchiveComponentId(
+          'contractor_purp_013',
+          reg.archiveId,
+          'supplier_specification_sheet'
+        );
 
-      // Customer facade externally blocked
-      const customerEval = await archiveService.evaluateComponentEligibility({
-        tenantId: 'contractor_purp_013',
-        archiveId: reg.archiveId,
-        componentId: customerCompId,
-        purpose: 'external_ai_training',
-        originType: 'customer_or_subject_data',
-      });
-      expect(customerEval.eligible).toBe(false);
-      expect(customerEval.reason).toBe('blocked_by_origin');
+        // Customer facade externally blocked
+        const customerEval = await archiveService.evaluateComponentEligibility({
+          tenantId: 'contractor_purp_013',
+          archiveId: reg.archiveId,
+          componentId: customerCompId,
+          purpose: 'external_ai_training',
+          originType: 'customer_or_subject_data',
+        });
+        expect(customerEval.eligible).toBe(false);
+        expect(customerEval.reason).toBe('blocked_by_origin');
 
-      // Supplier doc externally blocked
-      const supplierEval = await archiveService.evaluateComponentEligibility({
-        tenantId: 'contractor_purp_013',
-        archiveId: reg.archiveId,
-        componentId: supplierCompId,
-        purpose: 'commercial_licensing',
-        originType: 'third_party_data',
+        // Supplier doc externally blocked
+        const supplierEval = await archiveService.evaluateComponentEligibility({
+          tenantId: 'contractor_purp_013',
+          archiveId: reg.archiveId,
+          componentId: supplierCompId,
+          purpose: 'commercial_licensing',
+          originType: 'third_party_data',
+        });
+        expect(supplierEval.eligible).toBe(false);
+        expect(supplierEval.reason).toBe('blocked_by_origin');
       });
-      expect(supplierEval.eligible).toBe(false);
-      expect(supplierEval.reason).toBe('blocked_by_origin');
     });
 
     it('revoked rights block future use across all purposes', async () => {
-      const reg = await archiveService.registerArchiveRights({
-        tenantId: 'contractor_purp_014',
-        contractorUid: 'contractor_purp_014',
-        archiveReference: 'archive_will_revoke',
-        allowInternalAi: true,
-      });
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const archiveService = new ContractorArchiveRightsService(context.firestore());
+        const reg = await archiveService.registerArchiveRights({
+          tenantId: 'contractor_purp_014',
+          contractorUid: 'contractor_purp_014',
+          archiveReference: 'archive_will_revoke',
+          allowInternalAi: true,
+        });
 
-      // Revoke
-      await archiveService.revokeArchiveRights(
-        'contractor_purp_014',
-        reg.archiveId,
-        'Contractor requested archive retraction'
-      );
+        // Revoke
+        await archiveService.revokeArchiveRights(
+          'contractor_purp_014',
+          reg.archiveId,
+          'Contractor requested archive retraction'
+        );
 
-      // Internal AI check should now be blocked by status
-      const internalCheck = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_014',
-        archiveId: reg.archiveId,
-        purpose: 'internal_ai_use',
-      });
-      expect(internalCheck.eligible).toBe(false);
-      expect(internalCheck.reason).toBe('blocked_by_status');
+        // Internal AI check should now be blocked by status
+        const internalCheck = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_014',
+          archiveId: reg.archiveId,
+          purpose: 'internal_ai_use',
+        });
+        expect(internalCheck.eligible).toBe(false);
+        expect(internalCheck.reason).toBe('blocked_by_status');
 
-      // Platform operation check should now be blocked by status
-      const opCheck = await archiveService.evaluateArchiveEligibility({
-        tenantId: 'contractor_purp_014',
-        archiveId: reg.archiveId,
-        purpose: 'internal_platform_operation',
+        // Platform operation check should now be blocked by status
+        const opCheck = await archiveService.evaluateArchiveEligibility({
+          tenantId: 'contractor_purp_014',
+          archiveId: reg.archiveId,
+          purpose: 'internal_platform_operation',
+        });
+        expect(opCheck.eligible).toBe(false);
+        expect(opCheck.reason).toBe('blocked_by_status');
       });
-      expect(opCheck.eligible).toBe(false);
-      expect(opCheck.reason).toBe('blocked_by_status');
     });
   });
 
