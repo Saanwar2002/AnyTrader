@@ -67,6 +67,10 @@ import {
   dataClassificationEligibilityService,
   DataClassificationSecurityError,
   DataClassificationValidationError,
+  AiTrainingUsageControlsService,
+  aiTrainingUsageControlsService,
+  AiUsageControlsSecurityError,
+  AiUsageControlsValidationError,
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -6027,6 +6031,156 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         return res.status(403).json({ error: err.message });
       }
       if (err instanceof DataClassificationValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // =========================================================================
+  // Task 31: AI Training & Usage Controls Endpoints
+  // =========================================================================
+
+  // Register / Configure AI Usage Controls
+  app.post("/api/intelligence/ai-controls/register", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const body = req.body || {};
+
+      if (!body.recordType || !body.recordId || !body.provenanceRef) {
+        return res.status(400).json({ error: "Missing required fields: recordType, recordId, provenanceRef" });
+      }
+
+      if (db) {
+        aiTrainingUsageControlsService.setFirestoreDb(db);
+      }
+
+      const tenantId = user.uid;
+      const record = await aiTrainingUsageControlsService.registerAiUsageControls({
+        ...body,
+        tenantId,
+        recordedBy: user.uid,
+      });
+
+      res.json({
+        success: true,
+        record,
+      });
+    } catch (err: any) {
+      if (err instanceof AiUsageControlsSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof AiUsageControlsValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Evaluate AI Usage & Training Eligibility
+  app.post("/api/intelligence/ai-controls/evaluate", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { recordType, recordId, requestedPurpose, controlId, targetModelTier } = req.body || {};
+
+      if (!recordType || !recordId || !requestedPurpose) {
+        return res.status(400).json({ error: "Missing required fields: recordType, recordId, requestedPurpose" });
+      }
+
+      if (db) {
+        aiTrainingUsageControlsService.setFirestoreDb(db);
+      }
+
+      const tenantId = user.uid;
+      const decision = await aiTrainingUsageControlsService.evaluateAiUsageEligibility({
+        tenantId,
+        recordType,
+        recordId,
+        requestedPurpose,
+        controlId,
+        targetModelTier,
+        context: {
+          callerUid: user.uid,
+          isInternalAi: req.body?.isInternalAi === true,
+        },
+      });
+
+      res.json({
+        success: true,
+        decision,
+      });
+    } catch (err: any) {
+      if (err instanceof AiUsageControlsSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof AiUsageControlsValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Get AI Usage Control Record
+  app.get("/api/intelligence/ai-controls/:controlId", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { controlId } = req.params;
+
+      if (db) {
+        aiTrainingUsageControlsService.setFirestoreDb(db);
+      }
+
+      const record = await aiTrainingUsageControlsService.getAiUsageControlRecord(controlId, user.uid);
+      if (!record) {
+        return res.status(404).json({ error: "AI usage control record not found" });
+      }
+
+      res.json({
+        success: true,
+        record,
+      });
+    } catch (err: any) {
+      if (err instanceof AiUsageControlsSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Revoke AI Usage Controls
+  app.post("/api/intelligence/ai-controls/:controlId/revoke", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { controlId } = req.params;
+      const { reason } = req.body || {};
+
+      if (!reason || typeof reason !== "string") {
+        return res.status(400).json({ error: "Missing required 'reason' field" });
+      }
+
+      if (db) {
+        aiTrainingUsageControlsService.setFirestoreDb(db);
+      }
+
+      const tenantId = user.uid;
+      const record = await aiTrainingUsageControlsService.revokeAiUsageControls(
+        tenantId,
+        controlId,
+        reason,
+        user.uid
+      );
+
+      res.json({
+        success: true,
+        controlId: record.controlId,
+        status: record.status,
+        revocationReason: record.revocationReason,
+      });
+    } catch (err: any) {
+      if (err instanceof AiUsageControlsSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof AiUsageControlsValidationError) {
         return res.status(400).json({ error: err.message });
       }
       sendHttpError(res, err, req);

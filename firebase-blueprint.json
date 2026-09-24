@@ -4482,6 +4482,24 @@
         "$ref": "#/entities/Job"
       },
       "description": "Server-authoritative immutable data eligibility decision audit records with deterministic hashes."
+    },
+    "/ai_usage_controls/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative AI training and usage control policies enforcing strict purpose isolation and opt-in consent."
+    },
+    "/ai_usage_controls_history/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Append-only immutable historical AI usage control policy snapshots with cryptographic SHA-256 content hashes."
+    },
+    "/ai_usage_decisions/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative immutable AI usage eligibility evaluation decision audit trail records."
     }
   }
 }

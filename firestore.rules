@@ -1400,5 +1400,38 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Immutable decision audit trail; server writes only
     }
+
+    // =========================================================================
+    // V8.3 Task 31: AI Training & Usage Controls Security Rules
+    // Strict tenant boundary (tenantId === request.auth.uid) or platform admin.
+    // Client writes are strictly forbidden (allow create, update, delete: if false;).
+    // All controls, history, and decisions are server-authoritative.
+    // =========================================================================
+    match /ai_usage_controls/{controlId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /ai_usage_controls_history/{historyId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable history; client writes denied
+    }
+
+    match /ai_usage_decisions/{decisionId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Immutable evaluation decision audit trail; server writes only
+    }
   }
 }

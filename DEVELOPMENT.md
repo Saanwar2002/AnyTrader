@@ -1,5 +1,37 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Task 31: AI Training & Usage Controls (September 24, 2026)
+- **1. Server-Authoritative AI Training & Usage Controls Engine (`AiTrainingUsageControlsService`)**:
+  - Implemented `AiTrainingUsageControlsService` in `src/server/intelligence/aiTrainingUsageControls.ts` establishing server-authoritative controls over AI usage purposes and training consent.
+  - **Explicit Purpose Isolation (`internal_ai_use != external_ai_training`)**:
+    - Supported purposes: `internal_ai_use`, `external_ai_training`, `third_party_sharing`, `commercial_licensing`, `export`.
+    - Permission for internal AnyTrader AI operations (`internal_ai_use: 'allowed'`) strictly DOES NOT grant external AI model training, third-party sharing, commercial licensing, or export. Each purpose is evaluated independently.
+  - **Explicit Opt-In Training Consent Boundary**:
+    - `external_ai_training` strictly requires explicit `opt_in` status in `trainingConsent`.
+    - `opt_out`, `unknown`, or `revoked` consent statuses fail closed immediately (`blocked_by_consent`).
+  - **Conservative Evaluation Semantics (`unknown != allowed`)**:
+    - Unspecified or unknown purpose permissions or consent statuses fail closed.
+  - **Integrations**:
+    - Integrated with Task 27 (`DataRightsService`), Task 28 (`ProvenanceGraphService`), Task 29 (`ContractorArchiveRightsService`), and Task 30 (`DataClassificationEligibilityService`).
+  - **Deterministic Identifiers & Cryptographic Hashing**:
+    - Deterministic Control ID: `aicontrol_${SHA256(tenantId : recordType : recordId)}[0..24]`.
+    - Content Hash: SHA-256 over canonical policy fields.
+    - Decision Hash: SHA-256 audit digest over outcome, tenant, control ID, purpose, and timestamp.
+  - **Firestore Security Rules (`firestore.rules`) & Blueprint**:
+    - Rules added for `/ai_usage_controls/{id}`, `/ai_usage_controls_history/{id}`, `/ai_usage_decisions/{id}` enforcing strict UID-as-tenant isolation (`resource.data.tenantId == request.auth.uid || isAdmin()`).
+    - Complete client write denial (`allow create, update, delete: if false;`). Writes are Server Admin SDK only.
+  - **API Endpoints (`server.ts`)**:
+    - `POST /api/intelligence/ai-controls/register`: Server-authoritative AI control policy registration.
+    - `POST /api/intelligence/ai-controls/evaluate`: Purpose & training consent eligibility evaluation.
+    - `GET /api/intelligence/ai-controls/:controlId`: Policy lookup for authorized tenant.
+    - `POST /api/intelligence/ai-controls/:controlId/revoke`: Immediate policy revocation with audit history snapshot.
+- **2. Testing & Verification**:
+  - Unit test suite: `src/server/intelligence/aiTrainingUsageControls.test.ts` (100% clean).
+  - Emulator security suite: `tests/unit/task31AiTrainingUsageControls.test.ts` (Rules, cross-tenant isolation, explicit purpose isolation, opt-in consent enforcement).
+  - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
+  - Applet compilation (`compile_applet`): Succeeded cleanly.
+  - Tasks 32, 33, 34 & V8.4: Not started.
+
 ## 🛡️ AnyTrader V8.3 — Stability Hardening & Safe Property Access Verification (September 24, 2026)
 - **1. Frontend & Client-Side Null-Safety Hardening**:
   - Hardened nested `.length` evaluations across all components with safe optional chaining and fallback defaults (`?.length || 0`), eliminating unhandled `TypeError: Cannot read properties of undefined (reading 'length')` across:
