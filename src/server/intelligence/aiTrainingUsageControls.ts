@@ -536,7 +536,24 @@ export class AiTrainingUsageControlsService {
 
     // 3. Provenance verification
     let provenanceValid = true;
-    if (controlRecord.provenanceRef && controlRecord.provenanceRef.nodeId) {
+    if (request.requestedPurpose === 'external_ai_training') {
+      if (!controlRecord.provenanceRef || !controlRecord.provenanceRef.nodeId) {
+        provenanceValid = false;
+        reasons.push('External AI training requires a valid canonical Task 28 provenance nodeId');
+      } else {
+        const provRes = await this.provenanceService.validateProvenanceReference({
+          tenantId: request.tenantId,
+          nodeId: controlRecord.provenanceRef.nodeId,
+          sourceType: controlRecord.provenanceRef.sourceType,
+          sourceId: controlRecord.provenanceRef.sourceId,
+          sourceVersion: controlRecord.provenanceRef.sourceVersion,
+        });
+        provenanceValid = provRes.valid === true;
+        if (!provenanceValid) {
+          reasons.push(`Provenance graph validation failed for AI usage control record: ${provRes.reason || 'invalid'}`);
+        }
+      }
+    } else if (controlRecord.provenanceRef && controlRecord.provenanceRef.nodeId) {
       const provRes = await this.provenanceService.validateProvenanceReference({
         tenantId: request.tenantId,
         nodeId: controlRecord.provenanceRef.nodeId,
@@ -581,7 +598,30 @@ export class AiTrainingUsageControlsService {
 
     // 7. Linked Data Rights verification (Task 27)
     let rightsValid: boolean | undefined = undefined;
-    if (controlRecord.rightsRef) {
+    if (request.requestedPurpose === 'external_ai_training') {
+      if (!controlRecord.rightsRef || !controlRecord.rightsRef.rightsId) {
+        rightsValid = false;
+        reasons.push('External AI training requires canonical Task 27 data rights reference');
+      } else {
+        try {
+          const rightsRec = await this.rightsService.getDataRightsRecord(
+            controlRecord.rightsRef.rightsId
+          );
+          const hasRightsPermission = rightsRec !== null &&
+            rightsRec.status === 'active' &&
+            rightsRec.tenantId === request.tenantId &&
+            rightsRec.purposes?.['external_ai_training'] === 'allowed';
+
+          rightsValid = hasRightsPermission;
+          if (!rightsValid) {
+            reasons.push('Linked Task 27 data rights record is inactive, missing, cross-tenant, or lacks external_ai_training permission');
+          }
+        } catch {
+          rightsValid = false;
+          reasons.push('Error looking up linked Task 27 data rights record');
+        }
+      }
+    } else if (controlRecord.rightsRef) {
       try {
         const rightsRec = await this.rightsService.getDataRightsRecord(
           controlRecord.rightsRef.rightsId
@@ -598,7 +638,29 @@ export class AiTrainingUsageControlsService {
 
     // 8. Linked Classification verification (Task 30)
     let classificationValid: boolean | undefined = undefined;
-    if (controlRecord.classificationRef) {
+    if (request.requestedPurpose === 'external_ai_training') {
+      if (!controlRecord.classificationRef || !controlRecord.classificationRef.classificationId) {
+        classificationValid = false;
+        reasons.push('External AI training requires canonical Task 30 data classification reference');
+      } else {
+        try {
+          const classDecision = await this.classificationService.evaluateEligibility({
+            tenantId: request.tenantId,
+            recordType: request.recordType,
+            recordId: request.recordId,
+            requestedPurpose: request.requestedPurpose as any,
+            classificationId: controlRecord.classificationRef.classificationId,
+          });
+          classificationValid = classDecision.eligible === true;
+          if (!classificationValid) {
+            reasons.push(`Linked Task 30 data classification eligibility failed: ${classDecision.outcome}`);
+          }
+        } catch {
+          classificationValid = false;
+          reasons.push('Error evaluating linked Task 30 data classification');
+        }
+      }
+    } else if (controlRecord.classificationRef) {
       try {
         const classDecision = await this.classificationService.evaluateEligibility({
           tenantId: request.tenantId,
@@ -629,16 +691,16 @@ export class AiTrainingUsageControlsService {
       outcome = 'blocked_by_provenance';
     } else if (request.requestedPurpose === 'external_ai_training' && !trainingConsentValid) {
       outcome = 'blocked_by_consent';
+    } else if (rightsValid === false) {
+      outcome = 'blocked_by_restriction';
+    } else if (classificationValid === false) {
+      outcome = 'blocked_by_classification';
     } else if (purposePermission === 'unknown') {
       outcome = 'unknown';
     } else if (purposePermission === 'denied') {
       outcome = 'denied';
     } else if (!modelTierValid) {
       outcome = 'blocked_by_model_tier';
-    } else if (classificationValid === false) {
-      outcome = 'blocked_by_classification';
-    } else if (rightsValid === false) {
-      outcome = 'blocked_by_restriction';
     } else {
       allowed = true;
       outcome = 'allowed';

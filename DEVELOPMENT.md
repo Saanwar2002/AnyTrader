@@ -1,11 +1,13 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 31: AI Training & Usage Controls (September 24, 2026)
+## 🛡️ AnyTrader V8.3 — Task 31 / 31R: AI Training & Usage Controls (September 24, 2026)
 - **1. Server-Authoritative AI Training & Usage Controls Engine (`AiTrainingUsageControlsService`)**:
   - Implemented `AiTrainingUsageControlsService` in `src/server/intelligence/aiTrainingUsageControls.ts` establishing server-authoritative controls over AI usage purposes and training consent.
   - **Explicit Purpose Isolation (`internal_ai_use != external_ai_training`)**:
     - Supported purposes: `internal_ai_use`, `external_ai_training`, `third_party_sharing`, `commercial_licensing`, `export`.
     - Permission for internal AnyTrader AI operations (`internal_ai_use: 'allowed'`) strictly DOES NOT grant external AI model training, third-party sharing, commercial licensing, or export. Each purpose is evaluated independently.
+  - **Task 31R Mandatory Canonical Authorization Chain for `external_ai_training`**:
+    - `external_ai_training` strictly mandates canonical Task 27 data rights reference (`rightsRef`), Task 28 provenance nodeId (`provenanceRef.nodeId`), and Task 30 classification reference (`classificationRef`). Missing or invalid canonical references fail closed (`blocked_by_restriction`, `blocked_by_provenance`, or `blocked_by_classification`).
   - **Explicit Opt-In Training Consent Boundary**:
     - `external_ai_training` strictly requires explicit `opt_in` status in `trainingConsent`.
     - `opt_out`, `unknown`, or `revoked` consent statuses fail closed immediately (`blocked_by_consent`).
@@ -26,10 +28,12 @@
     - `GET /api/intelligence/ai-controls/:controlId`: Policy lookup for authorized tenant.
     - `POST /api/intelligence/ai-controls/:controlId/revoke`: Immediate policy revocation with audit history snapshot.
 - **2. Testing & Verification**:
-  - Unit test suite: `src/server/intelligence/aiTrainingUsageControls.test.ts` (100% clean).
-  - Emulator security suite: `tests/unit/task31AiTrainingUsageControls.test.ts` (Rules, cross-tenant isolation, explicit purpose isolation, opt-in consent enforcement).
+  - Unit test suite (`npm test`): **690/690 tests passing** across **44 test files** (100% clean).
+  - Task 31 unit suite: `src/server/intelligence/aiTrainingUsageControls.test.ts` (10/10 PASS).
+  - Emulator security suite: `tests/unit/task31AiTrainingUsageControls.test.ts` (Isolated in `test:emulator` script in `package.json` to guarantee active emulator lifecycle and eliminate `ECONNREFUSED` errors).
   - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
-  - Applet compilation (`compile_applet`): Succeeded cleanly.
+  - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
+  - Release Gate Audit (`npm run audit:release`): 0 critical failures.
   - Tasks 32, 33, 34 & V8.4: Not started.
 
 ## 🛡️ AnyTrader V8.3 — Stability Hardening & Safe Property Access Verification (September 24, 2026)

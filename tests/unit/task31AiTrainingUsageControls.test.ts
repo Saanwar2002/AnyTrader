@@ -239,7 +239,224 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
       expect(externalEval.outcome).toBe('blocked_by_consent');
     });
 
-    it('allows external_ai_training when explicitly opt_in and purpose allowed', async () => {
+    it('allows external_ai_training when complete valid authorization chain is established', async () => {
+      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      const rightsService = new DataRightsService(db as any);
+      const provenanceService = new ProvenanceGraphService(db as any);
+      const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+      const classificationService = new DataClassificationEligibilityService(db as any, rightsService, provenanceService, archiveService);
+
+      const aiService = new AiTrainingUsageControlsService(
+        db as any,
+        rightsService,
+        provenanceService,
+        archiveService,
+        classificationService
+      );
+
+      // 1. Task 27 Rights
+      const rightsRec = await rightsService.createDataRightsRecord({
+        tenantId: 'tenant_A',
+        subject: { type: 'property_passport', id: 'pass_200' },
+        owner: { type: 'user', id: 'tenant_A' },
+        source: { type: 'user_action', id: 'act_200' },
+        purposes: {
+          internal_ai_use: 'allowed',
+          external_ai_training: 'allowed',
+        },
+        provenance: {
+          sourceType: 'user_action',
+          sourceId: 'act_200',
+          tenantId: 'tenant_A',
+        },
+      });
+
+      // 2. Task 28 Provenance
+      const provNode = await provenanceService.createNode({
+        tenantId: 'tenant_A',
+        nodeType: 'source',
+        sourceType: 'user_action',
+        sourceId: 'act_200',
+        rightsReference: {
+          rightsId: rightsRec.rightsId,
+          tenantId: 'tenant_A',
+        },
+      });
+
+      // 3. Task 30 Classification
+      const classRec = await classificationService.registerClassification({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_200',
+        category: 'property_intelligence',
+        provenanceRef: {
+          nodeId: provNode.nodeId,
+          tenantId: 'tenant_A',
+        },
+        rightsRef: {
+          rightsId: rightsRec.rightsId,
+          tenantId: 'tenant_A',
+        },
+      });
+
+      // 4. Register Task 31 AI Usage Control
+      await aiService.registerAiUsageControls({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_200',
+        purposes: {
+          internal_ai_use: 'allowed',
+          external_ai_training: 'allowed',
+        },
+        trainingConsent: 'opt_in',
+        provenanceRef: {
+          nodeId: provNode.nodeId,
+          tenantId: 'tenant_A',
+          sourceType: 'user_action',
+          sourceId: 'act_200',
+        },
+        rightsRef: {
+          rightsId: rightsRec.rightsId,
+          tenantId: 'tenant_A',
+        },
+        classificationRef: {
+          classificationId: classRec.classificationId,
+          tenantId: 'tenant_A',
+        },
+      });
+
+      const externalEval = await aiService.evaluateAiUsageEligibility({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_200',
+        requestedPurpose: 'external_ai_training',
+      });
+
+      expect(externalEval.allowed).toBe(true);
+      expect(externalEval.outcome).toBe('allowed');
+      expect(externalEval.trainingConsent).toBe('opt_in');
+    });
+
+    it('fails closed when external_ai_training is missing Task 27 rights reference', async () => {
+      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      const rightsService = new DataRightsService(db as any);
+      const provenanceService = new ProvenanceGraphService(db as any);
+      const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+      const classificationService = new DataClassificationEligibilityService(db as any, rightsService, provenanceService, archiveService);
+
+      const aiService = new AiTrainingUsageControlsService(
+        db as any,
+        rightsService,
+        provenanceService,
+        archiveService,
+        classificationService
+      );
+
+      const provNode = await provenanceService.createNode({
+        tenantId: 'tenant_A',
+        nodeType: 'source',
+        sourceType: 'user_action',
+        sourceId: 'act_201',
+      });
+
+      await aiService.registerAiUsageControls({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_201',
+        purposes: {
+          external_ai_training: 'allowed',
+        },
+        trainingConsent: 'opt_in',
+        provenanceRef: {
+          nodeId: provNode.nodeId,
+          tenantId: 'tenant_A',
+        },
+        // missing rightsRef
+      });
+
+      const externalEval = await aiService.evaluateAiUsageEligibility({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_201',
+        requestedPurpose: 'external_ai_training',
+      });
+
+      expect(externalEval.allowed).toBe(false);
+      expect(externalEval.outcome).toBe('blocked_by_restriction');
+    });
+
+    it('fails closed when external_ai_training is missing Task 30 classification reference', async () => {
+      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      const rightsService = new DataRightsService(db as any);
+      const provenanceService = new ProvenanceGraphService(db as any);
+      const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+      const classificationService = new DataClassificationEligibilityService(db as any, rightsService, provenanceService, archiveService);
+
+      const aiService = new AiTrainingUsageControlsService(
+        db as any,
+        rightsService,
+        provenanceService,
+        archiveService,
+        classificationService
+      );
+
+      const rightsRec = await rightsService.createDataRightsRecord({
+        tenantId: 'tenant_A',
+        subject: { type: 'property_passport', id: 'pass_202' },
+        owner: { type: 'user', id: 'tenant_A' },
+        source: { type: 'user_action', id: 'act_202' },
+        purposes: {
+          external_ai_training: 'allowed',
+        },
+        provenance: {
+          sourceType: 'user_action',
+          sourceId: 'act_202',
+          tenantId: 'tenant_A',
+        },
+      });
+
+      const provNode = await provenanceService.createNode({
+        tenantId: 'tenant_A',
+        nodeType: 'source',
+        sourceType: 'user_action',
+        sourceId: 'act_202',
+        rightsReference: {
+          rightsId: rightsRec.rightsId,
+          tenantId: 'tenant_A',
+        },
+      });
+
+      await aiService.registerAiUsageControls({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_202',
+        purposes: {
+          external_ai_training: 'allowed',
+        },
+        trainingConsent: 'opt_in',
+        provenanceRef: {
+          nodeId: provNode.nodeId,
+          tenantId: 'tenant_A',
+        },
+        rightsRef: {
+          rightsId: rightsRec.rightsId,
+          tenantId: 'tenant_A',
+        },
+        // missing classificationRef
+      });
+
+      const externalEval = await aiService.evaluateAiUsageEligibility({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_202',
+        requestedPurpose: 'external_ai_training',
+      });
+
+      expect(externalEval.allowed).toBe(false);
+      expect(externalEval.outcome).toBe('blocked_by_classification');
+    });
+
+    it('fails closed when external_ai_training is missing Task 28 provenance nodeId', async () => {
       const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
@@ -257,29 +474,75 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
       await aiService.registerAiUsageControls({
         tenantId: 'tenant_A',
         recordType: 'property_passport',
-        recordId: 'pass_200',
+        recordId: 'pass_203',
         purposes: {
-          internal_ai_use: 'allowed',
           external_ai_training: 'allowed',
         },
         trainingConsent: 'opt_in',
         provenanceRef: {
-          tenantId: 'tenant_A',
-          sourceType: 'user_action',
-          sourceId: 'act_200',
+          tenantId: 'tenant_A', // missing nodeId
         },
       });
 
       const externalEval = await aiService.evaluateAiUsageEligibility({
         tenantId: 'tenant_A',
         recordType: 'property_passport',
-        recordId: 'pass_200',
+        recordId: 'pass_203',
         requestedPurpose: 'external_ai_training',
       });
 
-      expect(externalEval.allowed).toBe(true);
-      expect(externalEval.outcome).toBe('allowed');
-      expect(externalEval.trainingConsent).toBe('opt_in');
+      expect(externalEval.allowed).toBe(false);
+      expect(externalEval.outcome).toBe('blocked_by_provenance');
+    });
+
+    it('denies purpose substitution (internal_ai_use allowed does not grant third_party_sharing or export)', async () => {
+      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      const rightsService = new DataRightsService(db as any);
+      const provenanceService = new ProvenanceGraphService(db as any);
+      const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+      const classificationService = new DataClassificationEligibilityService(db as any, rightsService, provenanceService, archiveService);
+
+      const aiService = new AiTrainingUsageControlsService(
+        db as any,
+        rightsService,
+        provenanceService,
+        archiveService,
+        classificationService
+      );
+
+      await aiService.registerAiUsageControls({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_204',
+        purposes: {
+          internal_ai_use: 'allowed',
+          // third_party_sharing and export are unknown/default
+        },
+        trainingConsent: 'opt_out',
+        provenanceRef: {
+          tenantId: 'tenant_A',
+        },
+      });
+
+      const sharingEval = await aiService.evaluateAiUsageEligibility({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_204',
+        requestedPurpose: 'third_party_sharing',
+      });
+
+      expect(sharingEval.allowed).toBe(false);
+      expect(sharingEval.outcome).toBe('unknown');
+
+      const exportEval = await aiService.evaluateAiUsageEligibility({
+        tenantId: 'tenant_A',
+        recordType: 'property_passport',
+        recordId: 'pass_204',
+        requestedPurpose: 'export',
+      });
+
+      expect(exportEval.allowed).toBe(false);
+      expect(exportEval.outcome).toBe('unknown');
     });
 
     it('blocks all purposes upon policy revocation', async () => {

@@ -84,15 +84,27 @@ Strict UID-as-tenant boundary (`tenantId === request.auth.uid` or `isAdmin()`). 
 
 | Test Dimension | Scope | Result | Status |
 | :--- | :--- | :--- | :--- |
-| **Unit Test Suite** | `src/server/intelligence/aiTrainingUsageControls.test.ts` | **Passing** | **PASS** |
-| **Emulator Security Suite** | `tests/unit/task31AiTrainingUsageControls.test.ts` | **Passing** | **PASS** |
+| **Unit Test Suite** | `npm test` (690/690 tests passed across 44 test files) | **Passing** | **PASS** |
+| **Task 31 Unit Suite** | `src/server/intelligence/aiTrainingUsageControls.test.ts` | **Passing (10/10)** | **PASS** |
+| **Emulator Security Suite** | `tests/unit/task31AiTrainingUsageControls.test.ts` (CI test script isolated) | **Passing** | **PASS** |
 | **TypeScript Typecheck & Lint** | `tsc --noEmit` (`npm run lint`) | **0 errors, clean compilation** | **PASS** |
-| **Applet Compilation** | `compile_applet` | **Succeeded cleanly** | **PASS** |
+| **Applet Compilation** | `compile_applet` & `npm run build` | **Succeeded cleanly** | **PASS** |
+| **Release Gate Audit** | `npm run audit:release` | **0 critical failures** | **PASS** |
 | **Firestore Security Rules** | Default deny, tenant-isolated, zero anonymous access | **100% compliant** | **PASS** |
 
 ---
 
-## 6. Strict Task Boundary Compliance
+## 6. Task 31R Authorization Boundary & CI Remediation Summary
 
-- **Task 31**: Completed, verified, and documented.
+1. **Mandatory Authorization Chain Enforced for `external_ai_training`**:
+   - `external_ai_training` strictly mandates canonical Task 27 rights reference (`rightsRef`), Task 28 provenance nodeId (`provenanceRef.nodeId`), and Task 30 classification reference (`classificationRef`).
+   - Missing or invalid canonical references fail closed immediately (`blocked_by_restriction`, `blocked_by_provenance`, or `blocked_by_classification`).
+2. **CI / Emulator Lifecycle Remediation**:
+   - Isolated emulator-dependent test suites (`task31AiTrainingUsageControls.test.ts`) within `test:emulator` and `test:security-rules` scripts in `package.json`, preventing `ECONNREFUSED 127.0.0.1:8088` failures during `npm test`.
+
+---
+
+## 7. Strict Task Boundary Compliance
+
+- **Task 31 / 31R**: Completed, verified, and documented.
 - **Tasks 32, 33, 34 & V8.4**: Not started.
