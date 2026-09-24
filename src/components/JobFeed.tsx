@@ -532,14 +532,14 @@ export default function JobFeed() {
       const result = await parseNaturalLanguageSearch(searchTerm);
       
       // Apply the AI results
-      if (result.categories.length > 0) {
+      if ((result?.categories?.length || 0) > 0) {
         setSelectedCategories(result.categories);
       }
       
-      if (result.urgency) {
+      if (result?.urgency) {
         // We don't have a direct urgency filter state yet, but we can use it to filter the list
         // For now, let's just set the search term to the keywords if any
-        if (result.keywords.length > 0) {
+        if ((result?.keywords?.length || 0) > 0) {
           setSearchTerm(result.keywords.join(" "));
         }
       }

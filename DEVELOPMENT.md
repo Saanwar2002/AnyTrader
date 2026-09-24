@@ -1,5 +1,58 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Stability Hardening & Safe Property Access Verification (September 24, 2026)
+- **1. Frontend & Client-Side Null-Safety Hardening**:
+  - Hardened nested `.length` evaluations across all components with safe optional chaining and fallback defaults (`?.length || 0`), eliminating unhandled `TypeError: Cannot read properties of undefined (reading 'length')` across:
+    - `PostJobWizard.tsx`: `estimate.pricingInsights?.costSavingTips`, `formData.photos`, `formData.videos`, `formData.documents`, and `formData.description`.
+    - `JobFeed.tsx`: AI search result categories and keywords (`result?.categories`, `result?.keywords`).
+    - `TraderOutreachAgent.tsx`: `targetedSchedule.postcodes` in scheduler and UI badge lists.
+    - `EmergencyJobWizard.tsx`: `formData.photos` in validation and photo preview grids.
+    - `FindTrades.tsx`: `autocompleteSuggestions?.matchingLocations` and `matchingRecent`.
+    - `AdminFlashDealsAndAiAnalyticsTab.tsx`: `dealsTelemetry?.categoryDistribution`.
+    - `HomeHealthWidget.tsx`: `completedJobs` count evaluation.
+    - `DriverTerminal.tsx`: `overview_path` waypoint calculation.
+- **2. Full Verification & Release Gate**:
+  - Unit test suite: **677/677 tests passing** across **43 test files** (100% pass rate).
+  - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
+  - Applet compilation (`compile_applet`): Succeeded cleanly.
+  - Development Server: Healthy on port 3000.
+
+## 🛡️ AnyTrader V8.3 — Task 30: Data Classification & Eligibility Boundary (September 23, 2026)
+- **1. Server-Authoritative Data Classification & Eligibility Boundary Engine (`DataClassificationService`)**:
+  - Implemented `DataClassificationService` in `src/server/intelligence/dataClassification.ts` establishing server-authoritative classification and purpose eligibility boundaries across the platform.
+  - **Controlled Classification Taxonomy & Sensitivity Levels**:
+    - Taxonomy: `'transactional_platform_data' | 'customer_or_subject_data' | 'contractor_owned_data' | 'third_party_data' | 'platform_generated_data' | 'ai_derived_data' | 'imported_archive_data' | 'unclassified'`.
+    - Sensitivity: `'public' | 'operational' | 'confidential' | 'restricted_pii'`.
+  - **Classification != Permission Invariant**:
+    - Classification metadata NEVER independently grants permission for external operations.
+    - Purpose eligibility for external AI model training (`external_ai_training`), commercial licensing (`commercial_licensing`), third-party sharing (`third_party_sharing`), or data export (`export`) STRICTLY requires an explicit, active Task 27 sovereign data rights record (`DataRightsRecord`).
+  - **First-Class Internal AnyTrader AI Bot Support**:
+    - Internal AI Bot operations (`internal_ai_use`) for job matching, trade recommendations, property risk intelligence, and automation are explicitly permitted for active platform data by default (`internal_ai_use: 'allowed'`).
+    - Internal AI permission is strictly isolated and NEVER confers rights for external AI training or commercial monetization.
+  - **Fail-Closed Conservative Evaluation (`unknown != allowed`)**:
+    - Unclassified or unknown data fails closed immediately (`unclassified_data`).
+    - Unpromoted AI-derived outputs (`ai_derived_data` where `canonicalPromoted === false`) are treated as non-authoritative candidate records and blocked from export or commercial licensing (`ai_unpromoted_non_authoritative`).
+  - **Integrations**:
+    - Integrated with Task 28 Provenance Graph (`ProvenanceGraphService`) for verifiable lineage linking and cross-tenant provenance node validation.
+    - Integrated with Task 29 Contractor Archive Rights (`ContractorArchiveRightsService`) for delegation of imported archive component eligibility.
+  - **Deterministic Identifiers & Cryptographic Hashing**:
+    - Deterministic Classification ID: `dcls_${SHA256(tenantId : recordType : recordId : classificationType : version)}[0..24]`.
+    - Deterministic History ID: `dclsh_${SHA256(tenantId : classificationId : version : timestamp)}[0..24]`.
+    - Cryptographic SHA-256 state hashing covering all classification parameters.
+  - **Security Rules (`firestore.rules`) & Blueprint Schemas**:
+    - Added security rules for `/data_classifications/{id}` and `/data_classification_history/{id}` enforcing strict UID-as-tenant isolation (`resource.data.tenantId == request.auth.uid || isAdmin()`).
+    - Complete client write denial (`allow create, update, delete: if false;`). Writes are Server Admin SDK only.
+  - **API Endpoints (`server.ts`)**:
+    - `POST /api/intelligence/data-classification/classify`: Server-authoritative data classification registration.
+    - `POST /api/intelligence/data-classification/:classificationId/evaluate`: Server-authoritative purpose eligibility evaluation.
+    - `GET /api/intelligence/data-classification/:classificationId`: Classification record lookup.
+- **2. Testing & Verification**:
+  - Unit test suite: `src/server/intelligence/dataClassification.test.ts` (14/14 tests passing, 100% clean).
+  - Emulator security suite: `tests/unit/task30DataClassificationEligibility.test.ts` (Security vectors: unauthenticated defense, cross-tenant isolation, client write denial, production-path verification on live Firebase emulator).
+  - Total test suite: 679/679 unit tests passing across 43 test files.
+  - Typecheck & Lint: 0 TypeScript errors (`tsc --noEmit` clean).
+  - Applet compilation: Clean build.
+
 ## 🛡️ AnyTrader V8.3 — Task 29 / 29R / 29R-2 / 29R-3: Contractor Archive Rights Boundary (September 23, 2026)
 - **1. Server-Authoritative Contractor Archive Rights Service (`ContractorArchiveRightsService`)**:
   - Implemented `ContractorArchiveRightsService` in `src/server/intelligence/contractorArchiveRights.ts` managing historical contractor archives and portfolio data rights boundaries.

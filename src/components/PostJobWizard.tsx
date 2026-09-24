@@ -2867,15 +2867,15 @@ export default function PostJobWizard() {
                       }}
                     />
                     <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1.5 z-10">
-                      {formData.description.length > 0 && formData.description.length < 10 && (
+                      {(formData.description?.length || 0) > 0 && (formData.description?.length || 0) < 10 && (
                         <span className="text-[9px] text-slate-400 font-semibold hidden sm:inline">Keep typing to use AI...</span>
                       )}
                       <button 
                         onClick={handleImproveDescription}
-                        disabled={isImprovingDescription || formData.description.length < 10}
+                        disabled={isImprovingDescription || (formData.description?.length || 0) < 10}
                         className={cn(
                           "px-2.5 py-1 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all shadow-xs",
-                          formData.description.length >= 10 
+                          (formData.description?.length || 0) >= 10 
                             ? "bg-blue-600 text-white hover:bg-blue-700 active:scale-95" 
                             : "bg-slate-100 text-slate-400 cursor-not-allowed"
                         )}
@@ -2951,9 +2951,9 @@ export default function PostJobWizard() {
                    )}
 
                   {/* Document & Media Previews */}
-                  {(formData.photos.length > 0 || formData.videos.length > 0 || formData.documents.length > 0) && (
+                  {((formData.photos?.length || 0) > 0 || (formData.videos?.length || 0) > 0 || (formData.documents?.length || 0) > 0) && (
                     <div className="flex flex-wrap gap-3 pt-2">
-                      {formData.photos.map((url, i) => (
+                      {formData.photos?.map((url, i) => (
                         <div key={`photo-${i}`} className="relative w-16 h-16 rounded-xl overflow-hidden border border-black shadow-sm">
                           <img src={url} alt={`Job photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                           <button 
@@ -3869,8 +3869,8 @@ export default function PostJobWizard() {
                               <div>
                                 <h4 className="font-bold text-sm text-slate-900 mb-1">Cost-saving tips</h4>
                                 <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
-                                  {estimate.pricingInsights.costSavingTips.length > 0 ? (
-                                    estimate.pricingInsights.costSavingTips.map((tip: string, i: number) => (
+                                  {(estimate.pricingInsights?.costSavingTips?.length || 0) > 0 ? (
+                                    estimate.pricingInsights?.costSavingTips?.map((tip: string, i: number) => (
                                       <li key={i}>{tip}</li>
                                     ))
                                   ) : (

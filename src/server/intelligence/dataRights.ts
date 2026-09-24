@@ -326,7 +326,7 @@ export class DataRightsService {
 
   private getDb(): admin.firestore.Firestore {
     if (!this.db) {
-      if (admin.apps.length > 0) {
+      if (admin?.apps && admin.apps.length > 0) {
         this.db = admin.firestore();
       } else {
         throw new Error('[DataRightsService] Firestore not initialized');
@@ -441,6 +441,18 @@ export class DataRightsService {
       return null;
     }
     return snap.data() as DataRightsRecord;
+  }
+
+  /**
+   * Retrieves current active projection for a tenant subject
+   */
+  public async getDataRightsRecordBySubject(
+    tenantId: string,
+    subjectType: string,
+    subjectId: string
+  ): Promise<DataRightsRecord | null> {
+    const rightsId = this.generateRightsId(tenantId, subjectType, subjectId);
+    return this.getDataRightsRecord(rightsId);
   }
 
   /**

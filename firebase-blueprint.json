@@ -4464,6 +4464,24 @@
         "$ref": "#/entities/DataRightsHistory"
       },
       "description": "Append-only immutable historical data rights audit records with cryptographic snapshots."
+    },
+    "/data_classifications/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative controlled data classifications enforcing tenant isolation, category taxonomy, and sensitivity levels."
+    },
+    "/data_classifications_history/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Append-only immutable historical data classification snapshots with cryptographic SHA-256 hashes."
+    },
+    "/data_eligibility_decisions/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative immutable data eligibility decision audit records with deterministic hashes."
     }
   }
 }

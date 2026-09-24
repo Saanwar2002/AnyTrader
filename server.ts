@@ -63,6 +63,10 @@ import {
   contractorArchiveRightsService,
   ContractorArchiveSecurityError,
   ContractorArchiveValidationError,
+  DataClassificationEligibilityService,
+  dataClassificationEligibilityService,
+  DataClassificationSecurityError,
+  DataClassificationValidationError,
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -5923,6 +5927,107 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     } catch (err: any) {
       if (err instanceof ContractorArchiveSecurityError) {
         return res.status(403).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Register Data Classification
+  app.post("/api/intelligence/data-classification/register", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const body = req.body || {};
+
+      if (!body.recordType || !body.recordId || !body.category || !body.provenanceRef) {
+        return res.status(400).json({ error: "Missing required fields: recordType, recordId, category, provenanceRef" });
+      }
+
+      const tenantId = user.uid;
+      const record = await dataClassificationEligibilityService.registerClassification({
+        ...body,
+        tenantId,
+        recordedBy: user.uid,
+      });
+
+      res.json({
+        success: true,
+        record,
+      });
+    } catch (err: any) {
+      if (err instanceof DataClassificationSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataClassificationValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Evaluate Data Eligibility
+  app.post("/api/intelligence/data-classification/evaluate", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { recordType, recordId, requestedPurpose, classificationId } = req.body || {};
+
+      if (!recordType || !recordId || !requestedPurpose) {
+        return res.status(400).json({ error: "Missing required fields: recordType, recordId, requestedPurpose" });
+      }
+
+      const tenantId = user.uid;
+      const decision = await dataClassificationEligibilityService.evaluateEligibility({
+        tenantId,
+        recordType,
+        recordId,
+        requestedPurpose,
+        classificationId,
+        context: {
+          callerUid: user.uid,
+          isInternalAi: req.body?.isInternalAi === true,
+        },
+      });
+
+      res.json({
+        success: true,
+        decision,
+      });
+    } catch (err: any) {
+      if (err instanceof DataClassificationSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Revoke Data Classification
+  app.post("/api/intelligence/data-classification/revoke", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { classificationId, reason } = req.body || {};
+
+      if (!classificationId || !reason) {
+        return res.status(400).json({ error: "Missing required fields: classificationId, reason" });
+      }
+
+      const tenantId = user.uid;
+      const record = await dataClassificationEligibilityService.revokeClassification(
+        tenantId,
+        classificationId,
+        reason
+      );
+
+      res.json({
+        success: true,
+        classificationId: record.classificationId,
+        status: record.status,
+        revocationReason: record.revocationReason,
+      });
+    } catch (err: any) {
+      if (err instanceof DataClassificationSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataClassificationValidationError) {
+        return res.status(400).json({ error: err.message });
       }
       sendHttpError(res, err, req);
     }

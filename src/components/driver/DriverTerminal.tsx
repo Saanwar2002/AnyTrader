@@ -1709,15 +1709,15 @@ export default function DriverTerminal() {
           directions &&
           directions.routes &&
           directions.routes[0] &&
-          directions.routes[0].overview_path.length > 1
+          (directions.routes[0].overview_path?.length || 0) > 1
         ) {
           const path = directions.routes[0].overview_path;
-          targetBearing = getBearing(
+          targetBearing = (path?.[0]?.lat && path?.[1]?.lat) ? getBearing(
             path[0].lat(),
             path[0].lng(),
             path[1].lat(),
             path[1].lng(),
-          );
+          ) : null;
         } else {
           targetBearing = getBearing(
             mapCenterRef.current[0],

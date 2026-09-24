@@ -293,7 +293,8 @@ export default function TraderOutreachAgent() {
         if (!autopilotSettings.autoGeneratePacks) return false;
         if (targetedSchedule.enabled) {
           const textUpper = (l.cityLocation + " " + l.notes).toUpperCase();
-          const matchesPostcode = targetedSchedule.postcodes.length === 0 || targetedSchedule.postcodes.some(pc => textUpper.includes(pc.toUpperCase()));
+          const targetPostcodes = targetedSchedule.postcodes || [];
+          const matchesPostcode = targetPostcodes.length === 0 || targetPostcodes.some(pc => textUpper.includes(pc.toUpperCase()));
           return matchesPostcode;
         }
         return true;
@@ -1091,14 +1092,14 @@ export default function TraderOutreachAgent() {
                 <label className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                    Target Postcode Districts ({targetedSchedule.postcodes.length})
+                    Target Postcode Districts ({targetedSchedule.postcodes?.length || 0})
                   </span>
                   <span className="text-[10px] text-slate-400">e.g. M1, M2, SE1</span>
                 </label>
 
                 {/* Postcode Badges list */}
                 <div className="flex flex-wrap items-center gap-1.5 bg-slate-900 p-2.5 rounded-xl border border-slate-700 min-h-[42px] max-h-24 overflow-y-auto">
-                  {targetedSchedule.postcodes.map(pc => (
+                  {(targetedSchedule.postcodes || []).map(pc => (
                     <span key={pc} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-black">
                       <span>{pc}</span>
                       <button
@@ -1109,7 +1110,7 @@ export default function TraderOutreachAgent() {
                       </button>
                     </span>
                   ))}
-                  {targetedSchedule.postcodes.length === 0 && (
+                  {(targetedSchedule.postcodes?.length || 0) === 0 && (
                     <span className="text-[10px] text-slate-500 italic">No postcodes added (Targeting all areas)</span>
                   )}
                 </div>

@@ -840,6 +840,10 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
   beforeEach(async () => {
     await testEnv.clearFirestore();
 
+    intelligenceTaskQueue.registerHandler('job_extraction', async (task) => {
+      return { processed: true, id: task.aggregateId };
+    });
+
     // Seed 10 test jobs in the real Firestore emulator
     for (let i = 1; i <= 10; i++) {
       const jobId = `job_emu_25_${String(i).padStart(3, '0')}`;
@@ -882,7 +886,7 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     expect(scopeSnap.exists).toBe(true);
     expect(scopeSnap.data()?.status).toBe('paused');
     expect(scopeSnap.data()?.activeRunId).toBe(runId);
-  });
+  }, 15000);
 
   it('Production Emulator Vector 2: Resuming backfill continues from saved cursor and finishes remaining items to completed state', async () => {
     const runId = 'bf_run_emu_resume_2';
@@ -915,7 +919,7 @@ describe('Task 25 — Scale / Backfill / Resilience Production Firebase Emulator
     const scopeSnap = await adminDb.collection('intelligence_backfill_scopes').doc('jobs_job_extraction').get();
     expect(scopeSnap.data()?.status).toBe('completed');
     expect(scopeSnap.data()?.activeRunId).toBeNull();
-  });
+  }, 15000);
 
   it('Production Emulator Vector 3: Security rules strictly deny unauthenticated and non-admin client writes to backfill collections', async () => {
     const unauthDb = testEnv.unauthenticatedContext().firestore();

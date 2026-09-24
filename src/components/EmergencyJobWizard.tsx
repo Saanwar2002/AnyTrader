@@ -324,7 +324,7 @@ export default function EmergencyJobWizard() {
       setError("Please describe the emergency.");
       return;
     }
-    if (formData.photos.length === 0) {
+    if ((formData.photos?.length || 0) === 0) {
       setError("Please upload at least one photo of the emergency.");
       return;
     }
@@ -650,9 +650,9 @@ export default function EmergencyJobWizard() {
               )}
             </button>
 
-            {formData.photos.length > 0 && (
+            {(formData.photos?.length || 0) > 0 && (
               <div className="grid grid-cols-3 gap-3 pt-2">
-                {formData.photos.map((url, i) => (
+                {formData.photos?.map((url, i) => (
                   <div key={`photo-${i}`} className="relative aspect-square rounded-2xl overflow-hidden border border-black group shadow-sm">
                     <img src={url} alt={`Emergency photo ${i + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     <button 

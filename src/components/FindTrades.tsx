@@ -1230,11 +1230,11 @@ export default function FindTrades() {
     if (
       trimmed.length >= 3 && 
       finalDisplayList.length === 0 && 
-      autocompleteSuggestions.matchingCategories.length === 0
+      (autocompleteSuggestions?.matchingCategories?.length || 0) === 0
     ) {
       recordUnmatchedSearch(trimmed, profile?.postcode || postcodeFilterValue);
     }
-  }, [searchQuery, finalDisplayList.length, autocompleteSuggestions.matchingCategories.length, profile?.postcode, postcodeFilterValue]);
+  }, [searchQuery, finalDisplayList.length, autocompleteSuggestions?.matchingCategories?.length, profile?.postcode, postcodeFilterValue]);
 
   // Handle logging clicks on promoted profile cards
   const handlePromotedCardClick = async (tp: any) => {
@@ -1632,18 +1632,18 @@ export default function FindTrades() {
                   </button>
                 </div>
                 {/* Category Section */}
-                {autocompleteSuggestions.matchingCategories.length > 0 && (
+                {(autocompleteSuggestions?.matchingCategories?.length || 0) > 0 && (
                   <div className="p-2">
                     <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-orange-600">
                         <Tag className="w-3.5 h-3.5" /> Categories & Services
                       </span>
                       <span className="text-[9px] bg-orange-50 text-orange-700 border border-orange-200 px-1.5 py-0.2 rounded-full font-extrabold">
-                        {autocompleteSuggestions.matchingCategories.length}
+                        {autocompleteSuggestions?.matchingCategories?.length || 0}
                       </span>
                     </div>
                     <div className="space-y-1 mt-1">
-                      {autocompleteSuggestions.matchingCategories.map(cat => {
+                      {autocompleteSuggestions?.matchingCategories?.map(cat => {
                         const Icon = iconMap[cat.icon];
                         const matchedSub = (cat as any).matchedSubcategory;
                         return (
@@ -1676,14 +1676,14 @@ export default function FindTrades() {
                 )}
 
                 {/* Tradespeople Direct Match Section */}
-                {autocompleteSuggestions.matchingTradespeople.length > 0 && (
+                {(autocompleteSuggestions?.matchingTradespeople?.length || 0) > 0 && (
                   <div className="p-2">
                     <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-blue-600">
                         <Users className="w-3.5 h-3.5" /> Verified Tradespeople
                       </span>
                       <span className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 rounded-full font-extrabold">
-                        {autocompleteSuggestions.matchingTradespeople.length}
+                        {autocompleteSuggestions?.matchingTradespeople?.length || 0}
                       </span>
                     </div>
                     <div className="space-y-1 mt-1">
@@ -1741,7 +1741,7 @@ export default function FindTrades() {
                 )}
 
                 {/* Locations / Postcodes Section */}
-                {autocompleteSuggestions.matchingLocations.length > 0 && (
+                {(autocompleteSuggestions?.matchingLocations?.length || 0) > 0 && (
                   <div className="p-2">
                     <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                       <MapPin className="w-3.5 h-3.5 text-red-500" /> Locations & Postcodes
@@ -1775,7 +1775,7 @@ export default function FindTrades() {
                 )}
 
                 {/* Recent Matching Searches */}
-                {autocompleteSuggestions.matchingRecent.length > 0 && (
+                {(autocompleteSuggestions?.matchingRecent?.length || 0) > 0 && (
                   <div className="p-2">
                     <div className="px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                       <History className="w-3.5 h-3.5 text-purple-600" /> Recent History
@@ -2900,7 +2900,7 @@ export default function FindTrades() {
                         })}
 
                         {/* Fallback if no badges exist */}
-                        {getTraderBadges(tp).length === 0 && (!tp.badges || tp.badges.length === 0) && (!tp.searchFeedBadges || tp.searchFeedBadges.length === 0) && (
+                        {(getTraderBadges(tp)?.length || 0) === 0 && (!tp.badges || tp.badges.length === 0) && (!tp.searchFeedBadges || tp.searchFeedBadges.length === 0) && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black bg-slate-100 text-slate-950 border border-slate-300">
                             <ShieldCheck className="w-2.5 h-2.5 text-blue-700" />
                             <span>Verified AnyTrader Member</span>

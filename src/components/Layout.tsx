@@ -425,7 +425,7 @@ export default function Layout() {
     ];
   }
 
-  let navItems;
+  let navItems: any[] = homeownerNav;
   if (activeRole === "admin") {
     navItems = adminNav;
   } else if (activeRole === "ecosystem_manager") {
@@ -681,7 +681,7 @@ export default function Layout() {
               {/* Desktop Navigation */}
               {(activePortal as string) !== 'anyroller' && (
                 <nav className="hidden md:flex items-center gap-1 ml-2">
-                  {navItems.map((item) => {
+                  {(navItems || []).map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname + location.search === item.path || (item.path === "/admin" && location.pathname === "/admin" && (!location.search || location.search === "?tab=users"));
                     

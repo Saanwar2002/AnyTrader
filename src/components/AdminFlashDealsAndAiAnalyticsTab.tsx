@@ -809,12 +809,12 @@ export default function AdminFlashDealsAndAiAnalyticsTab() {
                   <p className="text-xs text-slate-500">Most claimed off-peak service discounts.</p>
                 </div>
                 <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-lg">
-                  {dealsTelemetry.categoryDistribution.length} Categories
+                  {dealsTelemetry?.categoryDistribution?.length || 0} Categories
                 </span>
               </div>
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dealsTelemetry.categoryDistribution}>
+                  <BarChart data={dealsTelemetry?.categoryDistribution || []}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#64748b" }} />

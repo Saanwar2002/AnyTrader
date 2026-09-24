@@ -1128,12 +1128,12 @@ export default function PublicProfile() {
             ))}
           </div>
           
-          {profile.services.length > 4 && (
+          {(profile.services?.length || 0) > 4 && (
             <button 
               onClick={() => setIsServicesExpanded(!isServicesExpanded)}
               className="mt-6 w-full py-3 flex items-center justify-center gap-2 text-blue-600 font-bold text-sm bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors"
             >
-              {isServicesExpanded ? "Show less" : `Show all ${profile.services.length} services`}
+              {isServicesExpanded ? "Show less" : `Show all ${profile.services?.length || 0} services`}
               <ChevronDown className={cn("w-4 h-4 transition-transform", isServicesExpanded && "rotate-180")} />
             </button>
           )}
@@ -1259,7 +1259,7 @@ export default function PublicProfile() {
             <div className="space-y-3">
               {profile.faqs.map((faq: any, idx: number) => {
                 const faqId = faq.id || `faq_${idx}`;
-                const isOpen = openFaqIds.includes(faqId) || profile.faqs.length <= 3;
+                const isOpen = openFaqIds.includes(faqId) || (profile.faqs?.length || 0) <= 3;
                 return (
                   <div 
                     key={faqId} 

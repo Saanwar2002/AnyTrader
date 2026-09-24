@@ -4944,7 +4944,7 @@ export default function AnyTraderAdmin() {
                             }}
                             className="text-[10px] px-2 py-0.5 bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold rounded-md border border-black transition-colors"
                           >
-                            {expandedCategories.includes(cat.docId) ? "Show Less" : `+${cat.subcategories.length - 5} more`}
+                            {expandedCategories.includes(cat.docId) ? "Show Less" : `+${(cat.subcategories?.length || 0) - 5} more`}
                           </button>
                         )}
                       </div>

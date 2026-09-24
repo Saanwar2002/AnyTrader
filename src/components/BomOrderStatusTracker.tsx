@@ -467,7 +467,7 @@ export function BomOrderStatusTracker({
                 Property Passport Digital Twin Synced
               </h5>
               <span className="text-[9px] font-black bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-300">
-                {order.items.length} Parts Tracked
+                {order.items?.length || 0} Parts Tracked
               </span>
             </div>
             <p className="text-xs text-slate-600">
@@ -498,7 +498,7 @@ export function BomOrderStatusTracker({
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h5 className="font-black text-xs text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-blue-600" />
-                Itemized Order Manifest ({order.items.length} Line Items)
+                Itemized Order Manifest ({(order.items?.length || 0)} Line Items)
               </h5>
               <span className="font-mono text-xs font-black text-slate-900">
                 Total: £{order.totalAmount.toFixed(2)} (Inc. VAT)

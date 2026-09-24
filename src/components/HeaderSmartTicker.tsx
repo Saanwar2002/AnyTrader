@@ -270,7 +270,9 @@ export function HeaderSmartTicker() {
     return () => clearInterval(timer);
   }, [stickers.length]);
 
-  const activeSticker = stickers[currentIndex] || stickers[0];
+  const activeSticker = (stickers && stickers.length > 0) ? (stickers[currentIndex] || stickers[0]) : null;
+
+  if (!activeSticker) return null;
 
   return (
     <div 

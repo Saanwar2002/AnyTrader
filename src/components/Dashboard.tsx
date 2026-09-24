@@ -759,7 +759,7 @@ export default function Dashboard() {
                             {job.quoteScope.replace('_', ' ')}
                           </span>
                         )}
-                        {(job.photos?.length > 0 || job.videos?.length > 0) && (
+                        {((job.photos?.length || 0) > 0 || (job.videos?.length || 0) > 0) && (
                           <button
                             onClick={(e) => {
                               e.preventDefault();
@@ -768,7 +768,7 @@ export default function Dashboard() {
                             }}
                             className="bg-orange-50 text-orange-600 text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 hover:bg-orange-100 transition-colors"
                           >
-                            {job.photos?.length > 0 ? <ImageIcon className="w-2.5 h-2.5" /> : <VideoIcon className="w-2.5 h-2.5" />}
+                            {(job.photos?.length || 0) > 0 ? <ImageIcon className="w-2.5 h-2.5" /> : <VideoIcon className="w-2.5 h-2.5" />}
                             { (job.photos?.length || 0) + (job.videos?.length || 0) } Media
                           </button>
                         )}

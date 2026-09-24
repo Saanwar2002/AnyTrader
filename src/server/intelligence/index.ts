@@ -50,4 +50,5 @@ export * from './buyerIntelligence';
 export * from './dataRights';
 export * from './provenanceGraph';
 export * from './contractorArchiveRights';
+export * from './dataClassificationEligibility';
 

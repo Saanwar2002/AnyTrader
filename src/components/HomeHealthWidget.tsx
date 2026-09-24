@@ -523,7 +523,7 @@ export default function HomeHealthWidget({ completedJobs = [], userPostcode }: H
   const forecasts = getForecasts();
 
   // Calculate Home Health Score (out of 100)
-  const completedHistoryBonus = Math.min(completedJobs.length * 5, 20);
+  const completedHistoryBonus = Math.min((completedJobs?.length || 0) * 5, 20);
   const passportCompleteBonus = activeProperty?.address?.line1 ? 10 : 0;
   const urgentTasksCount = forecasts.filter(f => f.urgency === "urgent").length;
   const recommendedTasksCount = forecasts.filter(f => f.urgency === "recommended").length;

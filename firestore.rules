@@ -1358,5 +1358,47 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Append-only immutable provenance event history; server Admin SDK writes only
     }
+
+    // =========================================================================
+    // V8.3 Task 30: Server-Authoritative Data Classification & Eligibility Rules
+    // Strict tenant boundary (tenantId === request.auth.uid) or platform admin.
+    // Client writes are strictly forbidden (allow create, update, delete: if false;).
+    // All classifications and decisions are server-authoritative.
+    // =========================================================================
+    match /data_classifications/{classificationId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /data_classifications_history/{historyId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable history; client writes denied
+    }
+
+    match /data_classification_history/{historyId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable history; client writes denied
+    }
+
+    match /data_eligibility_decisions/{decisionId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Immutable decision audit trail; server writes only
+    }
   }
 }
