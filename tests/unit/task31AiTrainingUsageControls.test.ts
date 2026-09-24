@@ -130,12 +130,14 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('denies cross-tenant client reads on /ai_usage_controls', async () => {
-      const adminDb = testEnv.authenticatedContext('admin_uid', { isAdmin: true }).firestore();
-      await setDoc(doc(adminDb, 'ai_usage_controls', 'aicontrol_secret'), {
-        controlId: 'aicontrol_secret',
-        tenantId: 'tenant_owner',
-        recordType: 'report',
-        recordId: 'rep_1',
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'ai_usage_controls', 'aicontrol_secret'), {
+          controlId: 'aicontrol_secret',
+          tenantId: 'tenant_owner',
+          recordType: 'report',
+          recordId: 'rep_1',
+        });
       });
 
       const intruderDb = testEnv.authenticatedContext('tenant_intruder').firestore();
@@ -144,12 +146,14 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('allows owner tenant reads on /ai_usage_controls', async () => {
-      const adminDb = testEnv.authenticatedContext('admin_uid', { isAdmin: true }).firestore();
-      await setDoc(doc(adminDb, 'ai_usage_controls', 'aicontrol_mydata'), {
-        controlId: 'aicontrol_mydata',
-        tenantId: 'tenant_owner',
-        recordType: 'report',
-        recordId: 'rep_1',
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'ai_usage_controls', 'aicontrol_mydata'), {
+          controlId: 'aicontrol_mydata',
+          tenantId: 'tenant_owner',
+          recordType: 'report',
+          recordId: 'rep_1',
+        });
       });
 
       const ownerDb = testEnv.authenticatedContext('tenant_owner').firestore();
@@ -182,7 +186,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
 
   describe('Vector 3: Server-Authoritative Engine & Explicit Purpose Isolation', () => {
     it('allows internal_ai_use while denying external_ai_training when opt_out', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -240,7 +248,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('allows external_ai_training when complete valid authorization chain is established', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -338,7 +350,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('fails closed when external_ai_training is missing Task 27 rights reference', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -386,7 +402,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('fails closed when external_ai_training is missing Task 30 classification reference', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -457,7 +477,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('fails closed when external_ai_training is missing Task 28 provenance nodeId', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -496,7 +520,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('denies purpose substitution (internal_ai_use allowed does not grant third_party_sharing or export)', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
@@ -546,7 +574,11 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
     });
 
     it('blocks all purposes upon policy revocation', async () => {
-      const db = testEnv.authenticatedContext('test_runner', { isAdmin: true }).firestore();
+      let db: any;
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        db = context.firestore();
+      });
+
       const rightsService = new DataRightsService(db as any);
       const provenanceService = new ProvenanceGraphService(db as any);
       const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
