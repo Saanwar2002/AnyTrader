@@ -391,6 +391,29 @@ export class DataClassificationEligibilityService {
       sourceVersion: input.provenanceRef.sourceVersion || '1',
     };
 
+    // If live Firestore is available, perform authoritative provenance validation
+    if (this.db || (admin?.apps && admin.apps.length > 0)) {
+      const provVal = await this.provenanceService.validateProvenanceReference({
+        tenantId,
+        nodeId: provenanceRef.nodeId,
+        sourceType: provenanceRef.sourceType,
+        sourceId: provenanceRef.sourceId,
+        sourceVersion: provenanceRef.sourceVersion,
+      });
+      if (!provVal.valid) {
+        if (provVal.outcome === 'cross_tenant') {
+          throw new DataClassificationSecurityError(
+            `Cross-tenant provenance validation failed: ${provVal.reason}`
+          );
+        }
+        if (provVal.outcome === 'integrity_failure' || provVal.outcome === 'invalid_status') {
+          throw new DataClassificationSecurityError(
+            `Invalid provenance reference: ${provVal.reason}`
+          );
+        }
+      }
+    }
+
     const record: DataClassificationRecord = {
       classificationId,
       tenantId,
@@ -590,7 +613,7 @@ export class DataClassificationEligibilityService {
       });
     }
 
-    // 4. Provenance Validation
+    // 4. Server-Authoritative Task 28 Provenance Validation
     if (!classification.provenanceRef || !classification.provenanceRef.tenantId) {
       return this.buildDecisionResult({
         eligible: false,
@@ -619,6 +642,41 @@ export class DataClassificationEligibilityService {
         reason: 'Cross-tenant provenance reference detected',
         evaluatedAt,
       });
+    }
+
+    // Validate referenced Task 28 provenance node via ProvenanceGraphService
+    let isDbAvailable = false;
+    try {
+      if (this.db || (admin?.apps && admin.apps.length > 0)) {
+        isDbAvailable = true;
+      }
+    } catch {
+      isDbAvailable = false;
+    }
+
+    if (isDbAvailable) {
+      const provVal = await this.provenanceService.validateProvenanceReference({
+        tenantId,
+        nodeId: classification.provenanceRef.nodeId,
+        sourceType: classification.provenanceRef.sourceType,
+        sourceId: classification.provenanceRef.sourceId,
+        sourceVersion: classification.provenanceRef.sourceVersion,
+      });
+
+      if (!provVal.valid) {
+        return this.buildDecisionResult({
+          eligible: false,
+          outcome: 'blocked_by_provenance',
+          tenantId,
+          recordType: request.recordType,
+          recordId: request.recordId,
+          requestedPurpose: request.requestedPurpose,
+          category: classification.category,
+          classificationId: classification.classificationId,
+          reason: `Task 28 Provenance validation failed: ${provVal.reason}`,
+          evaluatedAt,
+        });
+      }
     }
 
     // 5. Explicit Classification Restrictions Check

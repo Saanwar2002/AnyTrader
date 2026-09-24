@@ -204,6 +204,21 @@ export interface ListNodesOptions {
   startAfterNodeId?: string;
 }
 
+export interface ProvenanceValidationParams {
+  tenantId: string;
+  nodeId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  sourceVersion?: string | number;
+}
+
+export interface ProvenanceValidationResult {
+  valid: boolean;
+  outcome: 'valid' | 'nonexistent' | 'cross_tenant' | 'invalid_status' | 'mismatched_source' | 'integrity_failure';
+  node?: ProvenanceNode;
+  reason?: string;
+}
+
 // =============================================================================
 // ERROR CLASSES
 // =============================================================================
@@ -1131,6 +1146,137 @@ export class ProvenanceGraphService {
 
     const updatedOldNode = { ...oldNode, status: 'superseded' as const };
     return { oldNode: updatedOldNode, newNode, edge };
+  }
+
+  /**
+   * Authoritative Provenance Validation Boundary
+   * Validates that a referenced provenance node:
+   * 1. Exists in /provenance_nodes
+   * 2. Strictly belongs to the specified tenant (cross-tenant provenance access is denied)
+   * 3. Is in a valid status (active / superseded; retracted nodes fail validation)
+   * 4. Matches expected source identity if provided (sourceType, sourceId)
+   * 5. Passes cryptographic SHA-256 content hash integrity validation
+   * 6. Preserves rights reference tenant binding if attached
+   */
+  public async validateProvenanceReference(
+    params: ProvenanceValidationParams
+  ): Promise<ProvenanceValidationResult> {
+    validateNodeTenant(params.tenantId);
+
+    const db = this.getDb();
+    let nodeDoc: admin.firestore.DocumentSnapshot | null = null;
+
+    if (params.nodeId && params.nodeId.trim()) {
+      const doc = await db.collection('provenance_nodes').doc(params.nodeId.trim()).get();
+      if (doc.exists) {
+        nodeDoc = doc;
+      }
+    } else if (params.sourceType && params.sourceId) {
+      // Try computing deterministic source node ID
+      const compId = computeProvenanceNodeId(
+        params.tenantId,
+        'source',
+        params.sourceType,
+        params.sourceId,
+        params.sourceVersion ?? '1'
+      );
+      const doc = await db.collection('provenance_nodes').doc(compId).get();
+      if (doc.exists) {
+        nodeDoc = doc;
+      } else {
+        // Query by tenant and sourceId
+        const snap = await db
+          .collection('provenance_nodes')
+          .where('tenantId', '==', params.tenantId)
+          .where('sourceType', '==', params.sourceType)
+          .where('sourceId', '==', params.sourceId)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          nodeDoc = snap.docs[0];
+        }
+      }
+    }
+
+    if (!nodeDoc || !nodeDoc.exists) {
+      return {
+        valid: false,
+        outcome: 'nonexistent',
+        reason: `Provenance node '${params.nodeId || `${params.sourceType}:${params.sourceId}`}' does not exist in Provenance Registry`,
+      };
+    }
+
+    const node = nodeDoc.data() as ProvenanceNode;
+
+    // 1. Cross-tenant isolation verification
+    if (node.tenantId !== params.tenantId) {
+      return {
+        valid: false,
+        outcome: 'cross_tenant',
+        reason: `Cross-tenant provenance reference rejected: node tenant '${node.tenantId}' does not match caller tenant '${params.tenantId}'`,
+      };
+    }
+
+    // 2. Status verification (retracted provenance fails closed)
+    if (node.status === 'retracted') {
+      return {
+        valid: false,
+        outcome: 'invalid_status',
+        reason: `Referenced provenance node '${node.nodeId}' has status 'retracted'`,
+      };
+    }
+
+    // 3. Source identity verification if requested
+    if (params.sourceType && node.sourceType !== params.sourceType) {
+      return {
+        valid: false,
+        outcome: 'mismatched_source',
+        reason: `Provenance node sourceType '${node.sourceType}' does not match requested sourceType '${params.sourceType}'`,
+      };
+    }
+    if (params.sourceId && node.sourceId !== params.sourceId) {
+      return {
+        valid: false,
+        outcome: 'mismatched_source',
+        reason: `Provenance node sourceId '${node.sourceId}' does not match requested sourceId '${params.sourceId}'`,
+      };
+    }
+
+    // 4. Content hash integrity check
+    if (node.contentHash) {
+      const computedHash = computeProvenanceContentHash({
+        tenantId: node.tenantId,
+        nodeType: node.nodeType,
+        sourceType: node.sourceType,
+        sourceId: node.sourceId,
+        sourceVersion: node.sourceVersion,
+        schemaVersion: node.schemaVersion,
+        rightsReference: node.rightsReference,
+        metadata: node.metadata,
+      });
+      if (node.contentHash !== computedHash) {
+        return {
+          valid: false,
+          outcome: 'integrity_failure',
+          reason: `Provenance node '${node.nodeId}' content hash integrity failure (tampering detected)`,
+        };
+      }
+    }
+
+    // 5. Rights reference tenant binding check (if present)
+    if (node.rightsReference && node.rightsReference.tenantId !== params.tenantId) {
+      return {
+        valid: false,
+        outcome: 'cross_tenant',
+        reason: `Provenance node '${node.nodeId}' contains cross-tenant rights reference '${node.rightsReference.rightsId}' belonging to '${node.rightsReference.tenantId}'`,
+      };
+    }
+
+    return {
+      valid: true,
+      outcome: 'valid',
+      node,
+    };
   }
 
   // ===========================================================================

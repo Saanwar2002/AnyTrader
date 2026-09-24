@@ -10,6 +10,7 @@ import {
   computeDataClassificationId,
   computeClassificationContentHash,
   DATA_CLASSIFICATION_CATEGORIES,
+  SENSITIVITY_LEVELS,
 } from './dataClassificationEligibility';
 import { DataRightsService } from './dataRights';
 import { ProvenanceGraphService } from './provenanceGraph';
@@ -81,6 +82,42 @@ describe('Task 30 DataClassificationEligibilityService Unit Tests', () => {
       expect(DATA_CLASSIFICATION_CATEGORIES).toContain('platform_derived_intelligence');
       expect(DATA_CLASSIFICATION_CATEGORIES).toContain('provenance_evidence_metadata');
       expect(DATA_CLASSIFICATION_CATEGORIES).toContain('unknown_unclassified');
+    });
+
+    it('validates all 5 canonical sensitivity levels', () => {
+      expect(SENSITIVITY_LEVELS).toEqual(['public', 'internal', 'confidential', 'restricted', 'pii']);
+    });
+
+    it('rejects missing or empty tenantId in provenance reference', async () => {
+      await expect(
+        service.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'invoice',
+          recordId: 'inv_123',
+          category: 'transactional_operational',
+          provenanceRef: {
+            tenantId: '',
+            sourceType: 'system',
+            sourceId: 'sys_1',
+          },
+        })
+      ).rejects.toThrow(DataClassificationSecurityError);
+    });
+
+    it('rejects invalid classification category', async () => {
+      await expect(
+        service.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'invoice',
+          recordId: 'inv_123',
+          category: 'invalid_category_xyz' as any,
+          provenanceRef: {
+            tenantId: 'tenant_A',
+            sourceType: 'system',
+            sourceId: 'sys_1',
+          },
+        })
+      ).rejects.toThrow(DataClassificationValidationError);
     });
 
     it('rejects cross-tenant provenance reference', async () => {
