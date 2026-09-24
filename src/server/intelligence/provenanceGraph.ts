@@ -1149,6 +1149,77 @@ export class ProvenanceGraphService {
   }
 
   /**
+   * Server-Authoritative status transition for a provenance node (e.g. retracting a node)
+   * Enforces:
+   * - Tenant isolation (cannot modify another tenant's node)
+   * - Valid status transition ('active' | 'superseded' | 'retracted' | 'corrected')
+   * - Append-only event logging in /provenance_events (NODE_STATUS_CHANGED)
+   */
+  public async updateNodeStatus(
+    tenantId: string,
+    nodeId: string,
+    status: ProvenanceNodeStatus,
+    reason?: string
+  ): Promise<ProvenanceNode> {
+    validateNodeTenant(tenantId);
+    const db = this.getDb();
+    const nodeRef = db.collection('provenance_nodes').doc(nodeId);
+
+    const now = new Date().toISOString();
+    let updatedNode: ProvenanceNode | null = null;
+
+    await db.runTransaction(async (transaction: any) => {
+      const doc = await transaction.get(nodeRef);
+      if (!doc.exists) {
+        throw new ProvenanceValidationError(`Provenance node '${nodeId}' does not exist`);
+      }
+      const data = doc.data() as ProvenanceNode;
+      if (data.tenantId !== tenantId) {
+        throw new ProvenanceSecurityError(`Cross-tenant status modification rejected for node '${nodeId}'`);
+      }
+
+      updatedNode = {
+        ...data,
+        status,
+        metadata: {
+          ...data.metadata,
+          ...(reason ? { statusChangeReason: reason } : {}),
+          statusChangedAt: now,
+        },
+      };
+
+      transaction.update(nodeRef, {
+        status,
+        metadata: updatedNode.metadata,
+      });
+
+      // Log append-only audit event
+      const eventId = computeProvenanceEventId(tenantId, 'NODE_STATUS_CHANGED', nodeId, now);
+      const eventRef = db.collection('provenance_events').doc(eventId);
+      const event: ProvenanceEvent = {
+        eventId,
+        tenantId,
+        eventType: 'NODE_STATUS_CHANGED',
+        nodeId,
+        payload: {
+          previousStatus: data.status,
+          newStatus: status,
+          reason: reason || 'status transition',
+        },
+        eventHash: computeSha256(JSON.stringify({ nodeId, previousStatus: data.status, newStatus: status, tenantId })),
+        recordedAt: now,
+      };
+      transaction.set(eventRef, event);
+    });
+
+    if (!updatedNode) {
+      throw new ProvenanceValidationError(`Failed to update status for node '${nodeId}'`);
+    }
+
+    return updatedNode;
+  }
+
+  /**
    * Authoritative Provenance Validation Boundary
    * Validates that a referenced provenance node:
    * 1. Exists in /provenance_nodes

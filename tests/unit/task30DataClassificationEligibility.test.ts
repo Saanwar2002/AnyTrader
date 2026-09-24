@@ -187,7 +187,23 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('registers a classification record server-authoritatively and appends history', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        const service = new DataClassificationEligibilityService(db as any);
+        const rightsService = new DataRightsService(db as any);
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+        const service = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService,
+          archiveService
+        );
+
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'property_inspection',
+          sourceId: 'insp_99',
+          sourceVersion: 1,
+        });
 
         const record = await service.registerClassification({
           tenantId: 'tenant_A',
@@ -196,6 +212,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           category: 'property_intelligence',
           sensitivity: 'confidential',
           provenanceRef: {
+            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'property_inspection',
             sourceId: 'insp_99',
@@ -219,7 +236,15 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('evaluates eligibility and blocks unclassified data for external AI training', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        const service = new DataClassificationEligibilityService(db as any);
+        const rightsService = new DataRightsService(db as any);
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+        const service = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService,
+          archiveService
+        );
 
         const result = await service.evaluateEligibility({
           tenantId: 'tenant_A',
@@ -265,6 +290,20 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           },
         });
 
+        // Create Task 28 Provenance Node
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'inspection',
+          sourceId: 'insp_1',
+          sourceVersion: 1,
+          rightsReference: {
+            rightsId: rightsRecord.rightsId,
+            tenantId: 'tenant_A',
+            status: 'active',
+          },
+        });
+
         // Register Data Classification
         const classification = await classificationService.registerClassification({
           tenantId: 'tenant_A',
@@ -272,6 +311,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           recordId: 'pass_200',
           category: 'property_intelligence',
           provenanceRef: {
+            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'inspection',
             sourceId: 'insp_1',
@@ -378,7 +418,23 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('blocks eligibility when classification is revoked', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        const service = new DataClassificationEligibilityService(db as any);
+        const rightsService = new DataRightsService(db as any);
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
+        const service = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService,
+          archiveService
+        );
+
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'system',
+          sourceId: 'sys_1',
+          sourceVersion: 1,
+        });
 
         const classification = await service.registerClassification({
           tenantId: 'tenant_A',
@@ -386,6 +442,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           recordId: 'report_1',
           category: 'transactional_operational',
           provenanceRef: {
+            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'system',
             sourceId: 'sys_1',
@@ -416,10 +473,12 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
         const db = context.firestore();
         const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
         const classificationService = new DataClassificationEligibilityService(
           db as any,
           rightsService,
-          provenanceService
+          provenanceService,
+          archiveService
         );
 
         // 1. Create canonical Task 27 Data Rights
@@ -530,11 +589,14 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('fails closed when attempting cross-tenant provenance reference', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
         const classificationService = new DataClassificationEligibilityService(
           db as any,
-          undefined,
-          provenanceService
+          rightsService,
+          provenanceService,
+          archiveService
         );
 
         // Tenant B creates a node
@@ -569,10 +631,12 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
         const db = context.firestore();
         const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
         const classificationService = new DataClassificationEligibilityService(
           db as any,
           rightsService,
-          provenanceService
+          provenanceService,
+          archiveService
         );
 
         const provNode = await provenanceService.createNode({
@@ -621,11 +685,14 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('fails closed when provenance source identity is mismatched', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
         const classificationService = new DataClassificationEligibilityService(
           db as any,
-          undefined,
-          provenanceService
+          rightsService,
+          provenanceService,
+          archiveService
         );
 
         const provNode = await provenanceService.createNode({
@@ -660,18 +727,22 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
 
         expect(decision.eligible).toBe(false);
         expect(decision.outcome).toBe('blocked_by_provenance');
-        expect(decision.reason).toContain('mismatches');
+        expect(decision.reason).toContain('sourceType');
+        expect(decision.reason).toContain('does not match');
       });
     });
 
     it('fails closed when provenance content hash has been tampered with', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
+        const archiveService = new ContractorArchiveRightsService(db as any, rightsService, provenanceService);
         const classificationService = new DataClassificationEligibilityService(
           db as any,
-          undefined,
-          provenanceService
+          rightsService,
+          provenanceService,
+          archiveService
         );
 
         const provNode = await provenanceService.createNode({
