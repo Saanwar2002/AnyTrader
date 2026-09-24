@@ -1,6 +1,6 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 31 / 31R: AI Training & Usage Controls (September 24, 2026)
+## 🛡️ AnyTrader V8.3 — Task 31 / 31R / 31R2: AI Training & Usage Controls (September 24, 2026)
 - **1. Server-Authoritative AI Training & Usage Controls Engine (`AiTrainingUsageControlsService`)**:
   - Implemented `AiTrainingUsageControlsService` in `src/server/intelligence/aiTrainingUsageControls.ts` establishing server-authoritative controls over AI usage purposes and training consent.
   - **Explicit Purpose Isolation (`internal_ai_use != external_ai_training`)**:

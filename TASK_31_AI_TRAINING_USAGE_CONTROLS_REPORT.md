@@ -104,7 +104,18 @@ Strict UID-as-tenant boundary (`tenantId === request.auth.uid` or `isAdmin()`). 
 
 ---
 
-## 7. Strict Task Boundary Compliance
+## 7. Task 31R2 Emulator Test Lifecycle & Trusted Context Remediation Summary
 
-- **Task 31 / 31R**: Completed, verified, and documented.
+1. **Test Fixture Lifecycle Scoping Refactoring**:
+   - Refactored `tests/unit/task31AiTrainingUsageControls.test.ts` so that entire server-authoritative service operations (`DataRightsService`, `ProvenanceGraphService`, `ContractorArchiveRightsService`, `DataClassificationEligibilityService`, `AiTrainingUsageControlsService`) execute completely within the lifetime of the `testEnv.withSecurityRulesDisabled(async (context) => { ... })` callback.
+   - Eliminated client instance escaping/termination errors (`FirebaseError: The client has already been terminated.`).
+2. **Security Rules & Zero-Trust Integrity**:
+   - Preserved `firestore.rules` zero-trust client write restriction (`allow create, update, delete: if false;`) across `/ai_usage_controls`, `/ai_usage_controls_history`, and `/ai_usage_decisions`.
+   - Verified that authenticated tenant reads succeed only for owned records and fail with `PERMISSION_DENIED` for cross-tenant access.
+
+---
+
+## 8. Strict Task Boundary Compliance
+
+- **Task 31 / 31R / 31R2**: Completed, verified, and documented.
 - **Tasks 32, 33, 34 & V8.4**: Not started.
