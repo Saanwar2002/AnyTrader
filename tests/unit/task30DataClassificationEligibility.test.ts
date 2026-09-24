@@ -187,16 +187,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('registers a classification record server-authoritatively and appends history', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const service = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        // Seed provenance node
-        const provNode = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'property_inspection',
-          sourceId: 'insp_99',
-        });
+        const service = new DataClassificationEligibilityService(db as any);
 
         const record = await service.registerClassification({
           tenantId: 'tenant_A',
@@ -205,7 +196,6 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           category: 'property_intelligence',
           sensitivity: 'confidential',
           provenanceRef: {
-            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'property_inspection',
             sourceId: 'insp_99',
@@ -275,18 +265,6 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           },
         });
 
-        // Create Task 28 Provenance Node
-        const provNode = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'inspection',
-          sourceId: 'insp_1',
-          rightsReference: {
-            rightsId: rightsRecord.rightsId,
-            tenantId: 'tenant_A',
-          },
-        });
-
         // Register Data Classification
         const classification = await classificationService.registerClassification({
           tenantId: 'tenant_A',
@@ -294,7 +272,6 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           recordId: 'pass_200',
           category: 'property_intelligence',
           provenanceRef: {
-            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'inspection',
             sourceId: 'insp_1',
@@ -359,15 +336,13 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           ],
         });
 
-        // Seed Provenance Node for contractor archive
-        const provNode = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'contractor_archive',
-          sourceId: archiveReg.archiveId,
-        });
+        if (!archiveReg.provenanceNode) {
+          throw new Error('Expected contractor archive registration to create canonical provenance node');
+        }
 
-        // Register Data Classification linking to archive component
+        const provNode = archiveReg.provenanceNode;
+
+        // Register Data Classification linking to archive component using canonical provenanceNode
         const classification = await classificationService.registerClassification({
           tenantId: 'tenant_A',
           recordType: 'archive_photo',
@@ -375,9 +350,9 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           category: 'contractor_archive',
           provenanceRef: {
             nodeId: provNode.nodeId,
-            tenantId: 'tenant_A',
-            sourceType: 'contractor_archive',
-            sourceId: archiveReg.archiveId,
+            tenantId: provNode.tenantId,
+            sourceType: provNode.sourceType,
+            sourceId: provNode.sourceId,
           },
           archiveRef: {
             archiveId: archiveReg.archiveId,
@@ -403,16 +378,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('blocks eligibility when classification is revoked', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const service = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        // Seed Provenance Node
-        const provNode = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'system',
-          sourceId: 'sys_1',
-        });
+        const service = new DataClassificationEligibilityService(db as any);
 
         const classification = await service.registerClassification({
           tenantId: 'tenant_A',
@@ -420,7 +386,6 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           recordId: 'report_1',
           category: 'transactional_operational',
           provenanceRef: {
-            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'system',
             sourceId: 'sys_1',
@@ -449,295 +414,81 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
     it('passes eligibility when referencing a valid, active provenance node', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
         const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService
+        );
 
-        const node = await provenanceService.createNode({
+        // 1. Create canonical Task 27 Data Rights
+        const rights = await rightsService.createDataRightsRecord({
           tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'job_attachment',
-          sourceId: 'att_101',
-        });
-
-        const classification = await classificationService.registerClassification({
-          tenantId: 'tenant_A',
-          recordType: 'attachment',
-          recordId: 'att_101',
-          category: 'transactional_operational',
-          provenanceRef: {
-            nodeId: node.nodeId,
+          subject: { type: 'property', id: 'prop_99' },
+          owner: { type: 'homeowner', id: 'tenant_A' },
+          source: { type: 'survey', id: 'srv_1', tenantId: 'tenant_A' },
+          purposes: {
+            internal_platform_operation: 'allowed',
+            internal_ai_use: 'allowed',
+            external_ai_training: 'allowed',
+            third_party_sharing: 'allowed',
+          },
+          provenance: {
+            sourceType: 'survey',
+            sourceId: 'srv_1',
             tenantId: 'tenant_A',
-            sourceType: 'job_attachment',
-            sourceId: 'att_101',
           },
         });
 
-        const result = await classificationService.evaluateEligibility({
+        // 2. Create canonical Task 28 Provenance Node
+        const provNode = await provenanceService.createNode({
           tenantId: 'tenant_A',
-          recordType: 'attachment',
-          recordId: 'att_101',
-          requestedPurpose: 'internal_platform_operation',
+          nodeType: 'observation',
+          sourceType: 'survey',
+          sourceId: 'srv_1',
+          sourceVersion: 1,
+          rightsReference: {
+            rightsId: rights.rightsId,
+            tenantId: 'tenant_A',
+            status: 'active',
+          },
+        });
+
+        // 3. Register classification referencing the canonical provenance node
+        const classification = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'property',
+          recordId: 'prop_99',
+          category: 'property_intelligence',
+          sensitivity: 'confidential',
+          provenanceRef: {
+            nodeId: provNode.nodeId,
+            tenantId: 'tenant_A',
+            sourceType: 'survey',
+            sourceId: 'srv_1',
+          },
+          rightsRef: {
+            rightsId: rights.rightsId,
+            tenantId: 'tenant_A',
+          },
+        });
+
+        // 4. Evaluate eligibility
+        const decision = await classificationService.evaluateEligibility({
+          tenantId: 'tenant_A',
+          recordType: 'property',
+          recordId: 'prop_99',
+          requestedPurpose: 'external_ai_training',
           classificationId: classification.classificationId,
         });
 
-        expect(result.eligible).toBe(true);
-        expect(result.outcome).toBe('allowed');
+        expect(decision.eligible).toBe(true);
+        expect(decision.outcome).toBe('allowed');
       });
     });
 
-    it('blocks eligibility with outcome blocked_by_provenance when provenance node does not exist in registry', async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        // Direct write of classification record with dangling nonexistent nodeId
-        const fakeNodeId = 'pnode_000000000000000000000000';
-        const classificationId = 'dclass_dangling_prov';
-        await setDoc(doc(db, 'data_classifications', classificationId), {
-          classificationId,
-          tenantId: 'tenant_A',
-          recordType: 'ghost_record',
-          recordId: 'ghost_1',
-          category: 'property_intelligence',
-          sensitivity: 'internal',
-          restrictions: [],
-          version: 1,
-          provenanceRef: {
-            nodeId: fakeNodeId,
-            tenantId: 'tenant_A',
-            sourceType: 'ghost_source',
-            sourceId: 'ghost_1',
-          },
-          status: 'active',
-          contentHash: 'hash_placeholder',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-
-        const result = await classificationService.evaluateEligibility({
-          tenantId: 'tenant_A',
-          recordType: 'ghost_record',
-          recordId: 'ghost_1',
-          requestedPurpose: 'internal_platform_operation',
-          classificationId,
-        });
-
-        expect(result.eligible).toBe(false);
-        expect(result.outcome).toBe('blocked_by_provenance');
-        expect(result.reason).toContain('Task 28 Provenance validation failed');
-      });
-    });
-
-    it('blocks eligibility when referencing cross-tenant provenance node', async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        // Tenant B creates a valid provenance node
-        const nodeB = await provenanceService.createNode({
-          tenantId: 'tenant_B',
-          nodeType: 'source',
-          sourceType: 'tenant_b_data',
-          sourceId: 'b_data_1',
-        });
-
-        // Tenant A creates classification referencing Tenant B's node directly
-        const classificationId = 'dclass_cross_tenant_prov';
-        await setDoc(doc(db, 'data_classifications', classificationId), {
-          classificationId,
-          tenantId: 'tenant_A',
-          recordType: 'stolen_data',
-          recordId: 'stolen_1',
-          category: 'property_intelligence',
-          sensitivity: 'internal',
-          restrictions: [],
-          version: 1,
-          provenanceRef: {
-            nodeId: nodeB.nodeId,
-            tenantId: 'tenant_A', // references nodeB which belongs to tenant_B
-            sourceType: 'tenant_b_data',
-            sourceId: 'b_data_1',
-          },
-          status: 'active',
-          contentHash: 'hash_placeholder',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-
-        const result = await classificationService.evaluateEligibility({
-          tenantId: 'tenant_A',
-          recordType: 'stolen_data',
-          recordId: 'stolen_1',
-          requestedPurpose: 'internal_platform_operation',
-          classificationId,
-        });
-
-        expect(result.eligible).toBe(false);
-        expect(result.outcome).toBe('blocked_by_provenance');
-        expect(result.reason).toContain('Cross-tenant provenance reference rejected');
-      });
-    });
-
-    it('blocks eligibility when provenance node has status retracted', async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        const node = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'retracted_source',
-          sourceId: 'ret_1',
-        });
-
-        // Mark provenance node as retracted in Firestore
-        await updateDoc(doc(db, 'provenance_nodes', node.nodeId), {
-          status: 'retracted',
-        });
-
-        const classificationId = 'dclass_retracted_prov';
-        await setDoc(doc(db, 'data_classifications', classificationId), {
-          classificationId,
-          tenantId: 'tenant_A',
-          recordType: 'retracted_doc',
-          recordId: 'ret_1',
-          category: 'property_intelligence',
-          sensitivity: 'internal',
-          restrictions: [],
-          version: 1,
-          provenanceRef: {
-            nodeId: node.nodeId,
-            tenantId: 'tenant_A',
-            sourceType: 'retracted_source',
-            sourceId: 'ret_1',
-          },
-          status: 'active',
-          contentHash: 'hash_placeholder',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-
-        const result = await classificationService.evaluateEligibility({
-          tenantId: 'tenant_A',
-          recordType: 'retracted_doc',
-          recordId: 'ret_1',
-          requestedPurpose: 'internal_platform_operation',
-          classificationId,
-        });
-
-        expect(result.eligible).toBe(false);
-        expect(result.outcome).toBe('blocked_by_provenance');
-        expect(result.reason).toContain("has status 'retracted'");
-      });
-    });
-
-    it('blocks eligibility when provenance node source identity is mismatched', async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        const node = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'inspection_report',
-          sourceId: 'insp_100',
-        });
-
-        const classificationId = 'dclass_mismatched_source';
-        await setDoc(doc(db, 'data_classifications', classificationId), {
-          classificationId,
-          tenantId: 'tenant_A',
-          recordType: 'inspection_report',
-          recordId: 'insp_100',
-          category: 'property_intelligence',
-          sensitivity: 'internal',
-          restrictions: [],
-          version: 1,
-          provenanceRef: {
-            nodeId: node.nodeId,
-            tenantId: 'tenant_A',
-            sourceType: 'electric_certificate', // Mismatched sourceType!
-            sourceId: 'insp_100',
-          },
-          status: 'active',
-          contentHash: 'hash_placeholder',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-
-        const result = await classificationService.evaluateEligibility({
-          tenantId: 'tenant_A',
-          recordType: 'inspection_report',
-          recordId: 'insp_100',
-          requestedPurpose: 'internal_platform_operation',
-          classificationId,
-        });
-
-        expect(result.eligible).toBe(false);
-        expect(result.outcome).toBe('blocked_by_provenance');
-        expect(result.reason).toContain('sourceType');
-      });
-    });
-
-    it('blocks eligibility when provenance node content hash fails integrity verification', async () => {
-      await testEnv.withSecurityRulesDisabled(async (context) => {
-        const db = context.firestore();
-        const provenanceService = new ProvenanceGraphService(db as any);
-        const classificationService = new DataClassificationEligibilityService(db as any, undefined, provenanceService);
-
-        const node = await provenanceService.createNode({
-          tenantId: 'tenant_A',
-          nodeType: 'source',
-          sourceType: 'tampered_source',
-          sourceId: 'tamp_1',
-        });
-
-        // Corrupt contentHash directly in Firestore
-        await updateDoc(doc(db, 'provenance_nodes', node.nodeId), {
-          contentHash: 'bad_tampered_hash_000000000000000000000000000000000000000000000000',
-        });
-
-        const classificationId = 'dclass_tampered_prov';
-        await setDoc(doc(db, 'data_classifications', classificationId), {
-          classificationId,
-          tenantId: 'tenant_A',
-          recordType: 'tampered_data',
-          recordId: 'tamp_1',
-          category: 'property_intelligence',
-          sensitivity: 'internal',
-          restrictions: [],
-          version: 1,
-          provenanceRef: {
-            nodeId: node.nodeId,
-            tenantId: 'tenant_A',
-            sourceType: 'tampered_source',
-            sourceId: 'tamp_1',
-          },
-          status: 'active',
-          contentHash: 'hash_placeholder',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-
-        const result = await classificationService.evaluateEligibility({
-          tenantId: 'tenant_A',
-          recordType: 'tampered_data',
-          recordId: 'tamp_1',
-          requestedPurpose: 'internal_platform_operation',
-          classificationId,
-        });
-
-        expect(result.eligible).toBe(false);
-        expect(result.outcome).toBe('blocked_by_provenance');
-        expect(result.reason).toContain('content hash integrity failure');
-      });
-    });
-
-    it('guarantees internal AI is permitted while external AI training is strictly denied under same valid provenance', async () => {
+    it('fails closed when provenance node does not exist in graph', async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const db = context.firestore();
         const rightsService = new DataRightsService(db as any);
@@ -748,17 +499,245 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           provenanceService
         );
 
+        // Classification referencing nonexistent nodeId
+        const classification = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'property',
+          recordId: 'prop_missing_prov',
+          category: 'property_intelligence',
+          provenanceRef: {
+            nodeId: 'pnode_does_not_exist_xyz',
+            tenantId: 'tenant_A',
+            sourceType: 'survey',
+            sourceId: 'srv_missing',
+          },
+        });
+
+        const decision = await classificationService.evaluateEligibility({
+          tenantId: 'tenant_A',
+          recordType: 'property',
+          recordId: 'prop_missing_prov',
+          requestedPurpose: 'external_ai_training',
+          classificationId: classification.classificationId,
+        });
+
+        expect(decision.eligible).toBe(false);
+        expect(decision.outcome).toBe('blocked_by_provenance');
+        expect(decision.reason).toContain('does not exist');
+      });
+    });
+
+    it('fails closed when attempting cross-tenant provenance reference', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          undefined,
+          provenanceService
+        );
+
+        // Tenant B creates a node
+        const tenantBNode = await provenanceService.createNode({
+          tenantId: 'tenant_B',
+          nodeType: 'observation',
+          sourceType: 'doc',
+          sourceId: 'doc_1',
+          sourceVersion: 1,
+        });
+
+        // Tenant A tries to register classification with Tenant B's provenance node
+        await expect(
+          classificationService.registerClassification({
+            tenantId: 'tenant_A',
+            recordType: 'property',
+            recordId: 'prop_cross_tenant',
+            category: 'property_intelligence',
+            provenanceRef: {
+              nodeId: tenantBNode.nodeId,
+              tenantId: 'tenant_A', // claims tenant_A but node belongs to tenant_B
+              sourceType: 'doc',
+              sourceId: 'doc_1',
+            },
+          })
+        ).rejects.toThrow(DataClassificationSecurityError);
+      });
+    });
+
+    it('fails closed when provenance node is retracted', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService
+        );
+
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'sensor',
+          sourceId: 'sns_1',
+          sourceVersion: 1,
+        });
+
+        const classification = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'sensor_data',
+          recordId: 'sns_1',
+          category: 'property_intelligence',
+          provenanceRef: {
+            nodeId: provNode.nodeId,
+            tenantId: 'tenant_A',
+            sourceType: 'sensor',
+            sourceId: 'sns_1',
+          },
+        });
+
+        // Retract the provenance node
+        await provenanceService.updateNodeStatus(
+          'tenant_A',
+          provNode.nodeId,
+          'retracted',
+          'Sensor was faulty'
+        );
+
+        const decision = await classificationService.evaluateEligibility({
+          tenantId: 'tenant_A',
+          recordType: 'sensor_data',
+          recordId: 'sns_1',
+          requestedPurpose: 'external_ai_training',
+          classificationId: classification.classificationId,
+        });
+
+        expect(decision.eligible).toBe(false);
+        expect(decision.outcome).toBe('blocked_by_provenance');
+        expect(decision.reason).toContain('retracted');
+      });
+    });
+
+    it('fails closed when provenance source identity is mismatched', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          undefined,
+          provenanceService
+        );
+
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'meter_reading',
+          sourceId: 'mtr_001',
+          sourceVersion: 1,
+        });
+
+        // Register with mismatched sourceType/sourceId
+        const classification = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'meter_reading',
+          recordId: 'mtr_001',
+          category: 'property_intelligence',
+          provenanceRef: {
+            nodeId: provNode.nodeId,
+            tenantId: 'tenant_A',
+            sourceType: 'different_source',
+            sourceId: 'different_id',
+          },
+        });
+
+        const decision = await classificationService.evaluateEligibility({
+          tenantId: 'tenant_A',
+          recordType: 'meter_reading',
+          recordId: 'mtr_001',
+          requestedPurpose: 'external_ai_training',
+          classificationId: classification.classificationId,
+        });
+
+        expect(decision.eligible).toBe(false);
+        expect(decision.outcome).toBe('blocked_by_provenance');
+        expect(decision.reason).toContain('mismatches');
+      });
+    });
+
+    it('fails closed when provenance content hash has been tampered with', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          undefined,
+          provenanceService
+        );
+
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'observation',
+          sourceType: 'report',
+          sourceId: 'rep_1',
+          sourceVersion: 1,
+        });
+
+        // Register classification
+        const classification = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'report',
+          recordId: 'rep_1',
+          category: 'property_intelligence',
+          provenanceRef: {
+            nodeId: provNode.nodeId,
+            tenantId: 'tenant_A',
+            sourceType: 'report',
+            sourceId: 'rep_1',
+          },
+        });
+
+        // Tamper with contentHash directly in database
+        await updateDoc(doc(db, 'provenance_nodes', provNode.nodeId), {
+          contentHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        });
+
+        const decision = await classificationService.evaluateEligibility({
+          tenantId: 'tenant_A',
+          recordType: 'report',
+          recordId: 'rep_1',
+          requestedPurpose: 'external_ai_training',
+          classificationId: classification.classificationId,
+        });
+
+        expect(decision.eligible).toBe(false);
+        expect(decision.outcome).toBe('blocked_by_provenance');
+        expect(decision.reason).toContain('tampering');
+      });
+    });
+
+    it('preserves internal AI operations while strictly blocking external purposes without sovereign rights', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const rightsService = new DataRightsService(db as any);
+        const provenanceService = new ProvenanceGraphService(db as any);
+        const classificationService = new DataClassificationEligibilityService(
+          db as any,
+          rightsService,
+          provenanceService
+        );
+
+        // Rights configured with internal_ai_use: 'allowed', external_ai_training: 'denied'
         const rights = await rightsService.createDataRightsRecord({
           tenantId: 'tenant_A',
           subject: { type: 'property', id: 'prop_77' },
-          owner: { type: 'user', id: 'tenant_A' },
-          source: { type: 'survey', id: 'srv_1' },
+          owner: { type: 'homeowner', id: 'tenant_A' },
+          source: { type: 'survey', id: 'srv_1', tenantId: 'tenant_A' },
           purposes: {
             internal_platform_operation: 'allowed',
             internal_ai_use: 'allowed',
             external_ai_training: 'denied',
-            commercial_licensing: 'denied',
             third_party_sharing: 'denied',
+            commercial_licensing: 'denied',
             export: 'denied',
           },
           provenance: {
@@ -768,14 +747,16 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           },
         });
 
-        const node = await provenanceService.createNode({
+        const provNode = await provenanceService.createNode({
           tenantId: 'tenant_A',
-          nodeType: 'source',
+          nodeType: 'observation',
           sourceType: 'survey',
           sourceId: 'srv_1',
+          sourceVersion: 1,
           rightsReference: {
             rightsId: rights.rightsId,
             tenantId: 'tenant_A',
+            status: 'active',
           },
         });
 
@@ -785,7 +766,7 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
           recordId: 'prop_77',
           category: 'property_intelligence',
           provenanceRef: {
-            nodeId: node.nodeId,
+            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'survey',
             sourceId: 'srv_1',
@@ -820,15 +801,15 @@ describe('V8.3 Task 30 — Firebase Emulator Data Classification & Eligibility S
         expect(externalAi.outcome).toBe('denied');
 
         // 3. Commercial Licensing -> DENIED
-        const commLic = await classificationService.evaluateEligibility({
+        const commLicensing = await classificationService.evaluateEligibility({
           tenantId: 'tenant_A',
           recordType: 'property',
           recordId: 'prop_77',
           requestedPurpose: 'commercial_licensing',
           classificationId: classification.classificationId,
         });
-        expect(commLic.eligible).toBe(false);
-        expect(commLic.outcome).toBe('denied');
+        expect(commLicensing.eligible).toBe(false);
+        expect(commLicensing.outcome).toBe('denied');
 
         // 4. Third-Party Sharing -> DENIED
         const tpSharing = await classificationService.evaluateEligibility({
