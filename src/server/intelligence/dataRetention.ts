@@ -488,6 +488,17 @@ export class DataRetentionService {
   }
 
   /**
+   * Server-authoritative admin lookup for a retention policy by policyId.
+   */
+  public async getRetentionPolicyAdmin(policyId: string): Promise<RetentionPolicy | null> {
+    if (!policyId) return null;
+    const db = this.getDb();
+    const snap = await db.collection('data_retention_policies').doc(policyId).get();
+    if (!snap.exists) return null;
+    return snap.data() as RetentionPolicy;
+  }
+
+  /**
    * Looks up retention policy for tenant and recordType.
    */
   public async getRetentionPolicyForRecordType(
@@ -500,15 +511,17 @@ export class DataRetentionService {
 
   /**
    * Applies or removes a server-authoritative legal hold on a policy.
+   * If authorizedAdminUid is provided, tenant authority is derived from the authoritative policy record.
    */
   public async setLegalHold(
     tenantId: string,
     policyId: string,
     legalHold: boolean,
-    reason?: string
+    reason?: string,
+    authorizedAdminUid?: string
   ): Promise<RetentionPolicy> {
-    if (!tenantId || !policyId) {
-      throw new DataRetentionValidationError('Missing tenantId or policyId for setLegalHold');
+    if (!policyId) {
+      throw new DataRetentionValidationError('Missing policyId for setLegalHold');
     }
     const db = this.getDb();
     const policyRef = db.collection('data_retention_policies').doc(policyId);
@@ -518,12 +531,14 @@ export class DataRetentionService {
     }
 
     const policy = snap.data() as RetentionPolicy;
-    if (policy.tenantId !== tenantId) {
+    // Strict administrative privilege boundary: Only authorized administrators can apply or remove legal holds
+    if (!authorizedAdminUid) {
       throw new DataRetentionSecurityError(
-        `Cross-tenant legal hold modification rejected for policy '${policyId}'`
+        `Privilege required: Only authorized administrators can apply or remove legal holds on policy '${policyId}'`
       );
     }
 
+    const effectiveTenantId = policy.tenantId;
     const now = new Date().toISOString();
     const updatedPolicy: RetentionPolicy = {
       ...policy,
@@ -553,12 +568,12 @@ export class DataRetentionService {
     await policyRef.set(cleaned);
 
     await this.recordLifecycleEvent({
-      tenantId,
+      tenantId: effectiveTenantId,
       eventType: legalHold ? 'LEGAL_HOLD_APPLIED' : 'LEGAL_HOLD_REMOVED',
       recordType: policy.recordType,
       recordId: policyId,
       policyVersion: cleaned.version,
-      payload: { legalHold, reason },
+      payload: { legalHold, reason, authorizedAdminUid: authorizedAdminUid || null },
     });
 
     return cleaned;

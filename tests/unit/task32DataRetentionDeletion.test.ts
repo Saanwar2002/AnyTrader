@@ -370,7 +370,7 @@ describe('V8.3 Task 32 — Firebase Emulator Data Retention, Revocation & Deleti
           retentionUntil: '2020-01-01T00:00:00Z', // Expired
         });
 
-        await retentionService.setLegalHold('tenant_A', policy.policyId, true, 'Court Subpoena Hold');
+        await retentionService.setLegalHold('tenant_A', policy.policyId, true, 'Court Subpoena Hold', 'admin_court_officer');
 
         const evalRes = await retentionService.evaluateRetentionEligibility(
           'tenant_A',
@@ -584,6 +584,185 @@ describe('V8.3 Task 32 — Firebase Emulator Data Retention, Revocation & Deleti
             requestId: req.requestId,
           })
         ).rejects.toThrow(DataRetentionSecurityError);
+      });
+    });
+
+    it('permits authorized administrator to apply legal hold and blocks cross-tenant unauthorized legal hold removal', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        const policy = await retentionService.registerRetentionPolicy({
+          tenantId: 'tenant_victim',
+          recordType: 'dispute_evidence',
+          retentionClass: 'statutory',
+        });
+
+        // 1. Authorized Admin applies legal hold using authoritative tenant
+        const heldPolicy = await retentionService.setLegalHold(
+          'tenant_victim',
+          policy.policyId,
+          true,
+          'Regulatory Enforcement Hold',
+          'admin_compliance_uid'
+        );
+        expect(heldPolicy.legalHold).toBe(true);
+
+        // Verify audit event recorded with admin attribution
+        const eventDoc = await db.collection('data_lifecycle_events')
+          .where('tenantId', '==', 'tenant_victim')
+          .where('eventType', '==', 'LEGAL_HOLD_APPLIED')
+          .get();
+        expect(eventDoc.docs.length).toBeGreaterThan(0);
+        expect(eventDoc.docs[0].data().payload.authorizedAdminUid).toBe('admin_compliance_uid');
+
+        // 2. Unauthorized cross-tenant caller cannot remove legal hold
+        await expect(
+          retentionService.setLegalHold(
+            'tenant_intruder',
+            policy.policyId,
+            false,
+            'Malicious unhold'
+          )
+        ).rejects.toThrow(DataRetentionSecurityError);
+
+        // Verify policy still under legal hold
+        const currentPolicy = await retentionService.getRetentionPolicyAdmin(policy.policyId);
+        expect(currentPolicy?.legalHold).toBe(true);
+      });
+    });
+  });
+
+  describe('Vector 6: Task 32R-1 API Adversarial & Tenant Authority Boundary Suite', () => {
+    it('proves ordinary authenticated users cannot create or remove legal holds (fails closed in database state)', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        const ordinaryTenant = 'tenant_standard_user';
+
+        // 1. Ordinary user registers policy without legal hold
+        const policy = await retentionService.registerRetentionPolicy({
+          tenantId: ordinaryTenant,
+          recordType: 'standard_log',
+          retentionClass: 'operational',
+        });
+        expect(policy.legalHold).toBe(false);
+
+        // 2. Admin applies legal hold
+        await retentionService.setLegalHold(
+          ordinaryTenant,
+          policy.policyId,
+          true,
+          'Fraud Investigation Hold',
+          'admin_security_lead'
+        );
+
+        // Verify hold is active in database
+        const snap1 = await retentionService.getRetentionPolicyAdmin(policy.policyId);
+        expect(snap1?.legalHold).toBe(true);
+
+        // 3. Ordinary tenant attempts to clear hold without admin claims -> Fails Closed
+        await expect(
+          retentionService.setLegalHold(
+            ordinaryTenant,
+            policy.policyId,
+            false,
+            'Clear my hold'
+          )
+        ).rejects.toThrow(DataRetentionSecurityError);
+
+        // Database state MUST remain under legal hold
+        const snap2 = await retentionService.getRetentionPolicyAdmin(policy.policyId);
+        expect(snap2?.legalHold).toBe(true);
+        expect(snap2?.legalHoldReason).toBe('Fraud Investigation Hold');
+      });
+    });
+
+    it('proves a user cannot substitute another tenant ID to compromise foreign policies', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        const victimTenant = 'tenant_victim_enterprise';
+        const attackerTenant = 'tenant_attacker_malicious';
+
+        // 1. Victim registers policy
+        const victimPolicy = await retentionService.registerRetentionPolicy({
+          tenantId: victimTenant,
+          recordType: 'financial_ledger',
+          retentionClass: 'statutory',
+        });
+
+        // 2. Attacker attempts cross-tenant policy read
+        await expect(
+          retentionService.getRetentionPolicy(victimPolicy.policyId, attackerTenant)
+        ).rejects.toThrow(DataRetentionSecurityError);
+
+        // 3. Attacker attempts cross-tenant hold alteration
+        await expect(
+          retentionService.setLegalHold(
+            attackerTenant,
+            victimPolicy.policyId,
+            true,
+            'Tampered hold'
+          )
+        ).rejects.toThrow(DataRetentionSecurityError);
+
+        // Database state remains intact
+        const snap = await retentionService.getRetentionPolicyAdmin(victimPolicy.policyId);
+        expect(snap?.tenantId).toBe(victimTenant);
+        expect(snap?.legalHold).toBe(false);
+      });
+    });
+
+    it('proves server-authoritative deletion target resolution protects non-target collections in Firestore', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        const tenant = 'tenant_secure_deletion';
+
+        // 1. Register expired policy for temporary_upload
+        await retentionService.registerRetentionPolicy({
+          tenantId: tenant,
+          recordType: 'temporary_upload',
+          retentionClass: 'temporary',
+          retentionUntil: '2020-01-01T00:00:00Z',
+        });
+
+        // 2. Seed document in target collection ('temporary_files') and sensitive non-target collection ('jobs')
+        await setDoc(doc(db, 'temporary_files', 'temp_doc_101'), {
+          tenantId: tenant,
+          tempPayload: 'to be deleted',
+        });
+        await setDoc(doc(db, 'jobs', 'job_secure_202'), {
+          tenantId: tenant,
+          title: 'Protected Core Job Record',
+        });
+
+        // 3. Request and process deletion
+        const req = await retentionService.requestDeletion({
+          tenantId: tenant,
+          recordType: 'temporary_upload',
+          recordId: 'temp_doc_101',
+          reason: 'Scheduled lifecycle cleanup',
+        });
+
+        const completed = await retentionService.processDeletion({
+          tenantId: tenant,
+          requestId: req.requestId,
+        });
+        expect(completed.status).toBe('completed');
+
+        // Target document is erased
+        const targetSnap = await getDoc(doc(db, 'temporary_files', 'temp_doc_101'));
+        expect(targetSnap.exists()).toBe(false);
+
+        // Sensitive non-target document in jobs is completely preserved
+        const safeSnap = await getDoc(doc(db, 'jobs', 'job_secure_202'));
+        expect(safeSnap.exists()).toBe(true);
+        expect(safeSnap.data()?.title).toBe('Protected Core Job Record');
       });
     });
   });

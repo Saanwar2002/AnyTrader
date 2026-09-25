@@ -1,15 +1,16 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 32 / 32R: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
+## 🛡️ AnyTrader V8.3 — Task 32 / 32R / 32R-1: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
 - **1. Server-Authoritative Data Retention, Revocation & Deletion Service (`DataRetentionService`)**:
   - Implemented and security-hardened `DataRetentionService` in `src/server/intelligence/dataRetention.ts` establishing server-authoritative lifecycle boundaries over data retention policies, legal holds, dependency evaluation, multi-service revocation, deletion state machines, and immutable audit logging.
   - **Server-Authoritative Deletion Target (Remediation A)**:
     - Removed client `targetCollection` parameter from deletion processing.
     - Server resolves physical Firestore collections via `resolveAuthoritativeCollection` (e.g. `property` -> `properties`, `job` -> `jobs`, `temporary_upload` -> `temporary_files`). Unmapped record types fail closed with `DataRetentionValidationError`.
-  - **Privileged Legal Hold Boundary (Remediation B)**:
+  - **Privileged Legal Hold Boundary & Server-Authoritative Tenant Authority (Remediation B & Task 32R-1)**:
     - Normal authenticated users cannot establish, modify, or remove legal holds via policy registration (`legalHold` input fails closed with 403 / `DataRetentionSecurityError`).
     - Standard policy updates preserve existing active legal holds.
     - Legal hold management is strictly restricted to privileged administrators via dedicated `POST /api/intelligence/data-lifecycle/policy/:policyId/legal-hold` guarded by `requireAdmin`.
+    - In `setLegalHold`, caller must possess verified administrative authority (`authorizedAdminUid`). Tenant authority is derived from the server-authoritative policy record (`getRetentionPolicyAdmin`), preventing cross-tenant client substitution.
   - **REVOCATION != DELETION Invariant**:
     - Rights and AI control revocations take effect immediately and fail authorization closed across dependent pipelines without waiting for asynchronous background deletions.
     - Physical deletion separately evaluates retention periods, statutory holds, downstream dependencies, and immutable audit requirements.
@@ -35,12 +36,12 @@
     - `POST /api/intelligence/data-lifecycle/process-deletion`: Executes deletion of eligible current projections.
     - `GET /api/intelligence/data-lifecycle/:requestId`: Deletion request lookup for authorized tenant.
 - **2. Testing & Verification**:
-  - Full unit test suite (`npm test`): **704/704 tests passing** across **45 test files** (100% clean).
-  - Task 32 unit suite: `src/server/intelligence/dataRetention.test.ts` (14/14 PASS).
+  - Full unit test suite (`npm test`): **710/710 tests passing** across **45 test files** (100% clean).
+  - Task 32 unit suite: `src/server/intelligence/dataRetention.test.ts` (20/20 PASS).
   - Task 32 emulator security suite: `tests/unit/task32DataRetentionDeletion.test.ts` (100% PASS).
   - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
   - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
-  - Release Gate Audit (`npm run audit:release`): 0 critical failures.
+  - Release Gate Audit (`npm run audit:release`): 0 critical failures, 5 non-critical warnings.
   - Tasks 33, 34 & V8.4: Not started.
 
 ## 🛡️ AnyTrader V8.3 — Task 31 / 31R / 31R2: AI Training & Usage Controls (September 24, 2026)

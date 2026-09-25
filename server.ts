@@ -6240,7 +6240,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     try {
       const user = (req as any).user;
       const { policyId } = req.params;
-      const { tenantId, legalHold, reason } = req.body || {};
+      const { legalHold, reason } = req.body || {};
 
       if (typeof legalHold !== "boolean") {
         return res.status(400).json({ error: "Missing or invalid 'legalHold' boolean field" });
@@ -6250,12 +6250,18 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         dataRetentionService.setFirestoreDb(db);
       }
 
-      const targetTenantId = tenantId || user.uid;
+      // Server-authoritative tenant derivation: lookup policy to verify and derive tenant
+      const existingPolicy = await dataRetentionService.getRetentionPolicyAdmin(policyId);
+      if (!existingPolicy) {
+        return res.status(404).json({ error: `Retention policy '${policyId}' not found` });
+      }
+
       const policy = await dataRetentionService.setLegalHold(
-        targetTenantId,
+        existingPolicy.tenantId,
         policyId,
         legalHold,
-        reason
+        reason,
+        user.uid
       );
 
       res.json({
