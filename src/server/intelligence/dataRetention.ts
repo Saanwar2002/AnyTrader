@@ -180,7 +180,6 @@ export interface ProcessDeletionInput {
   tenantId: string;
   requestId: string;
   processedBy?: string;
-  targetCollection?: string; // Optional collection name to physically erase current projection
 }
 
 export interface LifecycleRevocationInput {
@@ -348,6 +347,39 @@ export class DataRetentionService {
   }
 
   /**
+   * Resolves the server-authoritative Firestore collection for a validated record type.
+   * Unknown record types return null (fails closed).
+   */
+  public resolveAuthoritativeCollection(recordType: string): string | null {
+    if (!recordType || typeof recordType !== 'string') return null;
+    const normalized = recordType.trim().toLowerCase();
+    const mappings: Record<string, string> = {
+      property: 'properties',
+      properties: 'properties',
+      property_passport: 'properties',
+      property_doc: 'properties',
+      job: 'jobs',
+      jobs: 'jobs',
+      quote: 'quotes',
+      quotes: 'quotes',
+      review: 'reviews',
+      reviews: 'reviews',
+      temporary_upload: 'temporary_files',
+      temporary_uploads: 'temporary_files',
+      temporary_file: 'temporary_files',
+      temporary_files: 'temporary_files',
+      contractor_document: 'contractor_documents',
+      contractor_documents: 'contractor_documents',
+      dispute_evidence: 'dispute_evidence',
+      user_profile: 'users',
+      user: 'users',
+      users: 'users',
+    };
+
+    return mappings[normalized] || null;
+  }
+
+  /**
    * Registers or updates a server-authoritative retention policy for a tenant & recordType.
    */
   public async registerRetentionPolicy(input: RegisterRetentionPolicyInput): Promise<RetentionPolicy> {
@@ -383,6 +415,10 @@ export class DataRetentionService {
       }
     }
 
+    // Preserve existing legal hold if not explicitly overridden by authorized input
+    const isLegalHold = input.legalHold !== undefined ? input.legalHold === true : (existingPolicy ? existingPolicy.legalHold === true : false);
+    const legalHoldReason = isLegalHold ? (input.legalHoldReason || (existingPolicy ? existingPolicy.legalHoldReason : undefined)) : undefined;
+
     const version = existingPolicy ? existingPolicy.version + 1 : 1;
     const policyRecord: RetentionPolicy = {
       policyId,
@@ -391,9 +427,9 @@ export class DataRetentionService {
       retentionClass: input.retentionClass,
       ...(input.retentionPeriodDays !== undefined ? { retentionPeriodDays: input.retentionPeriodDays } : {}),
       ...(retentionUntil ? { retentionUntil } : {}),
-      legalHold: input.legalHold === true,
-      ...(input.legalHold === true && input.legalHoldReason ? { legalHoldReason: input.legalHoldReason } : {}),
-      ...(input.legalHold === true ? { legalHoldAppliedAt: now } : {}),
+      legalHold: isLegalHold,
+      ...(isLegalHold && legalHoldReason ? { legalHoldReason } : {}),
+      ...(isLegalHold ? { legalHoldAppliedAt: existingPolicy?.legalHoldAppliedAt || now } : {}),
       version,
       status: 'active',
       createdAt: existingPolicy ? existingPolicy.createdAt : now,
@@ -1000,8 +1036,14 @@ export class DataRetentionService {
       // Ignore
     }
 
-    // 5. Erase target document from its collection (if collection is known or provided)
-    const targetCollection = input.targetCollection || (reqData.recordType.endsWith('s') ? reqData.recordType : `${reqData.recordType}s`);
+    // 5. Erase target document from server-authoritative collection
+    const targetCollection = this.resolveAuthoritativeCollection(reqData.recordType);
+    if (!targetCollection) {
+      throw new DataRetentionValidationError(
+        `No authoritative physical collection mapping exists for record type '${reqData.recordType}'`
+      );
+    }
+
     try {
       const targetRef = db.collection(targetCollection).doc(reqData.recordId);
       const targetSnap = await targetRef.get();
@@ -1015,7 +1057,7 @@ export class DataRetentionService {
       }
     } catch (err: any) {
       if (err instanceof DataRetentionSecurityError) throw err;
-      // Target might not exist as a physical collection, proceed
+      // Target might not exist as a physical document, proceed
     }
 
     // 6. Complete deletion request

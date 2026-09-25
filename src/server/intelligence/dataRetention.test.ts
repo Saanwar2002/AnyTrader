@@ -389,7 +389,7 @@ describe('DataRetentionService Unit Tests', () => {
       });
 
       // 2. Put dummy document in collection
-      await mockDb.collection('temporary_uploads').doc('upload_1').set({
+      await mockDb.collection('temporary_files').doc('upload_1').set({
         tenantId: 'tenant_A',
         fileName: 'temp.jpg',
       });
@@ -405,7 +405,7 @@ describe('DataRetentionService Unit Tests', () => {
       expect(req.status).toBe('approved');
       expect(req.requestId.startsWith('delreq_')).toBe(true);
 
-      // 4. Process deletion
+      // 4. Process deletion (Server-authoritative target collection 'temporary_files' resolved from recordType)
       const completedReq = await retentionService.processDeletion({
         tenantId: 'tenant_A',
         requestId: req.requestId,
@@ -414,8 +414,8 @@ describe('DataRetentionService Unit Tests', () => {
       expect(completedReq.status).toBe('completed');
       expect(completedReq.result?.erasedRecordsCount).toBe(1);
 
-      // Verify target document was physically erased
-      const docSnap = await mockDb.collection('temporary_uploads').doc('upload_1').get();
+      // Verify target document was physically erased from authoritative collection
+      const docSnap = await mockDb.collection('temporary_files').doc('upload_1').get();
       expect(docSnap.exists).toBe(false);
 
       // 5. Idempotency test: repeating processDeletion returns same completed record
@@ -425,6 +425,51 @@ describe('DataRetentionService Unit Tests', () => {
       });
       expect(repeated.status).toBe('completed');
       expect(repeated.version).toBe(completedReq.version);
+    });
+
+    it('fails closed when record type has no authoritative collection mapping', async () => {
+      await retentionService.registerRetentionPolicy({
+        tenantId: 'tenant_A',
+        recordType: 'unmapped_custom_record',
+        retentionClass: 'custom',
+        retentionUntil: '2020-01-01T00:00:00Z',
+      });
+
+      const req = await retentionService.requestDeletion({
+        tenantId: 'tenant_A',
+        recordType: 'unmapped_custom_record',
+        recordId: 'cust_100',
+        reason: 'Erasure',
+      });
+
+      await expect(
+        retentionService.processDeletion({
+          tenantId: 'tenant_A',
+          requestId: req.requestId,
+        })
+      ).rejects.toThrow(DataRetentionValidationError);
+    });
+
+    it('preserves existing legal hold across standard policy updates', async () => {
+      // 1. Initial policy under legal hold
+      const initial = await retentionService.registerRetentionPolicy({
+        tenantId: 'tenant_A',
+        recordType: 'dispute_evidence',
+        retentionClass: 'legal',
+        legalHold: true,
+        legalHoldReason: 'Litigation hold',
+      });
+      expect(initial.legalHold).toBe(true);
+
+      // 2. Standard update without legalHold field MUST preserve existing legal hold
+      const updated = await retentionService.registerRetentionPolicy({
+        tenantId: 'tenant_A',
+        recordType: 'dispute_evidence',
+        retentionClass: 'legal_updated',
+        retentionPeriodDays: 90,
+      });
+      expect(updated.legalHold).toBe(true);
+      expect(updated.legalHoldReason).toBe('Litigation hold');
     });
 
     it('rejects cross-tenant deletion requests and processing', async () => {

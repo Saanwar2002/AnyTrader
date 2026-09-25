@@ -1,16 +1,20 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 32: Revocation, Retention & Deletion (September 25, 2026)
+## 🛡️ AnyTrader V8.3 — Task 32 / 32R: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
 - **1. Server-Authoritative Data Retention, Revocation & Deletion Service (`DataRetentionService`)**:
-  - Implemented `DataRetentionService` in `src/server/intelligence/dataRetention.ts` establishing server-authoritative lifecycle boundaries over data retention policies, legal holds, dependency evaluation, multi-service revocation, deletion state machines, and immutable audit logging.
+  - Implemented and security-hardened `DataRetentionService` in `src/server/intelligence/dataRetention.ts` establishing server-authoritative lifecycle boundaries over data retention policies, legal holds, dependency evaluation, multi-service revocation, deletion state machines, and immutable audit logging.
+  - **Server-Authoritative Deletion Target (Remediation A)**:
+    - Removed client `targetCollection` parameter from deletion processing.
+    - Server resolves physical Firestore collections via `resolveAuthoritativeCollection` (e.g. `property` -> `properties`, `job` -> `jobs`, `temporary_upload` -> `temporary_files`). Unmapped record types fail closed with `DataRetentionValidationError`.
+  - **Privileged Legal Hold Boundary (Remediation B)**:
+    - Normal authenticated users cannot establish, modify, or remove legal holds via policy registration (`legalHold` input fails closed with 403 / `DataRetentionSecurityError`).
+    - Standard policy updates preserve existing active legal holds.
+    - Legal hold management is strictly restricted to privileged administrators via dedicated `POST /api/intelligence/data-lifecycle/policy/:policyId/legal-hold` guarded by `requireAdmin`.
   - **REVOCATION != DELETION Invariant**:
     - Rights and AI control revocations take effect immediately and fail authorization closed across dependent pipelines without waiting for asynchronous background deletions.
     - Physical deletion separately evaluates retention periods, statutory holds, downstream dependencies, and immutable audit requirements.
   - **Unknown Policy Fails Closed (`unknown != allowed to delete`)**:
     - Any deletion evaluation on a record type without an active retention policy strictly returns `blocked_by_unknown_policy`.
-  - **Server-Authoritative Legal Hold**:
-    - Legal hold (`legalHold === true`) absolutely blocks physical deletion (`blocked_by_legal_hold`).
-    - Client Firestore write permissions are strictly denied (`allow create, update, delete: if false;`); legal holds cannot be created, modified, or bypassed by client inputs.
   - **Dependency-Aware Deletion**:
     - Automatically discovers and evaluates downstream dependencies across Data Rights (`/data_rights`), Provenance Nodes (`/provenance_nodes`), Classifications (`/data_classifications`), and AI Controls (`/ai_usage_controls`).
     - Upstream records with active downstream dependencies fail closed with `blocked_by_dependency`.
@@ -21,17 +25,18 @@
     - States: `requested -> blocked | approved -> processing -> completed | rejected`.
     - Idempotent request handling: repeated deletion calls return completed state without duplicate side-effects.
   - **Firestore Security Rules & Blueprint**:
-    - Added rules for `/data_retention_policies/{id}`, `/data_deletion_requests/{id}`, `/data_lifecycle_events/{id}` enforcing strict UID-as-tenant read isolation and complete client write denial.
+    - Rules enforced for `/data_retention_policies/{id}`, `/data_deletion_requests/{id}`, `/data_lifecycle_events/{id}` with strict UID-as-tenant read isolation and complete client write denial (`allow create, update, delete: if false;`).
   - **Server API Routes (`server.ts`)**:
     - `POST /api/intelligence/data-lifecycle/policy/register`: Registers/updates retention policy.
+    - `POST /api/intelligence/data-lifecycle/policy/:policyId/legal-hold`: Privileged legal hold management (Admin Only).
     - `GET /api/intelligence/data-lifecycle/policy/:policyId`: Policy lookup for authorized tenant.
     - `POST /api/intelligence/data-lifecycle/revoke`: Multi-service rights/AI/provenance revocation.
     - `POST /api/intelligence/data-lifecycle/deletion-request`: Submits deletion request.
     - `POST /api/intelligence/data-lifecycle/process-deletion`: Executes deletion of eligible current projections.
     - `GET /api/intelligence/data-lifecycle/:requestId`: Deletion request lookup for authorized tenant.
 - **2. Testing & Verification**:
-  - Full unit test suite (`npm test`): **702/702 tests passing** across **45 test files** (100% clean).
-  - Task 32 unit suite: `src/server/intelligence/dataRetention.test.ts` (12/12 PASS).
+  - Full unit test suite (`npm test`): **704/704 tests passing** across **45 test files** (100% clean).
+  - Task 32 unit suite: `src/server/intelligence/dataRetention.test.ts` (14/14 PASS).
   - Task 32 emulator security suite: `tests/unit/task32DataRetentionDeletion.test.ts` (100% PASS).
   - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
   - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.

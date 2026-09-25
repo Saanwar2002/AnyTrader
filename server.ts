@@ -6201,6 +6201,12 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       const user = (req as any).user;
       const { recordType, retentionClass, retentionPeriodDays, retentionUntil, legalHold, legalHoldReason } = req.body || {};
 
+      // Security Remediation B: Legal Hold is strictly privileged. Ordinary users cannot create, modify, or remove legal holds.
+      const isAdmin = await checkIsAdmin(user);
+      if ((legalHold !== undefined || legalHoldReason !== undefined) && !isAdmin) {
+        return res.status(403).json({ error: "Forbidden: Only administrators can create, modify, or remove legal holds" });
+      }
+
       if (db) {
         dataRetentionService.setFirestoreDb(db);
       }
@@ -6211,11 +6217,48 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         retentionClass,
         retentionPeriodDays,
         retentionUntil,
-        legalHold,
-        legalHoldReason,
+        ...(isAdmin && legalHold !== undefined ? { legalHold, legalHoldReason } : {}),
       });
 
       res.status(201).json({
+        success: true,
+        policy,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataRetentionValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Apply or remove legal hold (Privileged Admin Only)
+  app.post("/api/intelligence/data-lifecycle/policy/:policyId/legal-hold", requireAdmin, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { policyId } = req.params;
+      const { tenantId, legalHold, reason } = req.body || {};
+
+      if (typeof legalHold !== "boolean") {
+        return res.status(400).json({ error: "Missing or invalid 'legalHold' boolean field" });
+      }
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const targetTenantId = tenantId || user.uid;
+      const policy = await dataRetentionService.setLegalHold(
+        targetTenantId,
+        policyId,
+        legalHold,
+        reason
+      );
+
+      res.json({
         success: true,
         policy,
       });
@@ -6332,11 +6375,11 @@ Limit your response to just the text of the tip. Do not use quotes.`;
     }
   });
 
-  // Process approved deletion
+  // Process approved deletion (Security Remediation A: Server-Authoritative target resolution; client targetCollection removed)
   app.post("/api/intelligence/data-lifecycle/process-deletion", requireAuth, async (req, res) => {
     try {
       const user = (req as any).user;
-      const { requestId, targetCollection } = req.body || {};
+      const { requestId } = req.body || {};
 
       if (!requestId) {
         return res.status(400).json({ error: "Missing required 'requestId' field" });
@@ -6350,7 +6393,6 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         tenantId: user.uid,
         requestId,
         processedBy: user.uid,
-        targetCollection,
       });
 
       res.json({

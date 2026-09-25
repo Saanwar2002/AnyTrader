@@ -474,16 +474,15 @@ describe('V8.3 Task 32 — Firebase Emulator Data Retention, Revocation & Deleti
         });
         expect(req.status).toBe('approved');
 
-        // 4. Process deletion
+        // 4. Process deletion (Server-authoritative target collection 'temporary_files' resolved from recordType)
         const completed = await retentionService.processDeletion({
           tenantId: 'tenant_A',
           requestId: req.requestId,
-          targetCollection: 'temporary_files',
         });
         expect(completed.status).toBe('completed');
         expect(completed.result?.erasedRecordsCount).toBe(1);
 
-        // 5. Target document is physically erased
+        // 5. Target document is physically erased from authoritative collection
         const targetSnap = await getDoc(doc(db, 'temporary_files', 'file_99'));
         expect(targetSnap.exists()).toBe(false);
 
@@ -503,6 +502,59 @@ describe('V8.3 Task 32 — Firebase Emulator Data Retention, Revocation & Deleti
         });
         expect(repeated.status).toBe('completed');
         expect(repeated.completedAt).toBe(completed.completedAt);
+      });
+    });
+
+    it('enforces server-authoritative deletion target mapping and fails closed on unmapped record type', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        await retentionService.registerRetentionPolicy({
+          tenantId: 'tenant_A',
+          recordType: 'unmapped_custom_artifact',
+          retentionClass: 'temp',
+          retentionUntil: '2020-01-01T00:00:00Z',
+        });
+
+        const req = await retentionService.requestDeletion({
+          tenantId: 'tenant_A',
+          recordType: 'unmapped_custom_artifact',
+          recordId: 'art_123',
+          reason: 'Erasure',
+        });
+
+        await expect(
+          retentionService.processDeletion({
+            tenantId: 'tenant_A',
+            requestId: req.requestId,
+          })
+        ).rejects.toThrow(DataRetentionValidationError);
+      });
+    });
+
+    it('preserves active legal hold across standard policy updates', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        const retentionService = new DataRetentionService(db as any);
+
+        const initial = await retentionService.registerRetentionPolicy({
+          tenantId: 'tenant_A',
+          recordType: 'dispute_evidence',
+          retentionClass: 'legal',
+          legalHold: true,
+          legalHoldReason: 'Litigation Hold',
+        });
+        expect(initial.legalHold).toBe(true);
+
+        // Standard update without legalHold input MUST preserve existing legal hold
+        const updated = await retentionService.registerRetentionPolicy({
+          tenantId: 'tenant_A',
+          recordType: 'dispute_evidence',
+          retentionClass: 'legal_v2',
+        });
+        expect(updated.legalHold).toBe(true);
+        expect(updated.legalHoldReason).toBe('Litigation Hold');
       });
     });
 
