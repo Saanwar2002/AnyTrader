@@ -201,6 +201,51 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
           classificationService
         );
 
+        // 1. Task 27 Rights
+        const rightsRec = await rightsService.createDataRightsRecord({
+          tenantId: 'tenant_A',
+          subject: { type: 'property_passport', id: 'pass_100' },
+          owner: { type: 'user', id: 'tenant_A' },
+          source: { type: 'user_action', id: 'act_100' },
+          purposes: {
+            internal_ai_use: 'allowed',
+            external_ai_training: 'allowed',
+          },
+          provenance: {
+            sourceType: 'user_action',
+            sourceId: 'act_100',
+            tenantId: 'tenant_A',
+          },
+        });
+
+        // 2. Task 28 Provenance
+        const provNode = await provenanceService.createNode({
+          tenantId: 'tenant_A',
+          nodeType: 'source',
+          sourceType: 'user_action',
+          sourceId: 'act_100',
+          rightsReference: {
+            rightsId: rightsRec.rightsId,
+            tenantId: 'tenant_A',
+          },
+        });
+
+        // 3. Task 30 Classification
+        const classRec = await classificationService.registerClassification({
+          tenantId: 'tenant_A',
+          recordType: 'property_passport',
+          recordId: 'pass_100',
+          category: 'property_intelligence',
+          provenanceRef: {
+            nodeId: provNode.nodeId,
+            tenantId: 'tenant_A',
+          },
+          rightsRef: {
+            rightsId: rightsRec.rightsId,
+            tenantId: 'tenant_A',
+          },
+        });
+
         // Register control with internal_ai_use: allowed, external_ai_training: unknown, trainingConsent: opt_out
         const control = await aiService.registerAiUsageControls({
           tenantId: 'tenant_A',
@@ -212,9 +257,18 @@ describe('V8.3 Task 31 — Firebase Emulator AI Training & Usage Controls Suite'
           },
           trainingConsent: 'opt_out',
           provenanceRef: {
+            nodeId: provNode.nodeId,
             tenantId: 'tenant_A',
             sourceType: 'user_action',
             sourceId: 'act_100',
+          },
+          rightsRef: {
+            rightsId: rightsRec.rightsId,
+            tenantId: 'tenant_A',
+          },
+          classificationRef: {
+            classificationId: classRec.classificationId,
+            tenantId: 'tenant_A',
           },
         });
 
