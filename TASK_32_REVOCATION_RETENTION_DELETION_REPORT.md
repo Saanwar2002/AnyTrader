@@ -1,10 +1,10 @@
-# V8.3 Task 32 / 32R / 32R-1: Revocation, Retention & Deletion Report
+# V8.3 Task 32 / 32R / 32R-1 / 32R-2: Revocation, Retention & Deletion Report
 
 ---
 
-## 1. Task 32 / 32R / 32R-1 Objective
+## 1. Task 32 / 32R / 32R-1 / 32R-2 Objective
 
-The objective of **Task 32**, **Task 32R**, and **Task 32R-1** is to implement and security-harden the server-authoritative **Revocation, Retention & Deletion Boundary** on top of the verified Task 27–31 architecture.
+The objective of **Task 32**, **Task 32R**, **Task 32R-1**, and **Task 32R-2** is to implement, security-harden, and evidence-reconcile the server-authoritative **Revocation, Retention & Deletion Boundary** on top of the verified Task 27–31 architecture.
 
 The boundary strictly enforces:
 1. **REVOCATION != DELETION**: Revocation immediately fails authorization closed, while deletion separately evaluates retention policies, legal holds, downstream dependencies, and immutable audit requirements.
@@ -28,7 +28,7 @@ The boundary strictly enforces:
 
 ## 2. Architecture & Service Ecosystem
 
-Task 32/32R/32R-1 orchestrates lifecycle policy across the verified Task 27–31 canonical services without introducing duplicate engines:
+Task 32/32R/32R-1/32R-2 orchestrates lifecycle policy across the verified Task 27–31 canonical services without introducing duplicate engines:
 - **`DataRetentionService`** (`src/server/intelligence/dataRetention.ts`):
   - Canonical orchestration engine for retention policies, privileged legal holds, dependency discovery, server-authoritative deletion targets, multi-service revocation, deletion requests, and physical erasure.
 - **`DataRightsService`** (`src/server/intelligence/dataRights.ts`):
@@ -138,24 +138,27 @@ All API endpoints derive tenant ownership strictly from the verified JWT token (
 
 | Verification Step | Command | Result |
 | :--- | :--- | :--- |
-| **Full Unit Test Suite** | `npm test` | **PASS: 710/710 unit tests passing** across **45 test files** (100% pass rate) |
+| **Firebase / Security Emulator Suite** | `npm run test:emulator` | **PASS: 534/534 tests passed** across **17 test files** |
+| **Full Unit / Security Suite** | `npm test` | **PASS: 710/710 tests passed** across **45 test files** (100% pass rate) |
 | **TypeScript & Lint** | `npm run lint` (`tsc --noEmit`) | **PASS: 0 errors** |
 | **Applet Compilation** | `compile_applet` | **PASS: Production bundle compilation succeeded** |
 | **Production Build** | `npm run build` | **PASS: Full-stack build completed** (`dist/` & `dist/server.cjs`) |
-| **Pre-Flight Release Audit** | `npm run audit:release` | **PASS: 0 Critical Failures** (5 non-critical environment warnings) |
+| **Release Candidate Audit** | `npm run audit:release` | **PASS: 0 Critical Failures** (7 non-critical environment warnings) |
 
 ---
 
 ## 9. Warnings & Non-Critical Notes
 
-- 5 non-critical environment variable warnings during local pre-flight audit (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, `ALLOWED_ORIGINS`, server Firestore client fallback in local dev environment). These are expected in local development and resolved via production Cloud Run environment secrets.
+- **7 non-critical environment warnings** during local pre-flight release audit (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `JWT_SECRET`, `ALLOWED_ORIGINS`, server Firestore client fallback in local dev environment). These are environmental and configuration warnings such as missing production secrets or unavailable server Firestore initialization in local development, and do not represent critical security failures.
 
 ---
 
 ## 10. Commit & Status
 
-- **Task**: V8.3 Task 32R-1 — Final Legal-Hold Tenant-Authority & Verification Remediation.
+- **Task**: V8.3 Task 32R-2 — Final Evidence & Report Reconciliation.
 - **Status**: **VERIFIED & CLOSED — 100% PASS (GO FOR RELEASE)**.
+- **Commit SHA**: NOT VERIFIED
+- **Working tree status**: NOT VERIFIED
 - **Task 33 (Scale & Resilience)**: **NOT STARTED**.
 - **Task 34 (Independent Final Audit)**: **NOT STARTED**.
 - **V8.4 (Contractor Archive Ingestion)**: **NOT STARTED**.

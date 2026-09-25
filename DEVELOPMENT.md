@@ -1,6 +1,6 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader V8.3 — Task 32 / 32R / 32R-1: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
+## 🛡️ AnyTrader V8.3 — Task 32 / 32R / 32R-1 / 32R-2: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
 - **1. Server-Authoritative Data Retention, Revocation & Deletion Service (`DataRetentionService`)**:
   - Implemented and security-hardened `DataRetentionService` in `src/server/intelligence/dataRetention.ts` establishing server-authoritative lifecycle boundaries over data retention policies, legal holds, dependency evaluation, multi-service revocation, deletion state machines, and immutable audit logging.
   - **Server-Authoritative Deletion Target (Remediation A)**:
@@ -36,12 +36,13 @@
     - `POST /api/intelligence/data-lifecycle/process-deletion`: Executes deletion of eligible current projections.
     - `GET /api/intelligence/data-lifecycle/:requestId`: Deletion request lookup for authorized tenant.
 - **2. Testing & Verification**:
-  - Full unit test suite (`npm test`): **710/710 tests passing** across **45 test files** (100% clean).
+  - Full unit / security test suite (`npm test`): **710/710 tests passing** across **45 test files** (100% clean).
+  - Firebase emulator test suite: **534/534 tests passing** across **17 test files**.
   - Task 32 unit suite: `src/server/intelligence/dataRetention.test.ts` (20/20 PASS).
   - Task 32 emulator security suite: `tests/unit/task32DataRetentionDeletion.test.ts` (100% PASS).
   - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
   - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
-  - Release Gate Audit (`npm run audit:release`): 0 critical failures, 5 non-critical warnings.
+  - Release Gate Audit (`npm run audit:release`): 0 critical failures, 7 non-critical warnings.
   - Tasks 33, 34 & V8.4: Not started.
 
 ## 🛡️ AnyTrader V8.3 — Task 31 / 31R / 31R2: AI Training & Usage Controls (September 24, 2026)
