@@ -52,4 +52,5 @@ export * from './provenanceGraph';
 export * from './contractorArchiveRights';
 export * from './dataClassificationEligibility';
 export * from './aiTrainingUsageControls';
+export * from './dataRetention';
 

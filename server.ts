@@ -71,6 +71,10 @@ import {
   aiTrainingUsageControlsService,
   AiUsageControlsSecurityError,
   AiUsageControlsValidationError,
+  DataRetentionService,
+  dataRetentionService,
+  DataRetentionSecurityError,
+  DataRetentionValidationError,
 } from "./src/server/intelligence/index.ts";
 import {
   runBootstrapSequence,
@@ -6182,6 +6186,210 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       }
       if (err instanceof AiUsageControlsValidationError) {
         return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // =========================================================================
+  // V8.3 Task 32: Revocation, Retention & Deletion API Routes
+  // =========================================================================
+
+  // Register or update retention policy
+  app.post("/api/intelligence/data-lifecycle/policy/register", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { recordType, retentionClass, retentionPeriodDays, retentionUntil, legalHold, legalHoldReason } = req.body || {};
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const policy = await dataRetentionService.registerRetentionPolicy({
+        tenantId: user.uid,
+        recordType,
+        retentionClass,
+        retentionPeriodDays,
+        retentionUntil,
+        legalHold,
+        legalHoldReason,
+      });
+
+      res.status(201).json({
+        success: true,
+        policy,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataRetentionValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Get retention policy
+  app.get("/api/intelligence/data-lifecycle/policy/:policyId", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { policyId } = req.params;
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const policy = await dataRetentionService.getRetentionPolicy(policyId, user.uid);
+      if (!policy) {
+        return res.status(404).json({ error: "Retention policy not found" });
+      }
+
+      res.json({
+        success: true,
+        policy,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Orchestrate lifecycle rights revocation
+  app.post("/api/intelligence/data-lifecycle/revoke", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { rightsId, controlId, provenanceNodeId, reason } = req.body || {};
+
+      if (!reason || typeof reason !== "string") {
+        return res.status(400).json({ error: "Missing required 'reason' field" });
+      }
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const result = await dataRetentionService.revokeDataLifecycleRights({
+        tenantId: user.uid,
+        rightsId,
+        controlId,
+        provenanceNodeId,
+        reason,
+        updatedBy: user.uid,
+      });
+
+      res.json({
+        success: true,
+        result,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataRetentionValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Request deletion
+  app.post("/api/intelligence/data-lifecycle/deletion-request", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { recordType, recordId, reason } = req.body || {};
+
+      if (!recordType || !recordId || !reason) {
+        return res.status(400).json({ error: "Missing required fields: recordType, recordId, reason" });
+      }
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const request = await dataRetentionService.requestDeletion({
+        tenantId: user.uid,
+        recordType,
+        recordId,
+        reason,
+        requestedBy: user.uid,
+      });
+
+      res.status(201).json({
+        success: true,
+        request,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataRetentionValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Process approved deletion
+  app.post("/api/intelligence/data-lifecycle/process-deletion", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { requestId, targetCollection } = req.body || {};
+
+      if (!requestId) {
+        return res.status(400).json({ error: "Missing required 'requestId' field" });
+      }
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const completed = await dataRetentionService.processDeletion({
+        tenantId: user.uid,
+        requestId,
+        processedBy: user.uid,
+        targetCollection,
+      });
+
+      res.json({
+        success: true,
+        request: completed,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof DataRetentionValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      sendHttpError(res, err, req);
+    }
+  });
+
+  // Get deletion request
+  app.get("/api/intelligence/data-lifecycle/:requestId", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { requestId } = req.params;
+
+      if (db) {
+        dataRetentionService.setFirestoreDb(db);
+      }
+
+      const request = await dataRetentionService.getDeletionRequest(requestId, user.uid);
+      if (!request) {
+        return res.status(404).json({ error: "Deletion request not found" });
+      }
+
+      res.json({
+        success: true,
+        request,
+      });
+    } catch (err: any) {
+      if (err instanceof DataRetentionSecurityError) {
+        return res.status(403).json({ error: err.message });
       }
       sendHttpError(res, err, req);
     }

@@ -1433,5 +1433,38 @@ service cloud.firestore {
         );
       allow create, update, delete: if false; // Immutable evaluation decision audit trail; server writes only
     }
+
+    // =========================================================================
+    // V8.3 Task 32: Revocation, Retention & Deletion Security Rules
+    // Strict tenant boundary (tenantId === request.auth.uid) or platform admin.
+    // Client writes are strictly forbidden (allow create, update, delete: if false;).
+    // All policies, deletion requests, and lifecycle events are server-authoritative.
+    // =========================================================================
+    match /data_retention_policies/{policyId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /data_deletion_requests/{requestId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Server Admin SDK writes only; client writes denied
+    }
+
+    match /data_lifecycle_events/{eventId} {
+      allow read: if isSignedIn() &&
+        (
+          (resource.data.get('tenantId', '') != '' && resource.data.tenantId == request.auth.uid) ||
+          isAdmin()
+        );
+      allow create, update, delete: if false; // Append-only immutable lifecycle events; client writes denied
+    }
   }
 }

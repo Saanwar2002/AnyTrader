@@ -4500,6 +4500,24 @@
         "$ref": "#/entities/Job"
       },
       "description": "Server-authoritative immutable AI usage eligibility evaluation decision audit trail records."
+    },
+    "/data_retention_policies/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative data retention policies enforcing tenant boundaries, statutory retention periods, and legal holds."
+    },
+    "/data_deletion_requests/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Server-authoritative data deletion and erasure lifecycle requests enforcing state machines and dependency gates."
+    },
+    "/data_lifecycle_events/{id}": {
+      "schema": {
+        "$ref": "#/entities/Job"
+      },
+      "description": "Append-only immutable data lifecycle audit events recording policy mutations, legal holds, revocations, and erasures."
     }
   }
 }
