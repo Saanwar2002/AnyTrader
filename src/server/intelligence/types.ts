@@ -277,6 +277,8 @@ export interface IntelligenceTask {
   leaseId?: string;
   leaseAcquiredAt?: string;
   leaseExpiresAt?: string;
+  tenantId?: string;
+  activeSlotAllocated?: boolean;
   error?: {
     classification: string;
     message: string;

@@ -23,7 +23,7 @@ import { processingRunStore, buildProcessingRunId, setGlobalProcessingRunDb } fr
 import { cleanUndefinedFields } from './evidence';
 import { SCALE_LIMITS } from './scaleLimits';
 import { classifyError, calculateBackoffDelay, ErrorClassification } from './retryPolicy';
-import { tenantWorkloadTracker } from './tenantWorkloadFairness';
+import { tenantWorkloadTracker, acquireTenantSlotTransactional, releaseTenantSlotTransactional } from './tenantWorkloadFairness';
 
 export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unknown>>;
 
@@ -376,6 +376,8 @@ export class IntelligenceTaskQueue {
           return existing.data() as IntelligenceTask;
         }
 
+        const tenantId = (payload as any)?.tenantId || (payload as any)?.userId || undefined;
+
         const newTask: IntelligenceTask = {
           taskId,
           taskType,
@@ -388,6 +390,7 @@ export class IntelligenceTaskQueue {
           createdAt: now,
           updatedAt: now,
           nextAttemptAt: now,
+          tenantId,
           payload,
         };
 
@@ -467,6 +470,22 @@ export class IntelligenceTaskQueue {
           return false;
         }
 
+        // Derive tenant authoritatively from task record (top-level tenantId or payload tenantId/userId)
+        const tenantId = data.tenantId || (data.payload as any)?.tenantId || (data.payload as any)?.userId || undefined;
+
+        // Atomically enforce tenant active workload limit in Firestore transaction across all worker instances
+        if (tenantId) {
+          const slotAcquired = await acquireTenantSlotTransactional(
+            transaction,
+            this.firestoreDb,
+            tenantId,
+            SCALE_LIMITS.maxTenantActiveTasks
+          );
+          if (!slotAcquired) {
+            return false; // Throttled: Tenant has reached or exceeded max active concurrency limit
+          }
+        }
+
         const newAttempts = (data.attempts || 0) + 1;
         const isRealAdminFirestore = Boolean(
           taskRef &&
@@ -492,6 +511,8 @@ export class IntelligenceTaskQueue {
           leaseAcquiredAt: nowIso,
           leaseExpiresAt: leaseExpiresAt,
           updatedAt: nowIso,
+          tenantId: tenantId || null,
+          activeSlotAllocated: !!tenantId,
           errorCode: deleteSentinel,
           lastError: deleteSentinel,
           nextAttemptAt: deleteSentinel,
@@ -578,7 +599,10 @@ export class IntelligenceTaskQueue {
   }
 
   /**
-   * Atomically recovers stale tasks across Firestore using transactions.
+   * Atomically recovers stale tasks across Firestore using bounded pagination and transactions.
+   * 
+   * Task 33R Remediation B: Replaces unbounded collection reads with bounded cursor pagination
+   * (hard limit of 50 per page, max 200 per cycle) to prevent memory exhaustion on large task queues.
    */
   public async recoverStaleTasksAsync(leaseTimeoutMs: number = this.defaultLeaseDurationMs): Promise<IntelligenceTask[]> {
     if (!this.firestoreDb) {
@@ -589,14 +613,29 @@ export class IntelligenceTaskQueue {
     const nowIso = new Date(now).toISOString();
     const recovered: IntelligenceTask[] = [];
 
-    try {
-      const snapshot = await this.firestoreDb
-        .collection('intelligence_tasks')
-        .where('status', '==', 'processing')
-        .get();
+    const PAGE_SIZE = 50;
+    const MAX_STALE_SCAN_PER_CYCLE = 200;
+    let totalScanned = 0;
+    let lastDoc: any = null;
 
-      if (snapshot && !snapshot.empty) {
+    try {
+      while (totalScanned < MAX_STALE_SCAN_PER_CYCLE) {
+        let query = this.firestoreDb
+          .collection('intelligence_tasks')
+          .where('status', '==', 'processing')
+          .limit(PAGE_SIZE);
+
+        if (lastDoc && typeof (query as any).startAfter === 'function') {
+          query = query.startAfter(lastDoc);
+        }
+
+        const snapshot = await query.get();
+        if (!snapshot || snapshot.empty || !snapshot.docs || snapshot.docs.length === 0) {
+          break;
+        }
+
         for (const doc of snapshot.docs) {
+          totalScanned++;
           const taskId = doc.id;
           const taskRef = this.firestoreDb.collection('intelligence_tasks').doc(taskId);
 
@@ -610,6 +649,12 @@ export class IntelligenceTaskQueue {
             const isExpired = !task.leaseExpiresAt || new Date(task.leaseExpiresAt).getTime() <= now;
             if (!isExpired) return null;
 
+            // Release active workload slot for tenant on stale lease recovery
+            const tenantId = task.tenantId || (task.payload as any)?.tenantId || (task.payload as any)?.userId;
+            if (task.activeSlotAllocated && tenantId) {
+              await releaseTenantSlotTransactional(transaction, this.firestoreDb, tenantId);
+            }
+
             const nextStatus: TaskStatus = task.attempts < task.maxAttempts ? 'retrying' : 'dead_letter';
             const updates: Record<string, any> = {
               status: nextStatus,
@@ -617,6 +662,7 @@ export class IntelligenceTaskQueue {
               nextRetryAt: nextStatus === 'retrying' ? nowIso : null,
               lastError: nextStatus === 'retrying' ? 'Lease expired / Worker timeout recovered' : 'Exceeded attempts during stale lease recovery',
               errorCode: nextStatus === 'retrying' ? 'STALE_LEASE_RECOVERED' : 'STALE_LEASE_EXHAUSTED',
+              activeSlotAllocated: false,
               leaseId: undefined,
               leaseExpiresAt: undefined,
               workerId: undefined,
@@ -632,7 +678,13 @@ export class IntelligenceTaskQueue {
             recovered.push(recoveredTask);
           }
         }
+
+        if (snapshot.docs.length < PAGE_SIZE) {
+          break;
+        }
+        lastDoc = snapshot.docs[snapshot.docs.length - 1];
       }
+
       return recovered;
     } catch (err: any) {
       const errMsg = err?.message || String(err);
@@ -829,6 +881,12 @@ export class IntelligenceTaskQueue {
           throw new OwnershipLostError(taskId, effectiveWorkerId);
         }
 
+        // Release tenant active workload slot inside the completion transaction
+        const tenantId = data.tenantId || (data.payload as any)?.tenantId || (data.payload as any)?.userId;
+        if (data.activeSlotAllocated && tenantId) {
+          await releaseTenantSlotTransactional(transaction, this.firestoreDb, tenantId);
+        }
+
         // Firestore rejects nested undefined; canonicalizeIntelligence emits undefined for
         // optional fields. Strip undefined before the write (explicit nulls are preserved).
         const mergedPayload = cleanUndefinedFields({ ...data.payload, ...(result as any) });
@@ -839,6 +897,7 @@ export class IntelligenceTaskQueue {
           processingDurationMs: durationMs,
           updatedAt: nowIso,
           payload: mergedPayload,
+          activeSlotAllocated: false,
           workerId: null,
           leaseId: null,
           leaseExpiresAt: null,
@@ -931,6 +990,12 @@ export class IntelligenceTaskQueue {
             throw new OwnershipLostError(taskId, effectiveWorkerId);
           }
 
+          // Release tenant active workload slot inside the failure transaction
+          const tenantId = data.tenantId || (data.payload as any)?.tenantId || (data.payload as any)?.userId;
+          if (data.activeSlotAllocated && tenantId) {
+            await releaseTenantSlotTransactional(transaction, this.firestoreDb, tenantId);
+          }
+
           transaction.update(taskRef, {
             status: newStatus,
             processingDurationMs: durationMs,
@@ -942,6 +1007,7 @@ export class IntelligenceTaskQueue {
               timestamp: nowIso,
             },
             updatedAt: nowIso,
+            activeSlotAllocated: false,
             workerId: null,
             leaseId: null,
             leaseExpiresAt: null,

@@ -388,6 +388,117 @@ describe('V8.3 Task 33: Scale & Resilience Adversarial Suite', () => {
       expect(tracker.getActiveCount('tenant_A')).toBe(2);
       expect(tracker.tryAcquire('tenant_A')).toBe(true);
     });
+
+    it('Task 33R Production Path: Enforces tenant active workload limit in claimTaskTransactional across concurrent worker instances', async () => {
+      const TENANT = 'tenant_multiworker_1';
+      queue.registerHandler('job_extraction', async () => ({ status: 'done' }));
+
+      // Enqueue 6 tasks for tenant_multiworker_1
+      const taskIds: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const t = await queue.enqueueTaskAsync('job_extraction', 'job', `job_m_${i}`, `idem_m_${i}`, {
+          tenantId: TENANT,
+        });
+        taskIds.push(t.taskId);
+      }
+
+      // Worker 1 claims up to SCALE_LIMITS.maxTenantActiveTasks (5 tasks)
+      for (let i = 0; i < 5; i++) {
+        const claimed = await queue.claimTaskTransactional(taskIds[i], 'worker_1', 60000);
+        expect(claimed).toBe(true);
+      }
+
+      // 6th task claim attempt for Worker 2 MUST be rejected due to tenant workload limit
+      const worker2Claimed = await queue.claimTaskTransactional(taskIds[5], 'worker_2', 60000);
+      expect(worker2Claimed).toBe(false);
+
+      // Check Firestore state of tenant workload record
+      const workloadDoc = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workloadDoc.data()?.activeCount).toBe(5);
+
+      // Worker 1 executes & completes 1 task
+      await queue.executeTask(taskIds[0], 'worker_1');
+
+      // Active count for tenant MUST now be decremented to 4
+      const workloadDocAfterFinish = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workloadDocAfterFinish.data()?.activeCount).toBe(4);
+
+      // Now Worker 2 can claim the 6th task!
+      const worker2ClaimedAfter = await queue.claimTaskTransactional(taskIds[5], 'worker_2', 60000);
+      expect(worker2ClaimedAfter).toBe(true);
+    });
+
+    it('Task 33R Production Path: Releases tenant workload slots on task completion, failure, and stale recovery', async () => {
+      const TENANT = 'tenant_lifecycle_1';
+      const task = await queue.enqueueTaskAsync('job_extraction', 'job', 'job_fail', 'idem_fail_1', {
+        tenantId: TENANT,
+      });
+
+      // Claim task
+      const claimed = await queue.claimTaskTransactional(task.taskId, 'worker_1', 60000);
+      expect(claimed).toBe(true);
+
+      let workload = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workload.data()?.activeCount).toBe(1);
+
+      // Register failing handler
+      queue.registerHandler('job_extraction', async () => {
+        throw new Error('503 Provider Unavailable');
+      });
+
+      // Execute task failure
+      await queue.executeTask(task.taskId, 'worker_1');
+
+      // Slot MUST be released on failure
+      workload = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workload.data()?.activeCount).toBe(0);
+
+      // Now test stale recovery slot release
+      const taskStale = await queue.enqueueTaskAsync('job_extraction', 'job', 'job_stale_slot', 'idem_stale_slot', {
+        tenantId: TENANT,
+      });
+      await queue.claimTaskTransactional(taskStale.taskId, 'worker_dead', -10000); // Expired lease
+
+      workload = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workload.data()?.activeCount).toBe(1);
+
+      // Recover stale task
+      await queue.recoverStaleTasksAsync();
+
+      // Slot MUST be released on stale recovery
+      workload = await mockDb.collection('tenant_active_workloads').doc(TENANT).get();
+      expect(workload.data()?.activeCount).toBe(0);
+    });
+
+    it('Task 33R Production Path: Executes bounded stale lease recovery with pagination and query document cursors', async () => {
+      // Seed 60 stale processing tasks with expired leases
+      for (let i = 0; i < 60; i++) {
+        const taskId = `stale_task_${String(i).padStart(3, '0')}`;
+        await mockDb.collection('intelligence_tasks').doc(taskId).set({
+          taskId,
+          status: 'processing',
+          attempts: 1,
+          maxAttempts: 5,
+          leaseExpiresAt: new Date(Date.now() - 10000).toISOString(),
+          tenantId: `tenant_stale_${i % 3}`,
+          activeSlotAllocated: true,
+        });
+        // Seed tenant workload active count
+        await mockDb.collection('tenant_active_workloads').doc(`tenant_stale_${i % 3}`).set({
+          tenantId: `tenant_stale_${i % 3}`,
+          activeCount: 20,
+        });
+      }
+
+      // Run bounded stale recovery
+      const recovered = await queue.recoverStaleTasksAsync();
+      expect(recovered.length).toBe(60);
+
+      // All recovered tasks should be in 'retrying' status
+      const sample = await mockDb.collection('intelligence_tasks').doc('stale_task_000').get();
+      expect(sample.data()?.status).toBe('retrying');
+      expect(sample.data()?.activeSlotAllocated).toBe(false);
+    });
   });
 
   describe('Vector 5: Bounded Firestore Batch & Cursor Operations', () => {
