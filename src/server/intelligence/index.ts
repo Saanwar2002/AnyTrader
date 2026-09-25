@@ -53,4 +53,8 @@ export * from './contractorArchiveRights';
 export * from './dataClassificationEligibility';
 export * from './aiTrainingUsageControls';
 export * from './dataRetention';
+export * from './scaleLimits';
+export * from './retryPolicy';
+export * from './boundedFirestoreBatch';
+export * from './tenantWorkloadFairness';
 

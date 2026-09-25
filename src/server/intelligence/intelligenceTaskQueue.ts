@@ -21,6 +21,9 @@ import { IntelligenceTask, TaskStatus, TaskType, IntelligenceAggregateType } fro
 import { AICandidateSecurityError } from './aiCandidateBoundary';
 import { processingRunStore, buildProcessingRunId, setGlobalProcessingRunDb } from './processingRunStore';
 import { cleanUndefinedFields } from './evidence';
+import { SCALE_LIMITS } from './scaleLimits';
+import { classifyError, calculateBackoffDelay, ErrorClassification } from './retryPolicy';
+import { tenantWorkloadTracker } from './tenantWorkloadFairness';
 
 export type TaskHandler = (task: IntelligenceTask) => Promise<Record<string, unknown>>;
 
@@ -29,7 +32,7 @@ export interface FirestoreTaskDb {
   runTransaction<T>(updateFunction: (transaction: any) => Promise<T>): Promise<T>;
 }
 
-export type ErrorClassification = 'RETRYABLE' | 'NON_RETRYABLE';
+export type { ErrorClassification };
 
 export class OwnershipLostError extends Error {
   constructor(public readonly taskId: string, public readonly workerId: string) {
@@ -84,7 +87,9 @@ export function classifyTaskError(err: unknown): {
   }
 
   // Security, lineage validation, schema validation, immutability violations, or missing handlers are strictly NON_RETRYABLE
+  const retryPolicyClassification = classifyError(err);
   if (
+    retryPolicyClassification === 'NON_RETRYABLE' ||
     err instanceof AICandidateSecurityError ||
     name === 'AICandidateSecurityError' ||
     name === 'LineageValidationError' ||
@@ -352,6 +357,12 @@ export class IntelligenceTaskQueue {
   ): Promise<IntelligenceTask> {
     if (!this.firestoreDb) {
       throw new Error("[IntelligenceTaskQueue] Firestore task store is not ready or configured");
+    }
+
+    // Task 33: Bounded queue payload check to prevent memory exhaustion & Firestore document limit overflow
+    const payloadStr = JSON.stringify(payload);
+    if (payloadStr.length > SCALE_LIMITS.maxPayloadSizeBytes) {
+      throw new Error(`[IntelligenceTaskQueue] Payload exceeds maximum allowed size of ${SCALE_LIMITS.maxPayloadSizeBytes} bytes`);
     }
 
     const taskId = taskDocumentId(idempotencyKey);

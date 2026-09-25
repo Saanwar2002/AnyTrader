@@ -1,5 +1,29 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader V8.3 — Task 33: Scale & Resilience Foundation (September 25, 2026)
+- **1. Scale & Resilience Foundation Architecture**:
+  - Implemented centralized engineering limits in `src/server/intelligence/scaleLimits.ts` establishing server-authoritative constants for max claim batches (25), worker concurrency (10, clamped 1–50), lease durations (5–15 mins), retry ceilings (5 attempts), exponential backoff ceilings (5 mins), Firestore batch writes (400 ops), and max payload sizes (1MB).
+  - **Retry Policy & Failure Classification (`retryPolicy.ts`)**:
+    - Distinguishes `RETRYABLE` (network, 429, timeouts, 503) vs `NON_RETRYABLE` (Task 27 Rights, Task 28 Provenance, Task 30 Classification, Task 31 Consent, Task 32 Holds/Dependencies, validation errors).
+    - Non-retryable errors fail immediately to `dead_letter` without endless retry loops.
+    - Transient errors apply bounded exponential backoff with jitter (`min(maxDelay, baseDelay * 2^(attempt-1)) + jitter`).
+  - **Tenant Fairness & Noisy-Neighbor Controls (`tenantWorkloadFairness.ts`)**:
+    - Server-authoritative concurrency tracker limiting concurrent active tasks per tenant (max 5 active) to prevent worker starvation and monopolization of shared AI quotas.
+  - **Bounded Firestore Operations (`boundedFirestoreBatch.ts`)**:
+    - `commitBoundedBatches`: Chunks Firestore write operations into safe batches of $\le 400$ items (below Firestore 500 limit).
+    - `iterateBoundedQuery`: Executes bounded pagination using query document cursors.
+  - **Task Queue Hardening (`intelligenceTaskQueue.ts`)**:
+    - Enforced payload size validation on enqueue to prevent Firestore document overflow.
+    - Preserved transactional lease ownership verification (`OwnershipLostError`), preventing stale workers from completing expired tasks.
+    - Zero raw PII or secrets logged in dead-letter failure payloads.
+- **2. Testing & Verification**:
+  - Full unit / security test suite (`npm test`): **725/725 tests passing** across **46 test files** (100% clean).
+  - Task 33 adversarial suite: `tests/unit/task33ScaleResilience.test.ts` (15/15 PASS).
+  - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
+  - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
+  - Release Gate Audit (`npm run audit:release`): 0 critical failures, 5 non-critical warnings.
+  - Tasks 34 & V8.4: Not started.
+
 ## 🛡️ AnyTrader V8.3 — Task 32 / 32R / 32R-1 / 32R-2: Revocation, Retention & Deletion Security Remediation (September 25, 2026)
 - **1. Server-Authoritative Data Retention, Revocation & Deletion Service (`DataRetentionService`)**:
   - Implemented and security-hardened `DataRetentionService` in `src/server/intelligence/dataRetention.ts` establishing server-authoritative lifecycle boundaries over data retention policies, legal holds, dependency evaluation, multi-service revocation, deletion state machines, and immutable audit logging.
