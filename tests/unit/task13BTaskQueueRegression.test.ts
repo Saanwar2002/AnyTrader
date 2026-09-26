@@ -260,7 +260,9 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
               };
             },
             where(field: string, op: string, val: any) {
-              return {
+              const queryObj = {
+                limit: () => queryObj,
+                startAfter: () => queryObj,
                 get: async () => {
                   const matching = Array.from(mockDocs.values()).filter((d) => d[field] === val);
                   return {
@@ -269,6 +271,7 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
                   };
                 },
               };
+              return queryObj;
             },
           };
         },
@@ -299,12 +302,15 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         collection() {
           return {
             where() {
-              return {
+              const queryObj = {
+                limit: () => queryObj,
+                startAfter: () => queryObj,
                 get: async () => ({
                   empty: false,
                   docs: [{ id: 'stale_err_task' }],
                 }),
               };
+              return queryObj;
             },
             doc() {
               return {};
@@ -716,7 +722,9 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         collection(name: string) {
           return {
             where(field: string, op: string, val: any) {
-              return {
+              const queryObj = {
+                limit: () => queryObj,
+                startAfter: () => queryObj,
                 get: async () => {
                   const matchingDocs = Array.from(mockDocs.entries())
                     .filter(([_, d]) => d[field] === val)
@@ -730,6 +738,7 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
                   };
                 },
               };
+              return queryObj;
             },
             doc(id: string) {
               return {
@@ -845,7 +854,9 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
         collection(name: string) {
           return {
             where(field: string, op: string, val: any) {
-              return {
+              const queryObj = {
+                limit: () => queryObj,
+                startAfter: () => queryObj,
                 get: async () => {
                   const matchingDocs = Array.from(mockDocs.entries())
                     .filter(([_, d]) => d[field] === val)
@@ -859,6 +870,7 @@ describe('Task 13B: Async Intelligence Task Queue & Worker Concurrency Regressio
                   };
                 },
               };
+              return queryObj;
             },
             doc(id: string) {
               return {

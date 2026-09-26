@@ -3,14 +3,26 @@
  * Enforces resource ownership, role boundaries, and mass-assignment protection.
  */
 import { UnauthorizedError, ForbiddenError, BadRequestError, ConflictError } from "./httpErrors.ts";
+import {
+  CanonicalAccountType,
+  CanonicalCapability,
+  CanonicalIdentity,
+  resolveCanonicalIdentity,
+  hasCapability,
+  assertHasCapability,
+  assertHasAccountType,
+} from "./identity.ts";
 
 export interface AuthenticatedUser {
   uid: string;
   email?: string;
   role?: string;
+  accountType?: CanonicalAccountType;
+  capabilities?: CanonicalCapability[];
   isAdmin?: boolean;
   admin?: boolean;
   isEcosystemManager?: boolean;
+  identity?: CanonicalIdentity;
 }
 
 /**
@@ -51,9 +63,51 @@ export function assertUserRole(
   if (isUserAdminClaim(user)) {
     return;
   }
-  if (!user.role || !allowedRoles.includes(user.role)) {
-    throw new ForbiddenError(`User role '${user.role || "unknown"}' is not permitted to perform this action.`);
+  const canonical = resolveUserCanonicalIdentity(user);
+  if (user.role && allowedRoles.includes(user.role)) {
+    return;
   }
+  if (allowedRoles.includes(canonical.accountType)) {
+    return;
+  }
+  throw new ForbiddenError(`User role '${user.role || canonical.accountType || "unknown"}' is not permitted to perform this action.`);
+}
+
+/**
+ * Resolves the full canonical identity representation for an authenticated user.
+ */
+export function resolveUserCanonicalIdentity(user: AuthenticatedUser | Record<string, any>): CanonicalIdentity {
+  return resolveCanonicalIdentity(user);
+}
+
+/**
+ * Asserts that an authenticated user possesses a required capability (e.g. 'homeowner', 'tradesperson', 'fleet_driver').
+ */
+export function assertUserCapability(
+  user: AuthenticatedUser,
+  capability: CanonicalCapability
+): void {
+  assertIsAuthenticated(user);
+  if (isUserAdminClaim(user)) {
+    return;
+  }
+  const identity = resolveUserCanonicalIdentity(user);
+  assertHasCapability(identity, capability);
+}
+
+/**
+ * Asserts that an authenticated user belongs to one of the permitted canonical account types.
+ */
+export function assertUserAccountType(
+  user: AuthenticatedUser,
+  allowedTypes: CanonicalAccountType[]
+): void {
+  assertIsAuthenticated(user);
+  if (isUserAdminClaim(user)) {
+    return;
+  }
+  const identity = resolveUserCanonicalIdentity(user);
+  assertHasAccountType(identity, allowedTypes);
 }
 
 /**
@@ -360,6 +414,14 @@ export function assertCanAccessUserStorage(
  * OWASP API Protection: Protects against injection of hidden fields that aren't security boundaries.
  */
 export const SERVER_OWNED_PROTECTED_KEYS = new Set([
+  // Canonical Identity & Capability (Server-Derived Only)
+  "accountType",
+  "capabilities",
+  "capabilitiesList",
+  "activeContext",
+  "customClaims",
+  "accountFlags",
+
   // Role & Admin privilege escalation
   "isAdmin",
   "role",

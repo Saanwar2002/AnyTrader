@@ -2005,19 +2005,10 @@ export default function PostJobWizard() {
         }
         
         // Apply initial boost configuration based on selected premium features
-        let isBoosted = editJob ? editJob.isBoosted || false : false;
-        let boostTier = editJob ? editJob.boostTier || null : null;
-        let boostExpiresAt = editJob ? editJob.boostExpiresAt || null : null;
-
-        if (!editJob && formData.isInstantMatch) {
-           isBoosted = true;
-           boostTier = 'instant_match';
-           boostExpiresAt = serverTimestamp(); // will be updated upon payment success in real implementation
-        } else if (!editJob && formData.isEmergencyBoost) {
-           isBoosted = true;
-           boostTier = 'emergency_boost';
-           boostExpiresAt = serverTimestamp();
-        }
+        // Note: For newly posted jobs, boosts remain inactive until verified payment via Stripe webhook / checkout
+        const isBoosted = editJob ? editJob.isBoosted || false : false;
+        const boostTier = editJob ? editJob.boostTier || null : null;
+        const boostExpiresAt = editJob ? editJob.boostExpiresAt || null : null;
 
         const jobData = {
           id: currentJobRef.id,

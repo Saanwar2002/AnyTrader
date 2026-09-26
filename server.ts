@@ -1878,6 +1878,17 @@ async function startServer() {
                 retryCount: 0
               });
 
+              try {
+                await db.collection("public_job_cards").doc(meta.jobId).set({
+                  isBoosted: true,
+                  boostTier: meta.tier || 'emergency_boost',
+                  isInstantMatch: isIM,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              } catch (pubErr) {
+                console.warn("Could not sync public_job_cards for boost:", pubErr);
+              }
+
               if (isIM) {
                  const matchRef = db.collection("instant_matches").doc();
                  await matchRef.set({
@@ -2337,6 +2348,17 @@ async function startServer() {
                 isEmergencyBoost: meta.tier === 'emergency_boost',
                 retryCount: 0
               }, { merge: true });
+
+              try {
+                await db.collection("public_job_cards").doc(meta.jobId).set({
+                  isBoosted: true,
+                  boostTier: meta.tier || 'emergency_boost',
+                  isInstantMatch: isIM,
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              } catch (pubErr) {
+                console.warn("Could not sync public_job_cards for mock boost:", pubErr);
+              }
 
               if (isIM) {
                 const matchRef = db.collection("instant_matches").doc();

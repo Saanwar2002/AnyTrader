@@ -362,6 +362,10 @@ const libraries: any[] = ['places', 'geometry'];
     if (!id || !job) return;
 
     const params = new URLSearchParams(window.location.search);
+    if (params.get('boost_success') === 'true') {
+      toast.success("⚡ Priority Boost activated! Your job is now pinned and prioritized.");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     if (params.get('quickQuote') === 'true') {
       setTimeout(() => {
         const element = document.getElementById('quote-form-section');

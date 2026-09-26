@@ -640,14 +640,17 @@ describe('V8.1 Structured Intelligence Foundation', () => {
 
     it('propagates transaction errors during stale recovery scan without swallowing', async () => {
       const queue = new IntelligenceTaskQueue();
+      const createQuery = () => ({
+        limit: () => createQuery(),
+        startAfter: () => createQuery(),
+        get: async () => ({
+          empty: false,
+          docs: [{ id: 'stale_t1' }],
+        }),
+      });
       const failingTxDb = {
         collection: () => ({
-          where: () => ({
-            get: async () => ({
-              empty: false,
-              docs: [{ id: 'stale_t1' }],
-            }),
-          }),
+          where: () => createQuery(),
           doc: () => ({}),
         }),
         runTransaction: async () => {
