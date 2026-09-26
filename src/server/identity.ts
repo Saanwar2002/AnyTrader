@@ -120,6 +120,8 @@ export function resolveAccountType(
 
 /**
  * Resolves authorized capabilities based on account type, legacy role, business layer, and explicit grants.
+ * Enforces strict accountType boundaries: an untrusted payload claiming explicit capabilities
+ * not allowed for its account type will be filtered out fail-closed.
  */
 export function resolveCapabilities(params: {
   role?: string | null;
@@ -132,16 +134,7 @@ export function resolveCapabilities(params: {
 
   const accountType = params.accountType || resolveAccountType(params.role, params.isAdmin);
 
-  // 1. Process explicit capability array if present
-  if (Array.isArray(params.explicitCapabilities)) {
-    for (const cap of params.explicitCapabilities) {
-      if (isValidCapability(cap)) {
-        capabilities.add(cap);
-      }
-    }
-  }
-
-  // 2. Derive base capabilities from accountType and legacy role mapping
+  // 1. Derive canonical baseline capabilities from accountType
   switch (accountType) {
     case "admin":
       // Admins possess operational monitoring across all standard capabilities
@@ -157,16 +150,19 @@ export function resolveCapabilities(params: {
 
     case "service_provider":
       capabilities.add("tradesperson");
+      capabilities.add("homeowner");
       break;
 
     case "driver":
       capabilities.add("fleet_driver");
+      capabilities.add("homeowner");
       break;
 
     case "business":
       // Business users possess organizational contractor/tradesperson capabilities
       capabilities.add("contractor");
       capabilities.add("tradesperson");
+      capabilities.add("homeowner");
 
       if (params.businessLayer === "properties" || params.role === "landlord" || params.role === "estate_agent" || params.role === "property_manager") {
         capabilities.add("landlord");
@@ -185,6 +181,25 @@ export function resolveCapabilities(params: {
         capabilities.add("landlord");
       }
       break;
+  }
+
+  // 2. Process explicit capability array, filtering against accountType permissions
+  if (Array.isArray(params.explicitCapabilities)) {
+    for (const cap of params.explicitCapabilities) {
+      if (isValidCapability(cap)) {
+        // Enforce boundary: consumer cannot claim fleet_driver or contractor without proper accountType
+        if (accountType === "consumer" && !["homeowner", "landlord"].includes(cap)) {
+          continue;
+        }
+        if (accountType === "driver" && !["fleet_driver", "homeowner"].includes(cap)) {
+          continue;
+        }
+        if (accountType === "service_provider" && !["tradesperson", "contractor", "homeowner"].includes(cap)) {
+          continue;
+        }
+        capabilities.add(cap);
+      }
+    }
   }
 
   return Array.from(capabilities);

@@ -233,4 +233,132 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       expect(() => assertResourceOwner(userA, "user_B_id", "Job")).toThrow(ForbiddenError);
     });
   });
+
+  describe("Test G: Multi-Vector Adversarial Escalation Defense (Task 1 Section 17)", () => {
+    it("Vector 1: Capability Escalation — client injection of explicit capabilities filtered against accountType", () => {
+      const forgedConsumer = resolveCanonicalIdentity({
+        uid: "attacker_consumer",
+        role: "customer",
+        explicitCapabilities: ["fleet_driver", "contractor", "admin"],
+      });
+
+      expect(forgedConsumer.accountType).toBe("consumer");
+      // Cannot claim fleet_driver or contractor because accountType is consumer
+      expect(forgedConsumer.capabilities).not.toContain("fleet_driver");
+      expect(forgedConsumer.capabilities).not.toContain("contractor");
+      expect(forgedConsumer.capabilities).toContain("homeowner");
+    });
+
+    it("Vector 2: Account Type Escalation — untrusted accountType string without custom claim defaults safely", () => {
+      const forgedPayload = {
+        uid: "attacker_claim",
+        accountType: "admin",
+        role: "customer",
+      };
+
+      const identity = resolveCanonicalIdentity(forgedPayload);
+      expect(identity.accountType).toBe("consumer");
+      expect(identity.accountType).not.toBe("admin");
+    });
+
+    it("Vector 3: Role Escalation — raw role: 'admin' string without custom claims does not grant admin", () => {
+      const forgedAdminRole = {
+        uid: "attacker_fake_admin",
+        role: "admin",
+        isAdmin: false,
+      };
+
+      const identity = resolveCanonicalIdentity(forgedAdminRole);
+      expect(identity.accountType).toBe("consumer");
+      expect(() => assertIsAdmin(forgedAdminRole)).toThrow(ForbiddenError);
+    });
+
+    it("Vector 4: Portal & LocalStorage Manipulation — manipulating activeContext/localStorage leaves server auth unchanged", () => {
+      // Simulate client localStorage having anytrader_active_role = "admin"
+      const clientSideActiveContext = {
+        portal: "anytrader" as const,
+        role: "admin",
+      };
+
+      const authenticatedConsumer: AuthenticatedUser = {
+        uid: "consumer_user",
+        role: "customer",
+        isAdmin: false,
+      };
+
+      // Server identity resolution uses authenticated server user context, not client localStorage
+      const serverIdentity = resolveCanonicalIdentity({
+        uid: authenticatedConsumer.uid,
+        role: authenticatedConsumer.role,
+        activeContext: clientSideActiveContext,
+      });
+
+      expect(serverIdentity.accountType).toBe("consumer");
+      expect(serverIdentity.capabilities).toContain("homeowner");
+      expect(serverIdentity.capabilities).not.toContain("fleet_driver");
+      expect(() => assertIsAdmin(authenticatedConsumer)).toThrow(ForbiddenError);
+      expect(() => assertUserCapability(authenticatedConsumer, "fleet_driver")).toThrow(ForbiddenError);
+    });
+
+    it("Vector 5: Subscription Manipulation — changing subscriptionType or plan does not grant admin or driver capabilities", () => {
+      const maliciousSubscriptionPayload = {
+        uid: "consumer_sub_attacker",
+        role: "customer",
+        subscriptionType: "gotham_b2b_enterprise",
+        tierId: "Platinum Enterprise",
+        subscriptionStatus: "active",
+        plan: "enterprise_admin",
+      };
+
+      const identity = resolveCanonicalIdentity(maliciousSubscriptionPayload);
+      expect(identity.accountType).toBe("consumer");
+      expect(identity.subscription.tierId).toBe("Platinum Enterprise");
+      expect(identity.capabilities).not.toContain("fleet_driver");
+      expect(identity.capabilities).not.toContain("tradesperson");
+      expect(identity.capabilities).toContain("homeowner");
+      expect(() => assertIsAdmin({ uid: maliciousSubscriptionPayload.uid, role: maliciousSubscriptionPayload.role })).toThrow(ForbiddenError);
+    });
+
+    it("Vector 6: Cross-User Identity — submitting another user's uid in payload does not change authenticated context", () => {
+      const authenticatedUser: AuthenticatedUser = {
+        uid: "legitimate_auth_uid",
+        role: "customer",
+      };
+
+      const untrustedPayload = {
+        uid: "victim_uid",
+        userId: "victim_uid",
+        ownerId: "victim_uid",
+        accountType: "admin",
+        capabilities: ["admin"],
+      };
+
+      // sanitizeClientPayload strips server-owned keys
+      const sanitized = sanitizeClientPayload(untrustedPayload);
+      expect((sanitized as any).accountType).toBeUndefined();
+      expect((sanitized as any).capabilities).toBeUndefined();
+
+      // assertResourceOwner verifies against authenticatedUser.uid, not payload uid
+      expect(() => assertResourceOwner(authenticatedUser, untrustedPayload.ownerId, "Document")).toThrow(ForbiddenError);
+      expect(() => assertResourceOwner(authenticatedUser, authenticatedUser.uid, "Document")).not.toThrow();
+    });
+
+    it("Vector 7: Admin Escalation Matrix — all non-custom-claim escalation vectors fail closed", () => {
+      const escalationVectors = [
+        { uid: "e1", role: "admin", isAdmin: false },
+        { uid: "e2", role: "ecosystem_manager", isAdmin: false },
+        { uid: "e3", accountType: "admin" },
+        { uid: "e4", capabilities: ["admin"] },
+        { uid: "e5", subscriptionType: "admin_enterprise" },
+        { uid: "e6", activeContext: { portal: "anytrader", role: "admin" } },
+      ];
+
+      for (const vec of escalationVectors) {
+        const user: AuthenticatedUser = { uid: vec.uid, role: (vec as any).role };
+        expect(() => assertIsAdmin(user)).toThrow(ForbiddenError);
+        const resolved = resolveCanonicalIdentity(vec as any);
+        expect(resolved.accountType).not.toBe("admin");
+      }
+    });
+  });
 });

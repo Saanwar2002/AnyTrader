@@ -393,12 +393,32 @@ export default function Onboarding() {
         console.warn("Fraud detection error", err);
       }
 
+      // Derive canonical identity model fields
+      const effectiveRole = (finalRole || role || "homeowner") as string;
+      const canonicalAccountType = (isAuthorizedAdmin && effectiveRole === "admin")
+        ? "admin"
+        : (effectiveRole === "business" ? "business" : (effectiveRole === "fleet_driver" ? "driver" : (effectiveRole === "tradesperson" ? "service_provider" : "consumer")));
+
+      const canonicalCapabilities = (isAuthorizedAdmin && effectiveRole === "admin")
+        ? ["homeowner", "landlord", "estate_agent", "property_manager", "tradesperson", "contractor", "consultant", "fleet_driver"]
+        : (effectiveRole === "business"
+            ? ["contractor", "tradesperson", "homeowner", ...(businessLayer === "properties" ? ["landlord", "property_manager", "estate_agent"] : (businessLayer === "consultancy" ? ["consultant"] : []))]
+            : (effectiveRole === "fleet_driver" ? ["fleet_driver", "homeowner"] : (effectiveRole === "tradesperson" ? ["tradesperson", "homeowner"] : ["homeowner"])));
+
       const profile = {
         uid: user.uid,
         email: user.email,
         isAnonymous: user.isAnonymous,
         name: finalName,
         phone: finalPhone,
+        // Canonical Identity Model
+        accountType: canonicalAccountType,
+        capabilities: canonicalCapabilities,
+        activeContext: {
+          portal: finalRole === "fleet_driver" ? "anyroller" : "anytrader",
+          role: finalRole,
+        },
+        // Legacy Compatibility Fields
         role: finalRole,
         businessLayer: role === "business" ? businessLayer : null,
         tierId: selectedTier || (
