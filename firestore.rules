@@ -209,7 +209,9 @@ service cloud.firestore {
       allow create: if isOwner(userId) && (
         isAdmin() || (
           request.resource.data.get('isAdmin', false) == false && 
-          !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager'])
+          !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager']) &&
+          request.resource.data.get('accountType', 'consumer') != 'admin' &&
+          !('admin' in request.resource.data.get('capabilities', []))
         )
       );
       allow delete: if isOwner(userId) || isAdmin();
@@ -221,7 +223,7 @@ service cloud.firestore {
             request.resource.data.get('isAdmin', false) == false && 
             !(request.resource.data.get('role', '') in ['admin', 'ecosystem_manager']) &&
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-              'role', 'isAdmin', 'permissions', 'verified', 'isVerified', 'idVerified',
+              'role', 'isAdmin', 'accountType', 'capabilities', 'permissions', 'verified', 'isVerified', 'idVerified',
               'verifiedTrader', 'videoVerified', 'videoVerificationStatus',
               'subscriptionStatus', 'subscriptionId', 'hasExclusiveAddon', 'isExclusiveActive',
               'exclusiveSubscribedAt', 'exclusiveSubscriptionId', 'hasVerifiedVideoProSubscription',
