@@ -360,5 +360,43 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
         expect(resolved.accountType).not.toBe("admin");
       }
     });
+
+    it("Vector 8: Legacy Role Bypass Prevention in assertUserRole — raw role string cannot bypass canonical authorization", () => {
+      // 1. Attacker claims role = "admin" in payload, but lacks custom claims
+      const fakeAdminUser: AuthenticatedUser = {
+        uid: "attacker_fake_admin",
+        role: "admin",
+        isAdmin: false,
+      };
+      // assertUserRole with admin in allowedRoles MUST throw ForbiddenError
+      expect(() => assertUserRole(fakeAdminUser, ["admin"])).toThrow(ForbiddenError);
+      expect(() => assertUserRole(fakeAdminUser, ["admin", "ecosystem_manager"])).toThrow(ForbiddenError);
+
+      // 2. Consumer attempting tradesperson or driver role
+      const consumerUser: AuthenticatedUser = {
+        uid: "consumer_user",
+        role: "customer",
+      };
+      expect(() => assertUserRole(consumerUser, ["tradesperson", "trader"])).toThrow(ForbiddenError);
+      expect(() => assertUserRole(consumerUser, ["driver", "fleet_driver"])).toThrow(ForbiddenError);
+      // Consumer with customer allowed passes
+      expect(() => assertUserRole(consumerUser, ["customer", "homeowner", "consumer"])).not.toThrow();
+
+      // 3. Tradesperson user passes for service_provider / tradesperson
+      const tradesUser: AuthenticatedUser = {
+        uid: "trader_123",
+        role: "tradesperson",
+      };
+      expect(() => assertUserRole(tradesUser, ["tradesperson", "service_provider"])).not.toThrow();
+      expect(() => assertUserRole(tradesUser, ["driver"])).toThrow(ForbiddenError);
+
+      // 4. Driver user passes for driver / fleet_driver
+      const driverUser: AuthenticatedUser = {
+        uid: "driver_123",
+        role: "fleet_driver",
+      };
+      expect(() => assertUserRole(driverUser, ["driver", "fleet_driver"])).not.toThrow();
+      expect(() => assertUserRole(driverUser, ["tradesperson"])).toThrow(ForbiddenError);
+    });
   });
 });

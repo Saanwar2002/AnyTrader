@@ -53,7 +53,10 @@ export function assertIsAdmin(user?: AuthenticatedUser | null): asserts user is 
 }
 
 /**
- * Ensures caller has one of the required roles or is an admin
+ * Compatibility adapter for legacy role assertions.
+ * Resolves the user to their canonical identity first to prevent raw role spoofing.
+ * Security Invariant: 'admin' or 'ecosystem_manager' in allowedRoles is NEVER satisfied
+ * by a raw user.role string; it strictly requires verified server custom claims via isUserAdminClaim().
  */
 export function assertUserRole(
   user: AuthenticatedUser,
@@ -63,13 +66,31 @@ export function assertUserRole(
   if (isUserAdminClaim(user)) {
     return;
   }
+
+  // Admin role can NEVER be granted without verified server custom claims
+  const nonAdminAllowed = allowedRoles.filter(r => r !== "admin" && r !== "ecosystem_manager");
+  if (nonAdminAllowed.length === 0) {
+    throw new ForbiddenError("Administrative privileges required for this action.");
+  }
+
   const canonical = resolveUserCanonicalIdentity(user);
-  if (user.role && allowedRoles.includes(user.role)) {
+
+  // Check if canonical accountType or any canonical capability satisfies the allowed roles
+  const hasMatchingAccountType = nonAdminAllowed.includes(canonical.accountType);
+  const hasMatchingCapability = canonical.capabilities.some(cap => nonAdminAllowed.includes(cap));
+
+  // Legacy role check through verified canonical mapping
+  const legacyRoleMatches = user.role && nonAdminAllowed.includes(user.role) && (
+    (user.role === "customer" || user.role === "homeowner") && canonical.accountType === "consumer" ||
+    (user.role === "tradesperson" || user.role === "trader") && (canonical.accountType === "service_provider" || canonical.capabilities.includes("tradesperson")) ||
+    (user.role === "driver" || user.role === "fleet_driver") && (canonical.accountType === "driver" || canonical.capabilities.includes("fleet_driver")) ||
+    (user.role === "business" || user.role === "contractor") && (canonical.accountType === "business" || canonical.capabilities.includes("contractor"))
+  );
+
+  if (hasMatchingAccountType || hasMatchingCapability || legacyRoleMatches) {
     return;
   }
-  if (allowedRoles.includes(canonical.accountType)) {
-    return;
-  }
+
   throw new ForbiddenError(`User role '${user.role || canonical.accountType || "unknown"}' is not permitted to perform this action.`);
 }
 
