@@ -398,5 +398,20 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       expect(() => assertUserRole(driverUser, ["driver", "fleet_driver"])).not.toThrow();
       expect(() => assertUserRole(driverUser, ["tradesperson"])).toThrow(ForbiddenError);
     });
+
+    it("Vector 9: Invitation Authority Escalation — invitationId without server custom claims cannot grant admin privilege", () => {
+      const invitedUserPayload = {
+        uid: "invited_user_1",
+        role: "admin",
+        invitationId: "invite_fake_admin_token",
+        isAdmin: false,
+      };
+
+      // Server identity resolution strictly evaluates isAdmin/claims, never client invitationId
+      const identity = resolveCanonicalIdentity(invitedUserPayload);
+      expect(identity.accountType).toBe("consumer");
+      expect(identity.accountType).not.toBe("admin");
+      expect(() => assertIsAdmin({ uid: invitedUserPayload.uid, role: invitedUserPayload.role })).toThrow(ForbiddenError);
+    });
   });
 });

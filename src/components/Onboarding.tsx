@@ -164,12 +164,12 @@ export default function Onboarding() {
     const cleanPhone = phone ? phone.replace(/\s/g, "") : "";
     
     let isAuthorizedAdmin = false;
-    // Prevent unauthorized role elevation to admin
+    // Prevent unauthorized role elevation to admin: strictly require server-minted custom claims
     if (role === 'admin') {
       const tokenResult = await user.getIdTokenResult().catch(() => null);
-      isAuthorizedAdmin = tokenResult?.claims.admin === true || tokenResult?.claims.role === "admin" || !!invitationId;
+      isAuthorizedAdmin = tokenResult?.claims.admin === true || tokenResult?.claims.isAdmin === true || tokenResult?.claims.role === "admin";
       if (!isAuthorizedAdmin) {
-        setError("Unauthorized role selected. Please choose Homeowner, Tradesperson / Business, or Driver.");
+        setError("Unauthorized role selected. Administrative onboarding requires verified custom claims.");
         setRole("homeowner");
         setLoading(false);
         return;
