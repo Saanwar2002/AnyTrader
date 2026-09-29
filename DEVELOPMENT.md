@@ -20,9 +20,13 @@
     - `SERVER_OWNED_PROTECTED_KEYS` in `src/server/authorization.ts` protects 25+ privileged and identity keys (`accountType`, `capabilities`, `activeContext`, `customClaims`, `isAdmin`, `role`, etc.).
   - **Onboarding Authority Hardening (`Onboarding.tsx`)**:
     - Administrative onboarding strictly requires server-minted custom claims; `invitationId` alone cannot grant administrative privileges.
+  - **Eliminate Legacy Authorization in `assertUserRole()`**:
+    - Completely removed `user.role` from authorization evaluation in `assertUserRole()`. All authorization decisions derive 100% from canonical identity (`canonical.accountType` and `canonical.capabilities`).
+  - **Firestore Mock Query Chaining**:
+    - Enhanced query builders in test mocks to support `.where().limit().get()` chaining without modifying production query code.
 - **2. Testing & Verification**:
-  - Full unit / security test suite (`npm test`): **752/752 tests passing** across **47 test files** (100% clean).
-  - Task 1 adversarial suite: `tests/unit/task1CanonicalIdentity.test.ts` (15/15 PASS covering all 9 attack vectors).
+  - Task 1 dedicated suite: `npx vitest run tests/unit/task1CanonicalIdentity.test.ts` (32/32 PASS).
+  - Full unit / security test suite (`npm test`): **760/760 tests passing** across **47 test files** (100% clean).
   - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
   - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
   - Release Gate Audit (`npm run audit:release`): 0 critical failures, 5 non-critical warnings.

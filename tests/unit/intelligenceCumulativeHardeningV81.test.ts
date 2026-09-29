@@ -50,23 +50,35 @@ class MockMemoryFirestore implements FirestoreDbLike {
           colMap.delete(id);
         },
       }),
-      where: (field: string, op: string, value: any) => ({
-        get: async () => {
-          const docs: any[] = [];
-          for (const [docId, docVal] of colMap.entries()) {
-            if (op === '==' && docVal[field] === value) {
-              docs.push({
-                id: docId,
-                data: () => JSON.parse(JSON.stringify(docVal)),
+      where: (field: string, op: string, value: any) => {
+        const createQuery = (filters: Array<{ field: string; op: string; value: any }>, limitVal?: number) => ({
+          where: (f2: string, op2: string, v2: any) => createQuery([...filters, { field: f2, op: op2, value: v2 }], limitVal),
+          limit: (n: number) => createQuery(filters, n),
+          get: async () => {
+            const docs: any[] = [];
+            for (const [docId, docVal] of colMap.entries()) {
+              const matches = filters.every((filter) => {
+                if (filter.op === '==') return docVal[filter.field] === filter.value;
+                if (filter.op === '<=') return docVal[filter.field] <= filter.value;
+                if (filter.op === '>=') return docVal[filter.field] >= filter.value;
+                return true;
               });
+              if (matches) {
+                docs.push({
+                  id: docId,
+                  data: () => JSON.parse(JSON.stringify(docVal)),
+                });
+              }
+              if (limitVal !== undefined && docs.length >= limitVal) break;
             }
-          }
-          return {
-            docs,
-            empty: docs.length === 0,
-          };
-        },
-      }),
+            return {
+              docs,
+              empty: docs.length === 0,
+            };
+          },
+        });
+        return createQuery([{ field, op, value }]);
+      },
     };
   }
 

@@ -21,6 +21,9 @@ import {
   requireAccountType,
   requireAccountTypeIn,
   requireCapability,
+  resolveCanonicalIdentityFromTrustedSource,
+  buildCanonicalIdentity,
+  deriveCanonicalIdentityFromLegacyProfile,
   CanonicalIdentity,
 } from "../../src/server/identity.ts";
 import {
@@ -446,6 +449,78 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
 
       expect(() => requireCapability(traderIdentity, "tradesperson")).not.toThrow();
       expect(() => requireCapability(traderIdentity, "fleet_driver")).toThrow(ForbiddenError);
+    });
+  });
+
+  describe("Test I: Required Adversarial Tests (Task 1 Section 10)", () => {
+    it("A. Role spoofing: rejects client-supplied admin role", async () => {
+      const homeownerAuth = {
+        uid: "user_homeowner_1",
+        role: "admin", // Client claims role = admin in request/profile without claims
+        isAdmin: false,
+      };
+
+      const identity = resolveCanonicalIdentityFromTrustedSource(homeownerAuth);
+      expect(() => requireAccountType(identity, "admin")).toThrow(ForbiddenError);
+    });
+
+    it("B. Capability spoofing: does not trust client-supplied capabilities", async () => {
+      const homeownerAuth = {
+        uid: "user_homeowner_2",
+        role: "customer",
+        capabilities: ["admin:all", "fleet_driver"],
+      };
+
+      const identity = resolveCanonicalIdentityFromTrustedSource(homeownerAuth);
+      expect(identity.capabilities).not.toContain("admin:all");
+      expect(identity.capabilities).not.toContain("fleet_driver");
+      expect(() => requireCapability(identity, "fleet_driver")).toThrow(ForbiddenError);
+    });
+
+    it("C. UID substitution: does not allow authenticated user A to act as user B", async () => {
+      const USER_A_UID = "auth_user_A";
+      const USER_B_UID = "target_user_B";
+
+      const verifiedAuthForUserA = {
+        uid: USER_A_UID,
+        token: { admin: false },
+      };
+
+      // Attacker attempts to provide user B in payload
+      const payloadWithForgedUid = {
+        uid: USER_B_UID,
+        role: "customer",
+      };
+
+      const identity = buildCanonicalIdentity({
+        uid: verifiedAuthForUserA.uid, // Authoritative UID from verifiedAuth
+        profile: payloadWithForgedUid,
+        trustedAdminClaims: verifiedAuthForUserA.token,
+      });
+
+      expect(identity.uid).toBe(USER_A_UID);
+      expect(identity.uid).not.toBe(USER_B_UID);
+    });
+
+    it("D. Admin spoofing: requires trusted admin authority", async () => {
+      const nonAdminAuth = {
+        uid: "user_regular",
+        role: "admin",
+        isAdmin: false,
+      };
+
+      const identity = resolveCanonicalIdentityFromTrustedSource(nonAdminAuth);
+      expect(identity.accountType).not.toBe("admin");
+    });
+
+    it("E. Legacy compatibility: normalizes legacy role without making it a second authorization source", () => {
+      const identity = deriveCanonicalIdentityFromLegacyProfile({
+        uid: "trader_legacy_1",
+        role: "trader",
+      });
+
+      expect(identity.accountType).toBe("service_provider");
+      expect(identity.capabilities).toContain("tradesperson");
     });
   });
 });

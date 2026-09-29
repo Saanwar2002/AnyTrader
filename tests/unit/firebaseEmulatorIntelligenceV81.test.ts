@@ -1133,13 +1133,21 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       ).rejects.toThrow('Firestore task store is not ready');
 
       // 4b. Firestore throws on query
+      const createFailingQuery = () => {
+        const q: any = {
+          where: () => q,
+          limit: () => q,
+          startAfter: () => q,
+          get: async () => {
+            throw new Error('Query index building / permission error');
+          }
+        };
+        return q;
+      };
       const errorDb = {
         collection: () => ({
-          where: () => ({
-            get: async () => {
-              throw new Error('Query index building / permission error');
-            }
-          })
+          where: () => createFailingQuery(),
+          limit: () => createFailingQuery(),
         })
       };
       queue.setFirestoreDb(errorDb as any);
@@ -1156,15 +1164,21 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
       ).rejects.toThrow('Firestore task store is not ready');
 
       // 5b. Firestore throws PERMISSION_DENIED
+      const createPermDeniedQuery = () => {
+        const q: any = {
+          where: () => q,
+          limit: () => q,
+          startAfter: () => q,
+          get: async () => {
+            throw { code: 7, message: 'PERMISSION_DENIED' };
+          }
+        };
+        return q;
+      };
       const errorDb = {
         collection: () => ({
-          where: () => ({
-            limit: () => ({
-              get: async () => {
-                throw { code: 7, message: 'PERMISSION_DENIED' };
-              }
-            })
-          })
+          where: () => createPermDeniedQuery(),
+          limit: () => createPermDeniedQuery(),
         })
       };
       queue.setFirestoreDb(errorDb as any);
@@ -2113,14 +2127,22 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         });
 
         let contentionAttempts = 0;
+        const createContentionQuery = () => {
+          const q: any = {
+            where: () => q,
+            limit: () => q,
+            startAfter: () => q,
+            get: async () => ({
+              empty: false,
+              docs: [{ id: taskIdContention }],
+            }),
+          };
+          return q;
+        };
         const contentionDb = {
           collection: (name: string) => ({
-            where: () => ({
-              get: async () => ({
-                empty: false,
-                docs: [{ id: taskIdContention }],
-              }),
-            }),
+            where: () => createContentionQuery(),
+            limit: () => createContentionQuery(),
             doc: realAdminDb.collection(name).doc,
           }),
           runTransaction: async <T>(updateFunction: (tx: any) => Promise<T>): Promise<T> => {

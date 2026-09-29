@@ -63,9 +63,9 @@ export function assertIsAdmin(user?: AuthenticatedUser | null): asserts user is 
 
 /**
  * Compatibility adapter for legacy role assertions.
- * Resolves the user to their canonical identity first to prevent raw role spoofing.
- * Security Invariant: 'admin' or 'ecosystem_manager' in allowedRoles is NEVER satisfied
- * by a raw user.role string; it strictly requires verified server custom claims via isUserAdminClaim().
+ * Resolves the caller to their canonical identity first.
+ * The authorization decision is made 100% strictly on canonical identity (accountType & capabilities),
+ * completely eliminating legacy 'user.role' as an independent authorization authority.
  */
 export function assertUserRole(
   user: AuthenticatedUser,
@@ -84,23 +84,52 @@ export function assertUserRole(
 
   const canonical = resolveUserCanonicalIdentity(user);
 
-  // Check if canonical accountType or any canonical capability satisfies the allowed roles
-  const hasMatchingAccountType = nonAdminAllowed.includes(canonical.accountType);
-  const hasMatchingCapability = canonical.capabilities.some(cap => nonAdminAllowed.includes(cap));
+  // Map allowed legacy role filters to canonical account types and capabilities
+  const mappedAllowedAccountTypes = new Set<string>();
+  const mappedAllowedCapabilities = new Set<string>();
 
-  // Legacy role check through verified canonical mapping
-  const legacyRoleMatches = user.role && nonAdminAllowed.includes(user.role) && (
-    (user.role === "customer" || user.role === "homeowner") && canonical.accountType === "consumer" ||
-    (user.role === "tradesperson" || user.role === "trader") && (canonical.accountType === "service_provider" || canonical.capabilities.includes("tradesperson")) ||
-    (user.role === "driver" || user.role === "fleet_driver") && (canonical.accountType === "driver" || canonical.capabilities.includes("fleet_driver")) ||
-    (user.role === "business" || user.role === "contractor") && (canonical.accountType === "business" || canonical.capabilities.includes("contractor"))
-  );
+  for (const r of nonAdminAllowed) {
+    mappedAllowedAccountTypes.add(r);
+    mappedAllowedCapabilities.add(r);
+    if (r === "customer" || r === "homeowner" || r === "consumer" || r === "tenant" || r === "passenger") {
+      mappedAllowedAccountTypes.add("consumer");
+      mappedAllowedCapabilities.add("homeowner");
+    }
+    if (r === "tradesperson" || r === "trader" || r === "pro" || r === "service_provider") {
+      mappedAllowedAccountTypes.add("service_provider");
+      mappedAllowedCapabilities.add("tradesperson");
+    }
+    if (r === "driver" || r === "fleet_driver" || r === "taxi_driver") {
+      mappedAllowedAccountTypes.add("driver");
+      mappedAllowedCapabilities.add("fleet_driver");
+    }
+    if (r === "business" || r === "contractor" || r === "enterprise") {
+      mappedAllowedAccountTypes.add("business");
+      mappedAllowedCapabilities.add("contractor");
+    }
+    if (r === "landlord") {
+      mappedAllowedCapabilities.add("landlord");
+    }
+    if (r === "estate_agent") {
+      mappedAllowedCapabilities.add("estate_agent");
+    }
+    if (r === "property_manager") {
+      mappedAllowedCapabilities.add("property_manager");
+    }
+    if (r === "consultant") {
+      mappedAllowedCapabilities.add("consultant");
+    }
+  }
 
-  if (hasMatchingAccountType || hasMatchingCapability || legacyRoleMatches) {
+  // Purely canonical checks — user.role is NEVER consulted here:
+  const hasMatchingAccountType = mappedAllowedAccountTypes.has(canonical.accountType);
+  const hasMatchingCapability = canonical.capabilities.some(cap => mappedAllowedCapabilities.has(cap));
+
+  if (hasMatchingAccountType || hasMatchingCapability) {
     return;
   }
 
-  throw new ForbiddenError(`User role '${user.role || canonical.accountType || "unknown"}' is not permitted to perform this action.`);
+  throw new ForbiddenError(`Account type '${canonical.accountType}' is not permitted to perform this action.`);
 }
 
 /**

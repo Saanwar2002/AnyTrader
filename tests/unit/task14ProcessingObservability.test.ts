@@ -65,28 +65,31 @@ describe('Task 14: Intelligence Processing Observability & Execution Records', (
             store.set(key, { ...store.get(key), ...updates });
           },
         }),
-        where: (field: string, op: string, val: any) => ({
-          where: (f2: string, op2: string, v2: any) => ({
+        where: (field: string, op: string, val: any) => {
+          const createQuery = (filters: Array<{ field: string; op: string; val: any }>, limitVal?: number) => ({
+            where: (f2: string, op2: string, v2: any) => createQuery([...filters, { field: f2, op: op2, val: v2 }], limitVal),
+            limit: (n: number) => createQuery(filters, n),
+            startAfter: () => createQuery(filters, limitVal),
             get: async () => {
               const docs: any[] = [];
               for (const [key, data] of store.entries()) {
-                if (key.startsWith(`${colName}/`) && data[field] === val && data[f2] === v2) {
+                if (!key.startsWith(`${colName}/`)) continue;
+                const matches = filters.every((filter) => {
+                  if (filter.op === '==') return data[filter.field] === filter.val;
+                  if (filter.op === '<=') return data[filter.field] <= filter.val;
+                  if (filter.op === '>=') return data[filter.field] >= filter.val;
+                  return true;
+                });
+                if (matches) {
                   docs.push({ id: key.split('/')[1], data: () => data });
                 }
+                if (limitVal !== undefined && docs.length >= limitVal) break;
               }
               return { docs, empty: docs.length === 0 };
             },
-          }),
-          get: async () => {
-            const docs: any[] = [];
-            for (const [key, data] of store.entries()) {
-              if (key.startsWith(`${colName}/`) && data[field] === val) {
-                docs.push({ id: key.split('/')[1], data: () => data });
-              }
-            }
-            return { docs, empty: docs.length === 0 };
-          },
-        }),
+          });
+          return createQuery([{ field, op, val }]);
+        },
       }),
       runTransaction: async <T>(updateFn: (tx: any) => Promise<T>): Promise<T> => {
         const tx = {

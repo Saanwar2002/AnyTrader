@@ -22,6 +22,8 @@ export type CanonicalAccountType =
   | "driver" 
   | "admin";
 
+export type AccountType = CanonicalAccountType;
+
 export type CanonicalCapability =
   | "homeowner"
   | "landlord"
@@ -31,6 +33,31 @@ export type CanonicalCapability =
   | "contractor"
   | "consultant"
   | "fleet_driver";
+
+export interface TrustedIdentitySource {
+  uid: string;
+  email?: string;
+  accountType?: CanonicalAccountType | string | null;
+  role?: string | null;
+  businessLayer?: string | null;
+  capabilities?: string[] | null;
+  isAdmin?: boolean;
+  admin?: boolean;
+  isVerified?: boolean;
+  verified?: boolean;
+  verifiedTrader?: boolean;
+  verificationStatus?: CanonicalVerificationStatus;
+  verificationDocs?: any[];
+  verifiedAt?: string | null;
+  verificationExpiresAt?: string | null;
+  tierId?: string;
+  tier?: string;
+  subscriptionType?: string;
+  subscriptionStatus?: string;
+  isFoundingMember?: boolean;
+  subscriptionExpiresAt?: string | null;
+  activeContext?: CanonicalActiveContext;
+}
 
 export type CanonicalVerificationStatus =
   | "unverified"
@@ -316,6 +343,72 @@ export function resolveCanonicalIdentity(
     subscription,
     activeContext,
   };
+}
+
+/**
+ * Derives canonical AccountType from profile record and verified admin claims.
+ */
+export function deriveCanonicalAccountType(
+  profile?: Record<string, any> | null,
+  trustedAdminClaims?: Record<string, any> | null
+): CanonicalAccountType {
+  const isAdmin = trustedAdminClaims?.admin === true || trustedAdminClaims?.isAdmin === true;
+  return resolveAccountType(profile?.accountType || profile?.role, isAdmin);
+}
+
+/**
+ * Derives authorized capabilities from profile record and verified admin claims.
+ */
+export function deriveCanonicalCapabilities(
+  profile?: Record<string, any> | null,
+  trustedAdminClaims?: Record<string, any> | null
+): CanonicalCapability[] {
+  const isAdmin = trustedAdminClaims?.admin === true || trustedAdminClaims?.isAdmin === true;
+  const accountType = deriveCanonicalAccountType(profile, trustedAdminClaims);
+  return resolveCapabilities({
+    role: profile?.role,
+    businessLayer: profile?.businessLayer,
+    explicitCapabilities: profile?.capabilities,
+    accountType,
+    isAdmin,
+  });
+}
+
+/**
+ * Constructs a fully verified CanonicalIdentity from trusted server-side parameters.
+ */
+export function buildCanonicalIdentity(params: {
+  uid: string;
+  profile?: Record<string, any> | null;
+  trustedAdminClaims?: Record<string, any> | null;
+  activeContext?: CanonicalActiveContext;
+}): CanonicalIdentity {
+  const profile = params.profile || {};
+  const isAdmin = params.trustedAdminClaims?.admin === true || params.trustedAdminClaims?.isAdmin === true;
+  return resolveCanonicalIdentity({
+    ...profile,
+    uid: params.uid,
+    isAdmin,
+    activeContext: params.activeContext || profile.activeContext,
+  });
+}
+
+/**
+ * Resolves canonical identity from a strictly typed TrustedIdentitySource.
+ */
+export function resolveCanonicalIdentityFromTrustedSource(
+  source: TrustedIdentitySource
+): CanonicalIdentity {
+  return resolveCanonicalIdentity(source);
+}
+
+/**
+ * Normalizes legacy profile record into a CanonicalIdentity without creating a secondary authorization path.
+ */
+export function deriveCanonicalIdentityFromLegacyProfile(
+  profile: Record<string, any>
+): CanonicalIdentity {
+  return resolveCanonicalIdentity(profile);
 }
 
 /**
