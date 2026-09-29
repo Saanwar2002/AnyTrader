@@ -711,15 +711,37 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
               };
             },
             where(field: string, op: string, val: any) {
-              return {
+              let limitVal: number | undefined;
+              let startAfterDoc: any = null;
+              const queryObj: any = {
+                limit: (lim: number) => {
+                  limitVal = lim;
+                  return queryObj;
+                },
+                startAfter: (cursor: any) => {
+                  startAfterDoc = cursor;
+                  return queryObj;
+                },
                 get: async () => {
-                  const matching = Array.from(mockDocs.values()).filter((d) => d[field] === val);
+                  let matching = Array.from(mockDocs.values()).filter((d) => d[field] === val);
+                  if (startAfterDoc) {
+                    const startIdx = matching.findIndex(
+                      (d) => d.taskId === (startAfterDoc.id || startAfterDoc)
+                    );
+                    if (startIdx >= 0) {
+                      matching = matching.slice(startIdx + 1);
+                    }
+                  }
+                  if (limitVal !== undefined) {
+                    matching = matching.slice(0, limitVal);
+                  }
                   return {
                     empty: matching.length === 0,
                     docs: matching.map((d) => ({ id: d.taskId, data: () => d })),
                   };
                 },
               };
+              return queryObj;
             },
           };
         },
@@ -1215,17 +1237,39 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
               };
             },
             where(field: string, op: string, val: any) {
-              return {
+              let limitVal: number | undefined;
+              let startAfterDoc: any = null;
+              const queryObj: any = {
+                limit: (lim: number) => {
+                  limitVal = lim;
+                  return queryObj;
+                },
+                startAfter: (cursor: any) => {
+                  startAfterDoc = cursor;
+                  return queryObj;
+                },
                 get: async () => {
-                  const docs: any[] = [];
+                  let docs: any[] = [];
                   for (const [id, doc] of mockDocs.entries()) {
                     if (doc[field] === val) {
                       docs.push({ id, data: () => doc });
                     }
                   }
+                  if (startAfterDoc) {
+                    const startIdx = docs.findIndex(
+                      (d) => d.id === (startAfterDoc.id || startAfterDoc)
+                    );
+                    if (startIdx >= 0) {
+                      docs = docs.slice(startIdx + 1);
+                    }
+                  }
+                  if (limitVal !== undefined) {
+                    docs = docs.slice(0, limitVal);
+                  }
                   return { empty: docs.length === 0, docs };
                 },
               };
+              return queryObj;
             },
           };
         },
