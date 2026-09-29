@@ -522,5 +522,20 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       expect(identity.accountType).toBe("service_provider");
       expect(identity.capabilities).toContain("tradesperson");
     });
+
+    it("F. Legacy role alone: does not authorize admin access from legacy role alone", async () => {
+      const identity = buildCanonicalIdentity({
+        uid: "user-1",
+        profile: {
+          role: "admin",
+        },
+        trustedAdminClaims: {
+          admin: false,
+        },
+      });
+
+      expect(identity.accountType).not.toBe("admin");
+      expect(() => requireAccountType(identity, "admin")).toThrow(ForbiddenError);
+    });
   });
 });

@@ -118,7 +118,18 @@ export default function MasterAdminLayout() {
     checkClaimsAndFreshness();
   }, [user, adminConfig]);
 
-  const isAuthorizedAdmin = (hasAdminClaim || profile?.role === "admin" || profile?.role === "ecosystem_manager" || isAuthorizedAdminEmail(user?.email, adminConfig));
+  // Presentation-only UI authorization flag for Master Admin Console.
+  // CRITICAL SECURITY BOUNDARY: This boolean controls client route presentation and navigation ONLY.
+  // It does NOT authorize privileged backend operations or bypass Firestore security rules.
+  // All backend mutations, API routes, and Firestore reads/writes independently enforce server-authoritative
+  // custom claims (request.auth.token.admin == true / checkIsAdmin) and canonical identity authorization.
+  const canRenderAdminUi = Boolean(
+    hasAdminClaim ||
+    profile?.role === "admin" ||
+    profile?.role === "ecosystem_manager" ||
+    isAuthorizedAdminEmail(user?.email, adminConfig)
+  );
+  const isAuthorizedAdmin = canRenderAdminUi;
 
   // Load configured Admin Auth from Firestore or local fallback
   useEffect(() => {

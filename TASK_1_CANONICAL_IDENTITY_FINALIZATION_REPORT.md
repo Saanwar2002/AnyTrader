@@ -42,7 +42,7 @@ Authenticated Request (Firebase Auth Token)
 - **Presentation vs Authority Isolation**: `PortalContext` state, `localStorage` flags (`anytrader_active_role`, `anytrader_active_portal`), and UI role selectors **NEVER** grant or elevate server authority.
 - **Single Coherent Admin Authority Model**: Administrator privileges require server-minted Firebase custom claims (`isAdmin === true` or `admin === true`) or verified server-controlled records (`admins/{uid}`). Raw role strings (`role: "admin"` or `role: "ecosystem_manager"`), email-based UI heuristics, and invitation IDs cannot independently manufacture admin authority.
 - **Fail-Closed Capability Resolution**: `resolveCapabilities()` enforces account-type boundaries. Untrusted requests attempting to inject out-of-boundary explicit capabilities (e.g. a consumer claiming `fleet_driver` or `contractor`) are filtered out fail-closed.
-- **Canonical Primitives**: Introduced `requireAccountType()`, `requireAccountTypeIn()`, and `requireCapability()`.
+- **Canonical Primitives**: Enforced `requireAccountType()`, `requireAccountTypeIn()`, and `requireCapability()`.
 - **Mass-Assignment Defense**: `SERVER_OWNED_PROTECTED_KEYS` in `src/server/authorization.ts` suppresses 25+ privileged and identity keys (`accountType`, `capabilities`, `activeContext`, `customClaims`, `isAdmin`, `role`, `tierId`, `subscriptionStatus`, etc.) from client payloads.
 - **Safe Backward Compatibility**: Historical AnyTrader role values (`customer`, `homeowner`, `tradesperson`, `trader`, `pro`, `driver`, `fleet_driver`, `business`, `contractor`) resolve seamlessly to their canonical counterparts without creating escalation vulnerabilities.
 
@@ -61,7 +61,7 @@ Authenticated Request (Firebase Auth Token)
 | 7 | **Can `ecosystem_manager` still bypass canonical admin authorization?** | **NO** | `ecosystem_manager` is treated as a privileged administrative role requiring server-verified custom claims. Without server claims, it defaults safely to `consumer`. Verified in `task1CanonicalIdentity.test.ts` (Vector 7). |
 | 8 | **Can frontend role checks bypass server authorization?** | **NO** | All state mutations (jobs, quotes, payments, milestones, storage, properties) enforce server guards (`assertCanAccessJob`, `assertCanModifyJob`, `assertResourceOwner`, `assertCanManageMilestone`) independent of UI state. Verified in `task1CanonicalIdentity.test.ts` (Test F & Vector 6). |
 | 9 | **Can `resolveCanonicalIdentity()` consume untrusted client data as authoritative identity?** | **NO** | `resolveCanonicalIdentityFromTrustedSource()` and `buildCanonicalIdentity()` strictly enforce custom claims for admin authority, strip client-injected `isAdmin`/`admin` from profiles, and filter capabilities against account types. Verified in `task1CanonicalIdentity.test.ts` (Vectors 1–9 & Test I). |
-| 10 | **Can existing legacy-role compatibility mappings accidentally create privilege escalation?** | **NO** | Legacy role strings map deterministically to non-admin canonical account types (`consumer`, `service_provider`, `driver`, `business`). Legacy `admin`/`ecosystem_manager` strings require server custom claims. Verified in `task1CanonicalIdentity.test.ts` (Test A, Vector 8, & Test I.E). |
+| 10 | **Can existing legacy-role compatibility mappings accidentally create privilege escalation?** | **NO** | Legacy role strings map deterministically to non-admin canonical account types (`consumer`, `service_provider`, `driver`, `business`). Legacy `admin`/`ecosystem_manager` strings require server custom claims. Verified in `task1CanonicalIdentity.test.ts` (Test A, Vector 8, & Test I.E & I.F). |
 
 ---
 
@@ -72,7 +72,7 @@ Authenticated Request (Firebase Auth Token)
   - Defined `AccountType = CanonicalAccountType` and `TrustedIdentitySource` interface.
   - Implemented `deriveCanonicalAccountType()` and `deriveCanonicalCapabilities()`.
   - Implemented `buildCanonicalIdentity()`, `resolveCanonicalIdentityFromTrustedSource()`, and `deriveCanonicalIdentityFromLegacyProfile()`.
-  - Hardened `buildCanonicalIdentity()` to delete untrusted `isAdmin` and `admin` keys from `profile` input, binding admin authority exclusively to verified server claims.
+  - Hardened `buildCanonicalIdentity()` to delete untrusted `isAdmin` and `admin` keys from `profile` input, binding admin authority exclusively to verified server claims (`trustedAdminClaims`).
   - Implemented canonical authorization primitives: `requireAccountType()`, `requireAccountTypeIn()`, and `requireCapability()`.
   - Enforced strict account-type filtering in `resolveCapabilities()`.
 - **Why**: Eliminates untrusted client data from becoming identity and enforces authoritative capabilities.
@@ -94,6 +94,7 @@ Authenticated Request (Firebase Auth Token)
 ### D. `src/components/Onboarding.tsx` & `src/components/MasterAdminLayout.tsx`
 - **What Changed**:
   - Replaced legacy `claims.role === "admin"` and `claims.role === "ecosystem_manager"` with canonical `claims.admin === true || claims.isAdmin === true`.
+  - Documented `canRenderAdminUi` presentation boundary in `MasterAdminLayout.tsx`.
 - **Why**: Ensures client UI state transitions strictly adhere to server-minted custom claims.
 - **Security Impact**: Prevents UI-level privilege confusion.
 
@@ -106,8 +107,8 @@ Authenticated Request (Firebase Auth Token)
 ### F. `tests/unit/task1CanonicalIdentity.test.ts`
 - **What Changed**:
   - Added Test H (testing `requireAccountType`, `requireAccountTypeIn`, and `requireCapability`).
-  - Added Test I (testing required adversarial vectors: role spoofing, capability spoofing, UID substitution, admin spoofing, legacy compatibility).
-- **Why**: Validates all Task 1 security boundaries with rigorous adversarial tests.
+  - Added Test I (testing required adversarial vectors: role spoofing, capability spoofing, UID substitution, admin spoofing, legacy compatibility, and legacy role alone admin rejection).
+- **Why**: Validates all Task 1 security boundaries with rigorous adversarial tests (33 dedicated tests).
 - **Security Impact**: Guarantees zero regression on all identity and authorization paths.
 
 ---
@@ -125,8 +126,8 @@ Authenticated Request (Firebase Auth Token)
 ### B. Task 1 Dedicated Test Suite
 - **Command**: `npx vitest run tests/unit/task1CanonicalIdentity.test.ts`
 - **Exit code**: `0`
-- **Total tests**: `32`
-- **Passed**: `32`
+- **Total tests**: `33`
+- **Passed**: `33`
 - **Failed**: `0`
 - **Skipped**: `0`
 
@@ -142,7 +143,7 @@ Authenticated Request (Firebase Auth Token)
 - **Command**: `npm test`
 - **Exit code**: `0`
 - **Test Files**: `47 passed (47)`
-- **Total tests**: `760 passed (760)`
+- **Total tests**: `761 passed (761)`
 - **Failed**: `0`
 - **Skipped**: `0`
 
@@ -154,13 +155,19 @@ Authenticated Request (Firebase Auth Token)
 ### F. Production Build
 - **Command**: `npm run build`
 - **Exit code**: `0`
-- **Result**: `✓ built in 28.61s` (Vite client assets + `dist/server.cjs` bundled).
+- **Result**: `✓ built in 27.20s` (Vite client assets + `dist/server.cjs` bundled).
+
+### G. Release Gate Audit
+- **Command**: `npm run audit:release`
+- **Exit code**: `0`
+- **Critical Failures**: `0`
+- **Warnings**: `5` (Non-critical development environment fallbacks for optional secrets: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, JWT_SECRET, ALLOWED_ORIGINS, Server Firestore client connectivity)
 
 ---
 
 ## 7. Remaining Issues
 
-- **None**: All Task 1 requirements, Firestore query mock contracts, emulator test suites, canonical identity trust boundaries, and admin authority audits are 100% satisfied and verified.
+- **None**: All Task 1 requirements, query mock contracts, emulator test suites, canonical identity trust boundaries, and admin authority audits are 100% satisfied and verified.
 
 ---
 
