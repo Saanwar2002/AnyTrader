@@ -11,7 +11,16 @@ import {
   hasCapability,
   assertHasCapability,
   assertHasAccountType,
+  requireAccountType,
+  requireAccountTypeIn,
+  requireCapability,
 } from "./identity.ts";
+
+export {
+  requireAccountType,
+  requireAccountTypeIn,
+  requireCapability,
+};
 
 export interface AuthenticatedUser {
   uid: string;

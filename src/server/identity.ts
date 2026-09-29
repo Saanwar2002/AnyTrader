@@ -379,3 +379,33 @@ export function assertHasAccountType(
     );
   }
 }
+
+/**
+ * Enforces that an identity strictly matches the expected AccountType.
+ */
+export function requireAccountType(
+  identityOrUser: CanonicalIdentity | Record<string, any> | null | undefined,
+  expected: CanonicalAccountType
+): void {
+  assertHasAccountType(identityOrUser, [expected]);
+}
+
+/**
+ * Enforces that an identity belongs to one of the allowed AccountTypes.
+ */
+export function requireAccountTypeIn(
+  identityOrUser: CanonicalIdentity | Record<string, any> | null | undefined,
+  allowed: readonly CanonicalAccountType[]
+): void {
+  assertHasAccountType(identityOrUser, allowed as CanonicalAccountType[]);
+}
+
+/**
+ * Enforces that an identity possesses the required capability.
+ */
+export function requireCapability(
+  identityOrUser: CanonicalIdentity | Record<string, any> | null | undefined,
+  capability: CanonicalCapability | string
+): void {
+  assertHasCapability(identityOrUser, capability as CanonicalCapability);
+}

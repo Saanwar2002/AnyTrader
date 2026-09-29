@@ -5684,7 +5684,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
         }
         const propData = propDoc.data();
         const isOwner = propData?.ownerId === user.uid || propData?.homeownerId === user.uid;
-        const isAdmin = user.isAdmin === true || user.role === "admin";
+        const isAdmin = await checkIsAdmin(user);
         if (!isOwner && !isAdmin) {
           return res.status(403).json({ error: "Forbidden: Not property owner or admin" });
         }
@@ -5890,7 +5890,7 @@ Limit your response to just the text of the tip. Do not use quotes.`;
       }
 
       const tenantId = user.uid;
-      const isAdmin = user.isAdmin === true || user.role === "admin";
+      const isAdmin = await checkIsAdmin(user);
 
       let result;
       if (componentId) {

@@ -18,6 +18,9 @@ import {
   hasCapability,
   assertHasCapability,
   assertHasAccountType,
+  requireAccountType,
+  requireAccountTypeIn,
+  requireCapability,
   CanonicalIdentity,
 } from "../../src/server/identity.ts";
 import {
@@ -412,6 +415,37 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       expect(identity.accountType).toBe("consumer");
       expect(identity.accountType).not.toBe("admin");
       expect(() => assertIsAdmin({ uid: invitedUserPayload.uid, role: invitedUserPayload.role })).toThrow(ForbiddenError);
+    });
+  });
+
+  describe("Test H: Canonical Authorization Primitives (requireAccountType, requireAccountTypeIn, requireCapability)", () => {
+    it("requireAccountType enforces expected account type and throws ForbiddenError on mismatch", () => {
+      const consumerIdentity = resolveCanonicalIdentity({ uid: "user_c", role: "customer" });
+      const traderIdentity = resolveCanonicalIdentity({ uid: "user_t", role: "tradesperson" });
+
+      expect(() => requireAccountType(consumerIdentity, "consumer")).not.toThrow();
+      expect(() => requireAccountType(consumerIdentity, "service_provider")).toThrow(ForbiddenError);
+
+      expect(() => requireAccountType(traderIdentity, "service_provider")).not.toThrow();
+      expect(() => requireAccountType(traderIdentity, "consumer")).toThrow(ForbiddenError);
+    });
+
+    it("requireAccountTypeIn enforces membership in allowed account types", () => {
+      const driverIdentity = resolveCanonicalIdentity({ uid: "user_d", role: "fleet_driver" });
+
+      expect(() => requireAccountTypeIn(driverIdentity, ["driver", "service_provider"])).not.toThrow();
+      expect(() => requireAccountTypeIn(driverIdentity, ["consumer", "business"])).toThrow(ForbiddenError);
+    });
+
+    it("requireCapability enforces required capability", () => {
+      const consumerIdentity = resolveCanonicalIdentity({ uid: "user_c", role: "customer" });
+      const traderIdentity = resolveCanonicalIdentity({ uid: "user_t", role: "tradesperson" });
+
+      expect(() => requireCapability(consumerIdentity, "homeowner")).not.toThrow();
+      expect(() => requireCapability(consumerIdentity, "tradesperson")).toThrow(ForbiddenError);
+
+      expect(() => requireCapability(traderIdentity, "tradesperson")).not.toThrow();
+      expect(() => requireCapability(traderIdentity, "fleet_driver")).toThrow(ForbiddenError);
     });
   });
 });
