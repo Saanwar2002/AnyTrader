@@ -108,7 +108,7 @@ export default function Onboarding() {
       // Check for admin authority via Firebase custom claims
       try {
         const tokenResult = await user.getIdTokenResult();
-        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.role === "admin";
+        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.isAdmin === true;
         if (isAdmin) {
           setHasAdminClaim(true);
           setRole("admin");
@@ -167,7 +167,7 @@ export default function Onboarding() {
     // Prevent unauthorized role elevation to admin: strictly require server-minted custom claims
     if (role === 'admin') {
       const tokenResult = await user.getIdTokenResult().catch(() => null);
-      isAuthorizedAdmin = tokenResult?.claims.admin === true || tokenResult?.claims.isAdmin === true || tokenResult?.claims.role === "admin";
+      isAuthorizedAdmin = tokenResult?.claims.admin === true || tokenResult?.claims.isAdmin === true;
       if (!isAuthorizedAdmin) {
         setError("Unauthorized role selected. Administrative onboarding requires verified custom claims.");
         setRole("homeowner");

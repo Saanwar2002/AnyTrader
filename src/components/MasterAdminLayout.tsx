@@ -97,7 +97,7 @@ export default function MasterAdminLayout() {
     const checkClaimsAndFreshness = async () => {
       try {
         const tokenResult = await user.getIdTokenResult();
-        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.role === "admin" || tokenResult.claims.role === "ecosystem_manager";
+        const isAdmin = tokenResult.claims.admin === true || tokenResult.claims.isAdmin === true;
         setHasAdminClaim(isAdmin);
 
         const authTimeSec = Number(tokenResult.claims.auth_time || 0);

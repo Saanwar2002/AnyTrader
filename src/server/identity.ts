@@ -383,12 +383,15 @@ export function buildCanonicalIdentity(params: {
   trustedAdminClaims?: Record<string, any> | null;
   activeContext?: CanonicalActiveContext;
 }): CanonicalIdentity {
-  const profile = params.profile || {};
+  const profile = params.profile ? { ...params.profile } : {};
+  delete profile.isAdmin;
+  delete profile.admin;
   const isAdmin = params.trustedAdminClaims?.admin === true || params.trustedAdminClaims?.isAdmin === true;
   return resolveCanonicalIdentity({
     ...profile,
     uid: params.uid,
     isAdmin,
+    admin: isAdmin,
     activeContext: params.activeContext || profile.activeContext,
   });
 }
