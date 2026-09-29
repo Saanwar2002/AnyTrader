@@ -1,5 +1,34 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader — Task 1: Canonical Identity & Capability Model Finalization (September 29, 2026)
+- **1. Canonical Identity Architecture & Authority Model**:
+  - Established formal separation between:
+    1. **Account Type** (`consumer` | `service_provider` | `business` | `driver` | `admin`): Fundamental structural account classification in `src/server/identity.ts`.
+    2. **Capabilities** (`homeowner`, `landlord`, `estate_agent`, `property_manager`, `tradesperson`, `contractor`, `consultant`, `fleet_driver`): Fine-grained operational permissions.
+    3. **Verification** (`unverified` | `pending` | `verified` | `rejected` | `expired` | `revoked`): Distinct credential verification lifecycle.
+    4. **Subscription** (`PAYG` | `Silver Professional` | `Gold Elite` | `Platinum Enterprise`): Commercial entitlement tracking independent of identity authorization.
+    5. **Active Context** (`portal`, `role`): Transient UI presentation and session persona state.
+  - **Single Coherent Admin Authority Model**:
+    - Administrator privileges strictly require server-minted Firebase custom claims (`isAdmin === true` or `admin === true`).
+    - Raw role strings (`role: "admin"` or `role: "ecosystem_manager"`), email-based UI heuristics, and invitation IDs cannot independently manufacture admin authority.
+  - **Harden `resolveCanonicalIdentity()` & `resolveCapabilities()`**:
+    - `resolveCapabilities()` enforces account-type boundaries: untrusted requests attempting to inject out-of-boundary explicit capabilities (e.g. consumer claiming `fleet_driver` or `contractor`) are filtered out fail-closed.
+    - `resolveCanonicalIdentity()` normalizes legacy role strings to non-admin canonical account types (`consumer`, `service_provider`, `driver`, `business`), defaulting unverified `admin` or `ecosystem_manager` strings safely to `consumer`.
+  - **PortalContext & Presentation Isolation**:
+    - `PortalContext.tsx` and `localStorage` (`anytrader_active_role`, `anytrader_active_portal`) manage client navigation and theme state only and are decoupled from backend security checks.
+  - **Mass-Assignment Defense**:
+    - `SERVER_OWNED_PROTECTED_KEYS` in `src/server/authorization.ts` protects 25+ privileged and identity keys (`accountType`, `capabilities`, `activeContext`, `customClaims`, `isAdmin`, `role`, etc.).
+  - **Onboarding Authority Hardening (`Onboarding.tsx`)**:
+    - Administrative onboarding strictly requires server-minted custom claims; `invitationId` alone cannot grant administrative privileges.
+- **2. Testing & Verification**:
+  - Full unit / security test suite (`npm test`): **752/752 tests passing** across **47 test files** (100% clean).
+  - Task 1 adversarial suite: `tests/unit/task1CanonicalIdentity.test.ts` (15/15 PASS covering all 9 attack vectors).
+  - Typecheck & Lint (`npm run lint`): 0 errors (`tsc --noEmit` clean).
+  - Applet compilation (`compile_applet` & `npm run build`): Succeeded cleanly.
+  - Release Gate Audit (`npm run audit:release`): 0 critical failures, 5 non-critical warnings.
+  - Report created: `/TASK_1_CANONICAL_IDENTITY_FINALIZATION_REPORT.md`.
+  - Next Task: Task 2 — Canonical CreateJob Command (Not started).
+
 ## 🛡️ AnyTrader V8.3 — Task 33: Scale & Resilience Foundation (September 25, 2026)
 - **1. Scale & Resilience Foundation Architecture**:
   - Implemented centralized engineering limits in `src/server/intelligence/scaleLimits.ts` establishing server-authoritative constants for max claim batches (25), worker concurrency (10, clamped 1–50), lease durations (5–15 mins), retry ceilings (5 attempts), exponential backoff ceilings (5 mins), Firestore batch writes (400 ops), and max payload sizes (1MB).
