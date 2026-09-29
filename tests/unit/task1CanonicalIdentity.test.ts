@@ -22,6 +22,7 @@ import {
   requireAccountTypeIn,
   requireCapability,
   resolveCanonicalIdentityFromTrustedSource,
+  resolveTrustedCanonicalIdentity,
   buildCanonicalIdentity,
   deriveCanonicalIdentityFromLegacyProfile,
   CanonicalIdentity,
@@ -535,6 +536,42 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       });
 
       expect(identity.accountType).not.toBe("admin");
+      expect(() => requireAccountType(identity, "admin")).toThrow(ForbiddenError);
+    });
+
+    it("G. Request-controlled body rejection: rejects client-controlled admin escalation in request body", async () => {
+      const authenticatedRequest = {
+        auth: {
+          uid: "authenticated_user_123",
+          token: {
+            admin: false,
+            isAdmin: false,
+          },
+        },
+        body: {
+          role: "admin",
+          accountType: "admin",
+          isAdmin: true,
+          admin: true,
+          capabilities: ["admin:all", "fleet_driver"],
+        },
+      };
+
+      // The client-controlled body fields must NOT become authority.
+      const identity = await resolveTrustedCanonicalIdentity(authenticatedRequest, async (uid) => {
+        // Simulated database profile containing user's registered consumer profile
+        return {
+          uid,
+          role: "customer",
+          accountType: "consumer",
+          displayName: "Regular Consumer",
+        };
+      });
+
+      expect(identity.uid).toBe("authenticated_user_123");
+      expect(identity.accountType).toBe("consumer");
+      expect(identity.accountType).not.toBe("admin");
+      expect(identity.capabilities).not.toContain("admin:all");
       expect(() => requireAccountType(identity, "admin")).toThrow(ForbiddenError);
     });
   });

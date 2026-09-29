@@ -8,6 +8,7 @@ import {
   CanonicalCapability,
   CanonicalIdentity,
   resolveCanonicalIdentity,
+  resolveTrustedCanonicalIdentity,
   hasCapability,
   assertHasCapability,
   assertHasAccountType,
@@ -17,6 +18,7 @@ import {
 } from "./identity.ts";
 
 export {
+  resolveTrustedCanonicalIdentity,
   requireAccountType,
   requireAccountTypeIn,
   requireCapability,

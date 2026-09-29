@@ -405,6 +405,51 @@ export function resolveCanonicalIdentityFromTrustedSource(
   return resolveCanonicalIdentity(source);
 }
 
+export interface AuthenticatedRequestLike {
+  auth?: {
+    uid: string;
+    token?: Record<string, any>;
+  };
+  user?: {
+    uid: string;
+    token?: Record<string, any>;
+    isAdmin?: boolean;
+    admin?: boolean;
+    role?: string;
+  };
+  body?: Record<string, any>;
+  query?: Record<string, any>;
+}
+
+/**
+ * Resolves trusted canonical identity from an authenticated request context.
+ * Strictly binds UID and admin claims to the verified server auth token, NEVER client body or query.
+ */
+export async function resolveTrustedCanonicalIdentity(
+  request: AuthenticatedRequestLike,
+  loadProfileFn?: (uid: string) => Promise<Record<string, any> | null>
+): Promise<CanonicalIdentity> {
+  const authUid = request?.auth?.uid || request?.user?.uid;
+  if (!authUid || typeof authUid !== "string") {
+    throw new UnauthorizedError("Authentication token is missing or invalid.");
+  }
+
+  const claims = request?.auth?.token || request?.user?.token || {};
+  const isAdminClaim = claims.admin === true || claims.isAdmin === true || request?.user?.isAdmin === true || request?.user?.admin === true;
+
+  const profile = loadProfileFn ? await loadProfileFn(authUid) : null;
+
+  return buildCanonicalIdentity({
+    uid: authUid,
+    profile,
+    trustedAdminClaims: {
+      admin: isAdminClaim,
+      isAdmin: isAdminClaim,
+      ...claims,
+    },
+  });
+}
+
 /**
  * Normalizes legacy profile record into a CanonicalIdentity without creating a secondary authorization path.
  */
