@@ -4346,8 +4346,7 @@ async function startServer() {
       });
 
       const platformConfig = await getCachedConfig("global");
-      const tiersConfig = await getCachedConfig("tiers");
-      const globalTiers = Array.isArray(tiersConfig?.tiers) ? tiersConfig.tiers : null;
+      const globalTiers = await getCachedConfig("global_tiers");
 
       const rawPayload = { ...(req.body || {}) };
       // Accept idempotency key from header or extract from body before validation
@@ -4355,7 +4354,7 @@ async function startServer() {
         (req.headers["x-idempotency-key"] as string) ||
         (req.headers["idempotency-key"] as string) ||
         rawPayload.idempotencyKey ||
-        null;
+        "";
       delete rawPayload.idempotencyKey;
 
       const quota = resolveCreateJobQuota(trustedProfile, platformConfig, globalTiers);

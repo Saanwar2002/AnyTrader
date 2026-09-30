@@ -58,6 +58,11 @@ export const JOB_CREATE_PROTECTED_KEYS = new Set([
   "funded",
   "isFunded",
 
+  // Privileged boost & commercial outcomes
+  "isEmergencyBoost",
+  "isBoosted",
+  "boostTier",
+
   // Privilege, roles & badges
   "role",
   "isAdmin",
@@ -84,7 +89,6 @@ export const JOB_CREATE_INPUT_SCHEMA = z.object({
   postcodeArea: z.string().optional(),
   urgency: z.enum(["emergency", "urgent", "standard", "flexible"]).default("standard"),
   isEmergency: z.boolean().optional(),
-  isEmergencyBoost: z.boolean().optional(),
   budget: z.union([z.number(), z.string(), z.record(z.any())]).optional().nullable(),
   estimateMin: z.number().optional().nullable(),
   estimateMax: z.number().optional().nullable(),
@@ -104,7 +108,10 @@ export const JOB_CREATE_INPUT_SCHEMA = z.object({
   targetTraderId: z.string().optional().nullable(),
   isDirectQuote: z.boolean().optional(),
   bomOrderId: z.string().optional().nullable(),
+  parentJobId: z.string().optional().nullable(),
+  isBOMDeliveryJob: z.boolean().optional(),
   recurringScheduleId: z.string().optional().nullable(),
+  isRecurringInstance: z.boolean().optional(),
   preferredDate: z.string().optional().nullable(),
   requiredCertifications: z.array(z.string()).optional(),
   tenancyReference: z.string().optional().nullable(),
@@ -113,8 +120,6 @@ export const JOB_CREATE_INPUT_SCHEMA = z.object({
   metadata: z.record(z.any()).optional(),
   isInstantMatch: z.boolean().optional(),
   exclusiveUntil: z.any().optional(),
-  isBoosted: z.boolean().optional(),
-  boostTier: z.string().optional().nullable(),
 }).strict();
 
 export type CreateJobInput = z.infer<typeof JOB_CREATE_INPUT_SCHEMA>;
@@ -192,7 +197,7 @@ export interface ExecuteCreateJobCommandParams {
   db: admin.firestore.Firestore;
   identity: CanonicalIdentity;
   rawPayload: Record<string, any>;
-  idempotencyKey?: string | null;
+  idempotencyKey: string;
   quota?: CreateJobQuotaConfig;
 }
 
@@ -228,22 +233,21 @@ export async function executeCreateJobCommand(
   // 2. Authoritative identity binding
   const homeownerId = identity.uid;
 
-  // 3. Emergency / Boost exemption detection
-  const isEmergency =
-    validatedInput.urgency === "emergency" ||
-    validatedInput.isEmergency === true ||
-    validatedInput.isEmergencyBoost === true;
+  // 3. Derived-job / system-job path evaluation & emergency detection
+  const isDerivedSystemJob = Boolean(validatedInput.isBOMDeliveryJob || validatedInput.isRecurringInstance);
+  const isEmergency = validatedInput.urgency === "emergency" || validatedInput.isEmergency === true;
 
   // 4. Initial state validation
   const initialStatus: JobStatus = "open";
   validateJobTransition("draft", initialStatus);
 
-  // 5. Persistent Idempotency Setup
-  let idempotencyRef: admin.firestore.DocumentReference | null = null;
-  if (idempotencyKey && typeof idempotencyKey === "string" && idempotencyKey.trim().length > 0) {
-    const hash = crypto.createHash("sha256").update(`${homeownerId}:${idempotencyKey.trim()}`).digest("hex");
-    idempotencyRef = db.collection("job_creation_idempotency").doc(hash);
+  // 5. Persistent Idempotency Setup (Mandatory)
+  if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
+    throw new BadRequestError("Idempotency key is required for job creation.");
   }
+  const trimmedIdempotencyKey = idempotencyKey.trim();
+  const hash = crypto.createHash("sha256").update(`${homeownerId}:${trimmedIdempotencyKey}`).digest("hex");
+  const idempotencyRef = db.collection("job_creation_idempotency").doc(hash);
 
   // 6. Pre-generate server-authoritative Job ID and human-friendly Job Number
   const jobRef = db.collection("jobs").doc();
@@ -259,25 +263,23 @@ export async function executeCreateJobCommand(
 
   transactionResult = await db.runTransaction(async (transaction) => {
     // A. Check Idempotency Record
-    if (idempotencyRef) {
-      const existingIdempotency = await transaction.get(idempotencyRef);
-      if (existingIdempotency.exists) {
-        const recorded = existingIdempotency.data();
-        if (recorded?.jobId) {
-          const recordedJobSnap = await transaction.get(db.collection("jobs").doc(recorded.jobId));
-          if (recordedJobSnap.exists) {
-            return {
-              replayed: true,
-              jobId: recorded.jobId,
-              job: recordedJobSnap.data() || { id: recorded.jobId, status: initialStatus },
-            };
-          }
+    const existingIdempotency = await transaction.get(idempotencyRef);
+    if (existingIdempotency.exists) {
+      const recorded = existingIdempotency.data();
+      if (recorded?.jobId) {
+        const recordedJobSnap = await transaction.get(db.collection("jobs").doc(recorded.jobId));
+        if (recordedJobSnap.exists) {
+          return {
+            replayed: true,
+            jobId: recorded.jobId,
+            job: recordedJobSnap.data() || { id: recorded.jobId, status: initialStatus },
+          };
         }
       }
     }
 
-    // B. Atomic Quota Enforcement
-    if (!isEmergency && quota && !quota.isUnlimited) {
+    // B. Atomic Quota Enforcement (Skipped for emergencies and derived system jobs)
+    if (!isEmergency && !isDerivedSystemJob && quota && !quota.isUnlimited) {
       const now = new Date();
       const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
       const quotaRef = db.collection("user_job_quotas").doc(`${homeownerId}_${monthKey}`);

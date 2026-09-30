@@ -33,7 +33,20 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
 
   describe("1. Protected Fields Rejection & Strict Schema Validation", () => {
     it("rejects client attempts to supply server-owned protected keys with BadRequestError", () => {
-      const protectedKeysToTest = ["status", "homeownerId", "id", "jobNo", "completed", "payoutStatus", "quoteCount"];
+      const protectedKeysToTest = [
+        "status",
+        "homeownerId",
+        "id",
+        "jobNo",
+        "completed",
+        "payoutStatus",
+        "quoteCount",
+        "isEmergencyBoost",
+        "isBoosted",
+        "boostTier",
+        "role",
+        "isAdmin",
+      ];
 
       for (const key of protectedKeysToTest) {
         const payloadWithProtected = {
@@ -79,16 +92,23 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
       expect(quota.monthlyLimit).toBe(5);
     });
 
-    it("resolves business tier quotas correctly", () => {
+    it("resolves business tier quotas correctly using global_tiers", () => {
+      const globalTiers = [
+        { id: "business_starter", monthlyJobLimit: 10 },
+        { id: "business_pro", monthlyJobLimit: 50 },
+      ];
+
       const starterBusinessQuota = resolveCreateJobQuota(
         { subscriptionType: "business", subscriptionStatus: "inactive" },
-        { paywallEnabled: true }
+        { paywallEnabled: true },
+        globalTiers
       );
       expect(starterBusinessQuota.monthlyLimit).toBe(10);
 
       const proBusinessQuota = resolveCreateJobQuota(
         { subscriptionType: "business", subscriptionId: "sub_123", subscriptionStatus: "active" },
-        { paywallEnabled: true }
+        { paywallEnabled: true },
+        globalTiers
       );
       expect(proBusinessQuota.monthlyLimit).toBe(50);
     });
@@ -97,6 +117,7 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
   describe("3. Authoritative Creation, Ownership Binding, Projection & Domain Event", () => {
     function createMockFirestore() {
       const store = new Map<string, any>();
+      let transactionQueue = Promise.resolve();
 
       const mockDb: any = {
         collection: (colName: string) => ({
@@ -128,22 +149,53 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
           }),
         }),
         runTransaction: async (updateFunction: (transaction: any) => Promise<any>) => {
-          const transaction = {
-            get: async (ref: any) => ref.get(),
-            set: (ref: any, data: any, options?: any) => {
-              if (options?.merge && store.has(ref.path)) {
-                store.set(ref.path, { ...store.get(ref.path), ...data });
-              } else {
-                store.set(ref.path, data);
+          return new Promise((resolve, reject) => {
+            transactionQueue = transactionQueue.then(async () => {
+              try {
+                const transaction = {
+                  get: async (ref: any) => ref.get(),
+                  set: (ref: any, data: any, options?: any) => {
+                    if (options?.merge && store.has(ref.path)) {
+                      store.set(ref.path, { ...store.get(ref.path), ...data });
+                    } else {
+                      store.set(ref.path, data);
+                    }
+                  },
+                };
+                const result = await updateFunction(transaction);
+                resolve(result);
+              } catch (err) {
+                reject(err);
               }
-            },
-          };
-          return updateFunction(transaction);
+            });
+          });
         },
       };
 
       return { mockDb, store };
     }
+
+    it("requires non-empty idempotencyKey, rejecting missing or blank key", async () => {
+      const { mockDb } = createMockFirestore();
+
+      await expect(
+        executeCreateJobCommand({
+          db: mockDb,
+          identity: dummyIdentity,
+          rawPayload: validJobPayload,
+          idempotencyKey: "",
+        })
+      ).rejects.toThrow(BadRequestError);
+
+      await expect(
+        executeCreateJobCommand({
+          db: mockDb,
+          identity: dummyIdentity,
+          rawPayload: validJobPayload,
+          idempotencyKey: "   ",
+        })
+      ).rejects.toThrow(BadRequestError);
+    });
 
     it("creates job with server-owned ID, jobNo, timestamps, status='open' and binds owner strictly to identity.uid", async () => {
       const { mockDb, store } = createMockFirestore();
@@ -153,6 +205,7 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
         db: mockDb,
         identity: dummyIdentity,
         rawPayload: validJobPayload,
+        idempotencyKey: "test_fresh_create_1",
         quota: { monthlyLimit: 5, isUnlimited: false, tierId: "consumer_standard" },
       });
 
@@ -225,6 +278,7 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
         db: mockDb,
         identity: dummyIdentity,
         rawPayload: validJobPayload,
+        idempotencyKey: "quota_key_1",
         quota: strictQuota,
       });
       expect(firstResult.jobId).toBeDefined();
@@ -235,9 +289,84 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
           db: mockDb,
           identity: dummyIdentity,
           rawPayload: { ...validJobPayload, title: "Second job attempt" },
+          idempotencyKey: "quota_key_2",
           quota: strictQuota,
         })
       ).rejects.toThrow(ForbiddenError);
+    });
+
+    it("handles derived system jobs (BOM Delivery and Recurring Instances) through authoritative input contract", async () => {
+      const { mockDb } = createMockFirestore();
+
+      // Quota of 0 standard jobs
+      const zeroQuota = { monthlyLimit: 0, isUnlimited: false, tierId: "exhausted_tier" };
+
+      // BOM Delivery Job passes as derived system job
+      const bomResult = await executeCreateJobCommand({
+        db: mockDb,
+        identity: dummyIdentity,
+        rawPayload: {
+          ...validJobPayload,
+          title: "BOM Delivery Courier",
+          parentJobId: "parent_job_123",
+          isBOMDeliveryJob: true,
+        },
+        idempotencyKey: "bom_idem_key_1",
+        quota: zeroQuota,
+      });
+      expect(bomResult.jobId).toBeDefined();
+
+      // Recurring Instance Job passes as derived system job
+      const recurringResult = await executeCreateJobCommand({
+        db: mockDb,
+        identity: dummyIdentity,
+        rawPayload: {
+          ...validJobPayload,
+          title: "Weekly Maintenance Recurring",
+          recurringScheduleId: "schedule_456",
+          isRecurringInstance: true,
+        },
+        idempotencyKey: "recurring_idem_key_1",
+        quota: zeroQuota,
+      });
+      expect(recurringResult.jobId).toBeDefined();
+    });
+
+    it("enforces concurrency safety when two CreateJob commands race under quota=1", async () => {
+      const { mockDb, store } = createMockFirestore();
+      const strictQuota = { monthlyLimit: 1, isUnlimited: false, tierId: "race_tier" };
+
+      // Launch two commands concurrently with distinct idempotency keys
+      const results = await Promise.allSettled([
+        executeCreateJobCommand({
+          db: mockDb,
+          identity: dummyIdentity,
+          rawPayload: { ...validJobPayload, title: "Racing Job Alpha" },
+          idempotencyKey: "race_key_alpha",
+          quota: strictQuota,
+        }),
+        executeCreateJobCommand({
+          db: mockDb,
+          identity: dummyIdentity,
+          rawPayload: { ...validJobPayload, title: "Racing Job Beta" },
+          idempotencyKey: "race_key_beta",
+          quota: strictQuota,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      // Exactly one must succeed and one must be rejected by quota limit
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+
+      // Verify the quota document in store has count === 1
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const quotaDoc = store.get(`user_job_quotas/${dummyIdentity.uid}_${monthKey}`);
+      expect(quotaDoc).toBeDefined();
+      expect(quotaDoc.count).toBe(1);
     });
   });
 });

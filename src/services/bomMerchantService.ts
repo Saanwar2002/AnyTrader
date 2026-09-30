@@ -685,11 +685,12 @@ export async function createBOMOrder(params: {
           urgency: params.courierDetails.deliveryWindow === "asap_90min" ? "emergency" : "standard",
           budget: params.courierDetails.courierFee,
           bomOrderId: orderId,
+          parentJobId: params.jobId || null,
+          isBOMDeliveryJob: true,
           propertyId: params.propertyId || null,
           address: params.courierDetails.deliveryAddress,
           metadata: {
             categoryCode: "84",
-            parentJobId: params.jobId,
             pickupAddress: params.courierDetails.pickupAddress,
             deliveryAddress: params.courierDetails.deliveryAddress,
             scheduledDeliveryTime: params.courierDetails.scheduledTime,
@@ -700,7 +701,6 @@ export async function createBOMOrder(params: {
             driverPayout: params.courierDetails.driverPayout,
             pickupReferenceCode,
             merchantName: params.selectedMerchant.merchantName,
-            isBOMDeliveryJob: true,
           },
         },
       });

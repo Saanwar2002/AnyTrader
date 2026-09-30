@@ -46,11 +46,11 @@ export async function processRecurringSchedules(userId: string) {
             postcode: schedule.postcode || "SW1A 1AA",
             urgency: "standard",
             recurringScheduleId: schedule.id,
+            isRecurringInstance: true,
             preferredDate: nextJobDate.toISOString(),
             metadata: {
               paymentPreference: schedule.paymentPreference || "negotiable",
               quoteScope: schedule.quoteScope || "labor_only",
-              isRecurringInstance: true,
               location: "As per previous arrangement",
               originalHomeownerId: schedule.homeownerId,
             },

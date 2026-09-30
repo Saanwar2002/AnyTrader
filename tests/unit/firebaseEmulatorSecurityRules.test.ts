@@ -1267,5 +1267,16 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         iconName: "Flame",
       }));
     });
+
+    it("70. Task 2 — Direct client job creation to /jobs/{jobId} is strictly DENIED", async () => {
+      const homeownerDb = testEnv.authenticatedContext("user_alice", { role: "customer" }).firestore();
+      await assertFails(setDoc(doc(homeownerDb, "jobs", "direct_client_job_1"), {
+        homeownerId: "user_alice",
+        title: "Direct Client Job",
+        category: "Plumbing",
+        status: "open",
+        createdAt: new Date().toISOString(),
+      }));
+    });
   });
 });
