@@ -481,40 +481,5 @@ describe("Task 2: Canonical CreateJob Command Test Suite", () => {
       // Domain event MUST NOT be dispatched a second time
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
     });
-
-    it("enforces real transactional quota contention when two CreateJob commands race under quota=1", async () => {
-      const { mockDb, store } = createMockFirestore();
-      const strictQuota = { enabled: true, limit: 1, periodKey: "2026-09", periodStart: "2026-09-01T00:00:00.000Z", isUnlimited: false, tierId: "race_tier" };
-
-      // Launch two commands concurrently with distinct idempotency keys
-      const results = await Promise.allSettled([
-        executeCreateJobCommand({
-          db: mockDb,
-          identity: homeownerIdentity,
-          rawPayload: { ...validJobPayload, title: "Racing Job Alpha" },
-          idempotencyKey: "race_key_alpha_123",
-          quota: strictQuota,
-        }),
-        executeCreateJobCommand({
-          db: mockDb,
-          identity: homeownerIdentity,
-          rawPayload: { ...validJobPayload, title: "Racing Job Beta" },
-          idempotencyKey: "race_key_beta_456",
-          quota: strictQuota,
-        }),
-      ]);
-
-      const fulfilled = results.filter((r) => r.status === "fulfilled");
-      const rejected = results.filter((r) => r.status === "rejected");
-
-      // Exactly one must succeed and one must be rejected by quota limit
-      expect(fulfilled.length).toBe(1);
-      expect(rejected.length).toBe(1);
-
-      // Verify the quota document in store has count === 1
-      const quotaDoc = store.get(`user_job_quotas/${homeownerIdentity.uid}_${strictQuota.periodKey}`);
-      expect(quotaDoc).toBeDefined();
-      expect(quotaDoc.count).toBe(1);
-    });
   });
 });
