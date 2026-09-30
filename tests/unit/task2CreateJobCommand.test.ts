@@ -1,3 +1,6 @@
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8088";
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   JOB_CREATE_PROTECTED_KEYS,
