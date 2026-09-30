@@ -20,7 +20,6 @@ import { SEO } from "./SEO";
 import { seedMockTraders, INITIAL_MOCK_TRADERS, INITIAL_MOCK_FLASH_DEALS, generateTraderSeedReviews } from "@/src/services/seedService";
 import { isDealSoldOut, isDealPaused, getRemainingSlots, getDealCapacityInfo, formatDealBadgeText, formatDealScheduleText } from "@/src/lib/flashDeals";
 import { shareDeal, DealCountdownBadge } from "@/src/lib/dealUtils";
-export { shareDeal, DealCountdownBadge };
 import { getCategoryHotSearches } from "@/src/utils/tradePresets";
 import { Capacitor } from '@capacitor/core';
 import { SpeechRecognition } from "@capacitor-community/speech-recognition";
