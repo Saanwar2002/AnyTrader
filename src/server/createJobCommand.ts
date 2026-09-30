@@ -1,78 +1,44 @@
 /**
  * Server-Authoritative CreateJob Command for AnyTrader V2 (Task 2)
  *
- * Implements strict input schema validation, protected-field rejection,
- * authoritative identity binding, atomic transactional quota enforcement,
- * persistent idempotency, public card projection, and domain event dispatch.
+ * Implements strict input schema validation, protected-field rejection inheriting
+ * Task 1's SERVER_OWNED_PROTECTED_KEYS, authoritative capability & persisted-record
+ * authorization, atomic transactional quota enforcement, persistent idempotency,
+ * public card projection, and domain event dispatch.
  */
 
 import { z } from "zod";
 import crypto from "crypto";
 import type admin from "firebase-admin";
-import { BadRequestError, ForbiddenError } from "./httpErrors.ts";
-import { CanonicalIdentity } from "./identity.ts";
+import { BadRequestError, ForbiddenError, NotFoundError } from "./httpErrors.ts";
+import { CanonicalIdentity, requireCapability, hasCapability } from "./identity.ts";
+import { SERVER_OWNED_PROTECTED_KEYS } from "./authorization.ts";
 import { validateJobTransition, JobStatus } from "./stateMachine.ts";
 import { domainEvents } from "./domainEvents.ts";
 import { sanitizeJobToPublicCard, isDirectJob } from "./projectionSync.ts";
 
 /**
  * Server-owned & privileged fields that clients are strictly forbidden from supplying.
+ * Inherits Task 1's SERVER_OWNED_PROTECTED_KEYS and augments with job-creation specific protected keys.
  * Supplying any of these keys results in an immediate BadRequestError rejection (OWASP API mass-assignment defense).
  */
 export const JOB_CREATE_PROTECTED_KEYS = new Set([
-  // Core server-owned identifiers & ownership
+  ...SERVER_OWNED_PROTECTED_KEYS,
   "id",
-  "jobId",
   "jobNo",
-  "homeownerId",
-  "userId",
-  "posterId",
-  "customerId",
-  "ownerId",
-
-  // Status, lifecycle & state-machine governed outcomes
-  "status",
-  "completed",
-  "isCompleted",
-  "payoutStatus",
-  "quoteCount",
-  "createdAt",
-  "updatedAt",
+  "createdByUid",
   "postedDate",
-  "fundingPaymentId",
-  "escrowStatus",
-  "platformFee",
-  "amount",
-  "payoutTransferred",
-  "balance",
-  "credits",
-  "adSpendTotal",
-  "quotes",
-  "selectedQuoteId",
-  "acceptedTradespersonId",
-  "acceptedTraderId",
-  "assignedTraderId",
-  "disputeStatus",
-  "refunded",
-  "isRefunded",
-  "funded",
-  "isFunded",
-
-  // Privileged boost & commercial outcomes
-  "isEmergencyBoost",
+  "exclusiveUntil",
+  "quoteCount",
+  "quotesCount",
+  "clientDeleted",
+  "viewsCount",
+  "retryCount",
+  "hasReview",
   "isBoosted",
+  "isEmergencyBoost",
   "boostTier",
-
-  // Privilege, roles & badges
-  "role",
-  "isAdmin",
-  "admin",
-  "rating",
-  "totalReviews",
-  "reviewCount",
-  "trustScore",
-  "accountType",
-  "capabilities",
+  "boostExpiresAt",
 ]);
 
 /**
@@ -119,7 +85,6 @@ export const JOB_CREATE_INPUT_SCHEMA = z.object({
   contactEmail: z.string().optional().nullable(),
   metadata: z.record(z.any()).optional(),
   isInstantMatch: z.boolean().optional(),
-  exclusiveUntil: z.any().optional(),
 }).strict();
 
 export type CreateJobInput = z.infer<typeof JOB_CREATE_INPUT_SCHEMA>;
@@ -153,21 +118,38 @@ export function validateCreateJobInput(payload: unknown): CreateJobInput {
 }
 
 export interface CreateJobQuotaConfig {
-  monthlyLimit: number;
-  isUnlimited: boolean;
+  enabled: boolean;
+  limit: number;
+  periodKey: string;
+  periodStart: string;
   tierId: string;
+  isUnlimited: boolean;
+  monthlyLimit?: number;
 }
 
 /**
  * Resolves job posting quota based on user profile and platform tier settings.
+ * Supports nested global_tiers.providerModels.[model].tiers.[tierId] structure with monthly/lifetime period semantics.
  */
 export function resolveCreateJobQuota(
   profile?: Record<string, any> | null,
   platformConfig?: Record<string, any> | null,
-  globalTiers?: Record<string, any>[] | null
+  globalTiersConfig?: Record<string, any> | null
 ): CreateJobQuotaConfig {
+  const now = new Date();
+  const utcMonthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+  const utcMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+
   if (platformConfig?.paywallEnabled === false) {
-    return { monthlyLimit: Infinity, isUnlimited: true, tierId: "free" };
+    return {
+      enabled: false,
+      limit: Infinity,
+      periodKey: utcMonthKey,
+      periodStart: utcMonthStart,
+      tierId: "free",
+      isUnlimited: true,
+      monthlyLimit: Infinity,
+    };
   }
 
   const isBusiness = profile?.subscriptionType === "business" || profile?.accountType === "business";
@@ -177,19 +159,56 @@ export function resolveCreateJobQuota(
     profile?.tier ||
     (isBusiness ? (hasActiveSubscription ? "business_pro" : "business_starter") : "consumer_standard");
 
-  let monthlyLimit = isBusiness ? (hasActiveSubscription ? 50 : 10) : 5;
+  let limit = isBusiness ? (hasActiveSubscription ? 50 : 10) : 5;
+  let limitPeriod = "monthly";
 
-  if (globalTiers && Array.isArray(globalTiers)) {
-    const matchedTier = globalTiers.find((t) => t.id === tierId || t.name === tierId);
-    if (matchedTier && typeof matchedTier.monthlyJobLimit === "number") {
-      monthlyLimit = matchedTier.monthlyJobLimit;
+  // Check structured global_tiers configuration
+  if (globalTiersConfig) {
+    let matchedTierConfig: any = null;
+
+    if (globalTiersConfig.providerModels) {
+      for (const model of Object.values(globalTiersConfig.providerModels) as any[]) {
+        if (model?.tiers && model.tiers[tierId]) {
+          matchedTierConfig = model.tiers[tierId];
+          break;
+        }
+      }
+    }
+
+    if (!matchedTierConfig && globalTiersConfig.tiers) {
+      if (Array.isArray(globalTiersConfig.tiers)) {
+        matchedTierConfig = globalTiersConfig.tiers.find((t: any) => t.id === tierId || t.name === tierId);
+      } else if (typeof globalTiersConfig.tiers === "object") {
+        matchedTierConfig = globalTiersConfig.tiers[tierId];
+      }
+    }
+
+    if (matchedTierConfig) {
+      if (typeof matchedTierConfig.jobPostsLimit === "number") {
+        limit = matchedTierConfig.jobPostsLimit;
+      } else if (typeof matchedTierConfig.monthlyJobLimit === "number") {
+        limit = matchedTierConfig.monthlyJobLimit;
+      }
+
+      if (typeof matchedTierConfig.limitPeriod === "string") {
+        limitPeriod = matchedTierConfig.limitPeriod;
+      }
     }
   }
 
+  const isLifetime = limitPeriod === "lifetime";
+  const periodKey = isLifetime ? "lifetime" : utcMonthKey;
+  const periodStart = isLifetime ? new Date(0).toISOString() : utcMonthStart;
+  const isUnlimited = limit === Infinity || limit < 0;
+
   return {
-    monthlyLimit,
-    isUnlimited: monthlyLimit === Infinity || monthlyLimit < 0,
+    enabled: true,
+    limit,
+    periodKey,
+    periodStart,
     tierId,
+    isUnlimited,
+    monthlyLimit: isUnlimited ? Infinity : limit,
   };
 }
 
@@ -212,8 +231,9 @@ export interface ExecuteCreateJobCommandResult {
  *
  * Runs inside a Firestore transaction:
  * - Checks and commits persistent idempotency record.
+ * - Enforces standard-job homeowner capability requirement or derived-job record authorization.
  * - Enforces atomic quota limit against concurrent creation races.
- * - Binds ownership to trusted identity.uid.
+ * - Binds ownership to trusted homeowner / derived parent owner identity.
  * - Writes server-owned ID, job number, initial status, and server timestamps.
  * - Creates sanitized public card projection.
  * - Emits JOB_CREATED domain event post-transaction.
@@ -227,34 +247,38 @@ export async function executeCreateJobCommand(
     throw new BadRequestError("Database service is not initialized.");
   }
 
-  // 1. Strict schema validation & protected key rejection
-  const validatedInput = validateCreateJobInput(rawPayload);
+  // 1. Mandatory Persistent Idempotency Key Validation
+  const normalizedIdempotencyKey = idempotencyKey ? idempotencyKey.trim() : "";
+  if (normalizedIdempotencyKey.length < 8 || normalizedIdempotencyKey.length > 200) {
+    throw new BadRequestError("A valid idempotency key is required for job creation.");
+  }
 
-  // 2. Authoritative identity binding
-  const homeownerId = identity.uid;
+  // 2. Strict schema validation & protected key rejection
+  const validatedInput = validateCreateJobInput(rawPayload);
 
   // 3. Derived-job / system-job path evaluation & emergency detection
   const isDerivedSystemJob = Boolean(validatedInput.isBOMDeliveryJob || validatedInput.isRecurringInstance);
   const isEmergency = validatedInput.urgency === "emergency" || validatedInput.isEmergency === true;
 
-  // 4. Initial state validation
+  // 4. Standard Job Authorization: Ordinary jobs require 'homeowner' capability
+  if (!isDerivedSystemJob) {
+    requireCapability(identity, "homeowner");
+  }
+
+  // 5. Initial state validation
   const initialStatus: JobStatus = "open";
   validateJobTransition("draft", initialStatus);
-
-  // 5. Persistent Idempotency Setup (Mandatory)
-  if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0) {
-    throw new BadRequestError("Idempotency key is required for job creation.");
-  }
-  const trimmedIdempotencyKey = idempotencyKey.trim();
-  const hash = crypto.createHash("sha256").update(`${homeownerId}:${trimmedIdempotencyKey}`).digest("hex");
-  const idempotencyRef = db.collection("job_creation_idempotency").doc(hash);
 
   // 6. Pre-generate server-authoritative Job ID and human-friendly Job Number
   const jobRef = db.collection("jobs").doc();
   const jobId = jobRef.id;
   const jobNo = `JOB-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  // 7. Atomic transaction for Idempotency + Quota + Job Write + Public Projection
+  // 7. Compute persistent idempotency hash
+  const hash = crypto.createHash("sha256").update(`${identity.uid}:${normalizedIdempotencyKey}`).digest("hex");
+  const idempotencyRef = db.collection("job_creation_idempotency").doc(hash);
+
+  // 8. Atomic transaction for Authorization + Idempotency + Quota + Job Write + Public Projection
   let transactionResult: {
     replayed: boolean;
     jobId: string;
@@ -278,110 +302,145 @@ export async function executeCreateJobCommand(
       }
     }
 
-    // B. Atomic Quota Enforcement (Skipped for emergencies and derived system jobs)
-    if (!isEmergency && !isDerivedSystemJob && quota && !quota.isUnlimited) {
-      const now = new Date();
-      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const quotaRef = db.collection("user_job_quotas").doc(`${homeownerId}_${monthKey}`);
-      const quotaDoc = await transaction.get(quotaRef);
+    // B. Derived Job Persisted-Record Authorization
+    let targetHomeownerId = identity.uid;
 
-      let currentCount = 0;
-      if (!quotaDoc.exists) {
-        // Compute current count for this month from existing jobs
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const existingJobsSnap = await db
-          .collection("jobs")
-          .where("homeownerId", "==", homeownerId)
-          .where("createdAt", ">=", monthStart)
-          .get();
-        currentCount = existingJobsSnap.size;
-      } else {
-        currentCount = quotaDoc.data()?.count || 0;
+    if (validatedInput.isBOMDeliveryJob) {
+      if (!validatedInput.parentJobId) {
+        throw new BadRequestError("parentJobId is required for BOM delivery job creation.");
       }
+      const parentRef = db.collection("jobs").doc(validatedInput.parentJobId);
+      const parentSnap = await transaction.get(parentRef);
+      if (!parentSnap.exists) {
+        throw new NotFoundError(`Parent job ${validatedInput.parentJobId} not found.`);
+      }
+      const parentData = parentSnap.data() || {};
+      const parentHomeownerId = parentData.homeownerId || parentData.userId;
+      const parentTraderId =
+        parentData.acceptedTraderId ||
+        parentData.acceptedTradespersonId ||
+        parentData.tradespersonId ||
+        parentData.assignedTraderId;
 
-      if (currentCount >= quota.monthlyLimit) {
+      const isAuthorized =
+        identity.accountType === "admin" ||
+        identity.uid === parentHomeownerId ||
+        identity.uid === parentTraderId;
+
+      if (!isAuthorized) {
+        throw new ForbiddenError("Not authorized to create BOM delivery job for this parent job.");
+      }
+      targetHomeownerId = parentHomeownerId || identity.uid;
+    } else if (validatedInput.isRecurringInstance) {
+      if (!validatedInput.recurringScheduleId) {
+        throw new BadRequestError("recurringScheduleId is required for recurring job creation.");
+      }
+      const scheduleRef = db.collection("recurring_schedules").doc(validatedInput.recurringScheduleId);
+      const scheduleSnap = await transaction.get(scheduleRef);
+      if (!scheduleSnap.exists) {
+        throw new NotFoundError(`Recurring schedule ${validatedInput.recurringScheduleId} not found.`);
+      }
+      const scheduleData = scheduleSnap.data() || {};
+      const scheduleHomeownerId = scheduleData.homeownerId || scheduleData.userId;
+      const scheduleTraderId = scheduleData.tradespersonId || scheduleData.traderId;
+
+      const isAuthorized =
+        identity.accountType === "admin" ||
+        identity.uid === scheduleHomeownerId ||
+        identity.uid === scheduleTraderId;
+
+      if (!isAuthorized) {
+        throw new ForbiddenError("Not authorized to create job instance for this recurring schedule.");
+      }
+      targetHomeownerId = scheduleHomeownerId || identity.uid;
+    }
+
+    // C. Atomic Quota Enforcement (Skipped for emergencies and derived system jobs)
+    if (!isEmergency && !isDerivedSystemJob && quota && quota.enabled && !quota.isUnlimited) {
+      const quotaRef = db.collection("user_job_quotas").doc(`${identity.uid}_${quota.periodKey}`);
+      const quotaSnap = await transaction.get(quotaRef);
+      let currentCount = 0;
+      if (quotaSnap.exists) {
+        currentCount = Number(quotaSnap.data()?.count || 0);
+      }
+      if (currentCount >= quota.limit) {
         throw new ForbiddenError(
-          `Monthly job posting quota of ${quota.monthlyLimit} reached for your tier (${quota.tierId}). Please upgrade your subscription to post more jobs.`
+          `Job posting quota exceeded. Current: ${currentCount}, Limit: ${quota.limit} (${quota.periodKey})`
         );
       }
-
-      // Increment quota count atomically in transaction
       transaction.set(
         quotaRef,
         {
+          uid: identity.uid,
+          periodKey: quota.periodKey,
+          periodStart: quota.periodStart,
           count: currentCount + 1,
-          homeownerId,
-          monthKey,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         },
         { merge: true }
       );
     }
 
-    // C. Construct authoritative server job document
+    // D. Persist Idempotency Record Transactionally
+    transaction.set(idempotencyRef, {
+      idempotencyKey: normalizedIdempotencyKey,
+      uid: identity.uid,
+      jobId,
+      createdAt: new Date().toISOString(),
+    });
+
+    // E. Assemble Server-Owned Job Record
     const nowIso = new Date().toISOString();
-    const createdJobDocument: Record<string, any> = {
+    const jobDocData: Record<string, any> = {
       ...validatedInput,
       id: jobId,
       jobNo,
-      homeownerId,
+      homeownerId: targetHomeownerId,
+      createdByUid: identity.uid,
       status: initialStatus,
       quoteCount: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
       postedDate: nowIso,
     };
 
-    // D. Persist Job document
-    transaction.set(jobRef, createdJobDocument);
+    transaction.set(jobRef, jobDocData);
 
-    // E. Persist Public Projection (for non-direct marketplace jobs)
-    if (!isDirectJob(createdJobDocument)) {
-      const publicCard = sanitizeJobToPublicCard(jobId, createdJobDocument);
+    // F. Create Public Card Projection Atomically for Standard/Broadcast Jobs
+    if (!isDirectJob(jobDocData)) {
       const publicCardRef = db.collection("public_job_cards").doc(jobId);
-      transaction.set(publicCardRef, publicCard);
-    }
-
-    // F. Persist Idempotency Record
-    if (idempotencyRef) {
-      transaction.set(idempotencyRef, {
-        jobId,
-        homeownerId,
-        idempotencyKey,
-        createdAt: new Date(),
-        jobData: {
-          id: jobId,
-          status: initialStatus,
-        },
-      });
+      const publicCardData = sanitizeJobToPublicCard(jobId, jobDocData);
+      transaction.set(publicCardRef, publicCardData);
     }
 
     return {
       replayed: false,
       jobId,
-      job: createdJobDocument,
+      job: jobDocData,
     };
   });
 
-  // 8. Dispatch Domain Event outside transaction (only on fresh creation, not on replay)
+  // 9. Dispatch JOB_CREATED domain event post-commit (if freshly created)
   if (!transactionResult.replayed) {
     try {
       await domainEvents.dispatch(
         "JOB_CREATED",
         transactionResult.jobId,
-        homeownerId,
+        identity.uid,
         {
           jobId: transactionResult.jobId,
-          jobNo,
-          homeownerId,
-          category: validatedInput.category,
-          title: validatedInput.title,
-          urgency: validatedInput.urgency,
+          homeownerId: transactionResult.job.homeownerId,
+          title: transactionResult.job.title,
+          category: transactionResult.job.category,
+          urgency: transactionResult.job.urgency,
           isEmergency,
-        }
+          isDerivedSystemJob,
+        },
+        undefined,
+        db
       );
     } catch (eventErr) {
-      console.warn(`[DomainEvent Warning] Failed to dispatch JOB_CREATED for job ${jobId}:`, eventErr);
+      console.error("[DomainEvents] Failed to dispatch JOB_CREATED event:", eventErr);
     }
   }
 

@@ -2056,8 +2056,6 @@ export default function PostJobWizard() {
             area: asset?.area || finalArea || null,
             address: asset?.fullAddress || formData.fullAddress || null,
             urgency: (formData.urgency || "standard") as any,
-            isEmergency: formData.urgency === "emergency" || Boolean(formData.isEmergencyBoost),
-            isEmergencyBoost: Boolean(formData.isEmergencyBoost),
             budget: formData.selectedBudget || null,
             estimateMin: estimate?.min || (formData.selectedBudget ? Math.floor(Number(formData.selectedBudget) * 0.9) : null),
             estimateMax: estimate?.max || (formData.selectedBudget ? Math.floor(Number(formData.selectedBudget) * 1.1) : null),
