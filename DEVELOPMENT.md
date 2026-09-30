@@ -5270,4 +5270,12 @@ The prefix is determined by the user's primary registration role:
     - Hardened `syncSynonyms` in `categoryRegistrySync.ts` with strict input sanitization: strips control characters, backticks, HTML/script tags, braces, and line breaks to prevent AI prompt injection when injecting dynamic synonyms into Gemini system instructions.
   - **Comprehensive Verification Suite (`vulnerabilityFixesAiAndSearch.test.ts`)**:
     - Added 10 automated unit and rules-simulation tests covering AI route middleware binding, unauthenticated telemetry rejection, non-admin synonym write denial, and prompt injection sanitization (10/10 passing).
+- 2026-09-30: AnyTrader V2 — Task 2: Canonical CreateJob Command Hardening (`src/server/createJobCommand.ts`, `server.ts`, `firestore.rules`, `src/services/jobCommandService.ts`, `tests/unit/task2CreateJobCommand.test.ts`).
+  - **Server-Authoritative Command Architecture**: Created `executeCreateJobCommand` and strict schema validation (`validateCreateJobInput` with `JOB_CREATE_INPUT_SCHEMA.strict()`).
+  - **Protected Field Rejection (OWASP API Mass Assignment Defense)**: Rejects client attempts to supply 25+ server-owned keys (`id`, `jobId`, `jobNo`, `homeownerId`, `userId`, `status`, `completed`, `payoutStatus`, `quoteCount`, `createdAt`, `updatedAt`, `role`, `isAdmin`, `admin`, etc.) with `BadRequestError` instead of silent stripping.
+  - **Deterministic Quota Enforcement**: Atomic transactional evaluation of tier quotas in Firestore (`user_job_quotas/{uid}_{monthKey}`) preventing race conditions where multiple requests pass stale reads.
+  - **Persistent Idempotency**: Cryptographically hashed idempotency keys (`job_creation_idempotency/{sha256(uid:key)}`) evaluated and committed inside the job creation transaction, guaranteeing exactly one job creation and exactly one `JOB_CREATED` domain event dispatch.
+  - **Firestore Rules Hardening**: Closed direct client `/jobs` creation (`allow create: if false;`), ensuring all job creations occur via the server command with verified Firebase Auth tokens.
+  - **Client Bypass Remediation**: Migrated all client job creation call sites (`PostJobWizard.tsx`, `EmergencyJobWizard.tsx`, `MyJobs.tsx`, `JobDetails.tsx`, `PropertyPassportModal.tsx`, `Portfolio.tsx`, `bomMerchantService.ts`, `recurringJobs.ts`) to `createJobViaCommand()`. Source scan verified 0 direct client `/jobs` creation calls remaining.
+  - **Verification**: 47/47 unit test files passing (763/763 tests), `tsc --noEmit` clean, production build clean, release audit passed with 0 critical errors.
 

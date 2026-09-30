@@ -8,6 +8,7 @@ import { lookupPostcode } from "@/src/services/postcodeService";
 import { db, collection, serverTimestamp, doc, setDoc, OperationType, handleFirestoreError, storage, ref, uploadBytesResumable, getDownloadURL, uploadBytes, uploadString, getDoc, getDocs, query, where } from "@/src/firebase";
 import { distributeJobNotifications } from "@/src/services/notificationService";
 import { useAuth } from "./AuthProvider";
+import { createJobViaCommand } from "../services/jobCommandService";
 import { AnimatePresence, motion } from "framer-motion";
 import { useJsApiLoader } from "@react-google-maps/api";
 import { Capacitor } from '@capacitor/core';
@@ -393,65 +394,38 @@ export default function EmergencyJobWizard() {
 
       const currentBoostTier = isPaidOption ? (isInstantMatch ? "instant_match" : "emergency_boost") : null;
 
-      // Create the document with a specific ID
-      const jobRef = doc(collection(db, "jobs"));
-      const newJobNo = generateJobNumber();
-      await setDoc(jobRef, {
-        id: jobRef.id,
-        jobNo: newJobNo,
-        homeownerId: user.uid,
-        category: formData.category,
-        title: `Emergency ${formData.category} Job`,
-        description: formData.description,
-        postcode: finalPostcode,
-        city: finalCity,
-        area: finalArea,
-        county: finalCounty,
-        status: jobStatus,
-        securityAlert: securityAlert || null,
-        urgency: "emergency",
-        hasReview: false,
-        photos: formData.photos,
-        postedDate: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        exclusiveUntil: new Date(Date.now() + 5 * 60000),
-        paymentPreference: "negotiable",
-        quoteScope: "complete_package",
-        isBoosted: isPaidOption,
-        boostTier: currentBoostTier,
-        boostExpiresAt,
-        retryCount: 0
-      });
-
-      try {
-        const publicRef = doc(db, "public_job_cards", jobRef.id);
-        await setDoc(publicRef, {
-          id: jobRef.id,
-          jobNo: newJobNo,
+      const commandResult = await createJobViaCommand({
+        user,
+        payload: {
           category: formData.category,
           title: `Emergency ${formData.category} Job`,
-          description: formData.description || "",
-          postcodeArea: finalPostcode?.trim().split(/\s+/)[0] || finalArea || "Local Area",
+          description: formData.description,
+          postcode: finalPostcode,
           city: finalCity || undefined,
           area: finalArea || undefined,
           urgency: "emergency",
-          status: jobStatus,
-          postedDate: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          quoteCount: 0,
+          isEmergency: true,
+          isEmergencyBoost: isPaidOption,
+          photos: formData.photos || [],
+          isInstantMatch: isInstantMatch,
           isBoosted: isPaidOption,
           boostTier: currentBoostTier,
-          photosCount: Array.isArray(formData.photos) ? formData.photos.length : 0
-        }, { merge: true });
-      } catch (projErr) {
-        console.warn("Public projection note for emergency job:", projErr);
-      }
-      
+          metadata: {
+            county: finalCounty || null,
+            securityAlert: securityAlert || null,
+            paymentPreference: "negotiable",
+            quoteScope: "complete_package",
+            boostExpiresAt: boostExpiresAt || null,
+          },
+        },
+      });
+
+      const serverJobId = commandResult.jobId;
+
       // Notify relevant traders via server-authoritative distribution
-      console.log("Notifying relevant traders for job:", jobRef.id);
+      console.log("Notifying relevant traders for job:", serverJobId);
       await distributeJobNotifications(
-        jobRef.id,
+        serverJobId,
         formData.category,
         formData.postcode,
         "emergency",
@@ -461,7 +435,7 @@ export default function EmergencyJobWizard() {
       if (!isPaidOption) {
         navigate("/my-jobs");
       }
-      return jobRef.id;
+      return serverJobId;
     } catch (err) {
       console.error("Error posting emergency job:", err);
       handleFirestoreError(err, OperationType.WRITE, "jobs");

@@ -1,6 +1,7 @@
-import { db, collection, doc, setDoc, getDoc, updateDoc, addDoc, serverTimestamp, query, where, onSnapshot } from "@/src/firebase";
+import { auth, db, collection, doc, setDoc, getDoc, updateDoc, serverTimestamp, query, where, onSnapshot } from "@/src/firebase";
 import { calculateMaterialMerchantAffiliateCommission, MaterialMerchantAffiliateBreakdown } from "./stripeIntegrationService";
 import { getApiUrl } from "@/src/lib/apiUrl";
+import { createJobViaCommand } from "./jobCommandService";
 
 export interface BOMItem {
   id: string;
@@ -672,41 +673,37 @@ export async function createBOMOrder(params: {
     }
 
     // 4. If Courier Dispatch selected, create Category 84 dispatch as an AnyTrader Job
-    if (params.fulfillmentType === "courier_dispatch" && params.courierDetails) {
-      const courierJobData = {
-        title: `Express Materials Delivery: ${params.selectedMerchant.merchantName} to Site`,
-        description: `Pick up pre-ordered TradeOS materials basket from ${params.selectedMerchant.merchantName} (${params.courierDetails.pickupAddress}) and deliver to site (${params.courierDetails.deliveryAddress}). Collection Code: ${pickupReferenceCode}. Items: ${params.items.length} parts. Van requirement: ${params.courierDetails.vanTypeLabel}.${params.courierDetails.notes ? ` Special notes: ${params.courierDetails.notes}` : ''}`,
-        category: "Courier, Parcel & Express Delivery",
-        subcategory: "Bulky Item & Heavy Appliance Transport (Washing Machines, Fridges, Dishwashers)",
-        categoryCode: "84",
-        parentJobId: params.jobId,
-        bomOrderId: orderId,
-        pickupAddress: params.courierDetails.pickupAddress,
-        deliveryAddress: params.courierDetails.deliveryAddress,
-        location: params.courierDetails.deliveryAddress,
-        scheduledDeliveryTime: params.courierDetails.scheduledTime,
-        vanType: params.courierDetails.vanType,
-        vanTypeLabel: params.courierDetails.vanTypeLabel,
-        budget: params.courierDetails.courierFee,
-        fixedPrice: params.courierDetails.courierFee,
-        platformFee: params.courierDetails.platformCommission,
-        driverPayout: params.courierDetails.driverPayout,
-        homeownerId: params.homeownerId || params.tradespersonId,
-        homeownerName: params.homeownerName || params.tradespersonName || "AnyTrader Client",
-        tradespersonId: params.tradespersonId,
-        tradespersonName: params.tradespersonName || "Verified Tradesperson",
-        status: "posted",
-        urgency: params.courierDetails.deliveryWindow === "asap_90min" ? "emergency" : "scheduled",
-        pickupReferenceCode,
-        merchantName: params.selectedMerchant.merchantName,
-        isBOMDeliveryJob: true,
-        postedDate: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-        quoteCount: 0
-      };
-
-      // Post to AnyTrader jobs collection so registered Category 84 van drivers/couriers see it in JobFeed & matching engine
-      await addDoc(collection(db, "jobs"), courierJobData);
+    if (params.fulfillmentType === "courier_dispatch" && params.courierDetails && auth.currentUser) {
+      await createJobViaCommand({
+        user: auth.currentUser,
+        payload: {
+          title: `Express Materials Delivery: ${params.selectedMerchant.merchantName} to Site`,
+          description: `Pick up pre-ordered TradeOS materials basket from ${params.selectedMerchant.merchantName} (${params.courierDetails.pickupAddress}) and deliver to site (${params.courierDetails.deliveryAddress}). Collection Code: ${pickupReferenceCode}. Items: ${params.items.length} parts. Van requirement: ${params.courierDetails.vanTypeLabel}.${params.courierDetails.notes ? ` Special notes: ${params.courierDetails.notes}` : ''}`,
+          category: "Courier, Parcel & Express Delivery",
+          subCategory: "Bulky Item & Heavy Appliance Transport (Washing Machines, Fridges, Dishwashers)",
+          postcode: params.courierDetails.deliveryAddress?.match(/[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}/i)?.[0]?.toUpperCase() || "SW1A 1AA",
+          urgency: params.courierDetails.deliveryWindow === "asap_90min" ? "emergency" : "standard",
+          budget: params.courierDetails.courierFee,
+          bomOrderId: orderId,
+          propertyId: params.propertyId || null,
+          address: params.courierDetails.deliveryAddress,
+          metadata: {
+            categoryCode: "84",
+            parentJobId: params.jobId,
+            pickupAddress: params.courierDetails.pickupAddress,
+            deliveryAddress: params.courierDetails.deliveryAddress,
+            scheduledDeliveryTime: params.courierDetails.scheduledTime,
+            vanType: params.courierDetails.vanType,
+            vanTypeLabel: params.courierDetails.vanTypeLabel,
+            fixedPrice: params.courierDetails.courierFee,
+            platformFee: params.courierDetails.platformCommission,
+            driverPayout: params.courierDetails.driverPayout,
+            pickupReferenceCode,
+            merchantName: params.selectedMerchant.merchantName,
+            isBOMDeliveryJob: true,
+          },
+        },
+      });
     }
   } catch (err) {
     console.error("Error creating BOM order in Firestore:", err);

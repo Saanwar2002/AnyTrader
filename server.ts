@@ -24,6 +24,8 @@ import { AbuseDefenseEngine } from "./src/server/abuseDefense.ts";
 import { BusinessLogicDefense } from "./src/server/businessLogicDefense.ts";
 import { domainEvents } from "./src/server/domainEvents.ts";
 import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
+import { resolveTrustedCanonicalIdentity } from "./src/server/identity.ts";
+import { executeCreateJobCommand, resolveCreateJobQuota } from "./src/server/createJobCommand.ts";
 import { 
   startPublicJobCardsSync, 
   backfillPublicJobCards, 
@@ -4331,67 +4333,48 @@ async function startServer() {
     }
   });
 
-  // Server-Enforced Job Creation Route (Task 4.5 & V6 Hardened)
+  // Server-Authoritative Canonical CreateJob Command Route (Task 2)
   app.post("/api/jobs/create", requireAuth, async (req, res) => {
     try {
-      const homeownerId = (req as any).user.uid;
-      const rawPayload = req.body;
+      if (!db) throw new BadRequestError("Database service is not initialized");
 
-      if (!db) throw new BadRequestError("Database not initialized");
-      if (!rawPayload || !rawPayload.title || !rawPayload.category) {
-        throw new BadRequestError("Missing required job fields: title and category");
-      }
+      let trustedProfile: Record<string, any> | null = null;
+      const identity = await resolveTrustedCanonicalIdentity(req as any, async (uid) => {
+        const profileSnap = await db!.collection("users").doc(uid).get();
+        trustedProfile = profileSnap.exists ? (profileSnap.data() || null) : null;
+        return trustedProfile;
+      });
 
-      // Mass-assignment & privilege stripping
-      const sanitizedPayload = sanitizeClientPayload(rawPayload);
+      const platformConfig = await getCachedConfig("global");
+      const tiersConfig = await getCachedConfig("tiers");
+      const globalTiers = Array.isArray(tiersConfig?.tiers) ? tiersConfig.tiers : null;
 
-      const isEmergency = sanitizedPayload.urgency === "emergency" || sanitizedPayload.isEmergencyBoost === true;
+      const rawPayload = { ...(req.body || {}) };
+      // Accept idempotency key from header or extract from body before validation
+      const idempotencyKey =
+        (req.headers["x-idempotency-key"] as string) ||
+        (req.headers["idempotency-key"] as string) ||
+        rawPayload.idempotencyKey ||
+        null;
+      delete rawPayload.idempotencyKey;
 
-      // 1. Check Posting Quota if not emergency
-      if (!isEmergency) {
-        const userDoc = await db.collection("users").doc(homeownerId).get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          const isBusiness = userData?.subscriptionType === "business";
-          const hasActiveSubscription = userData?.subscriptionId && userData?.subscriptionStatus === "active";
-          const platformConfig = await getCachedConfig("global");
+      const quota = resolveCreateJobQuota(trustedProfile, platformConfig, globalTiers);
 
-          if (platformConfig?.paywallEnabled !== false) {
-            const startOfMonth = new Date();
-            startOfMonth.setDate(1);
-            startOfMonth.setHours(0, 0, 0, 0);
+      const result = await executeCreateJobCommand({
+        db,
+        identity,
+        rawPayload,
+        idempotencyKey,
+        quota,
+      });
 
-            const activeJobsSnap = await db.collection("jobs")
-              .where("homeownerId", "==", homeownerId)
-              .where("urgency", "!=", "emergency")
-              .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(startOfMonth))
-              .get();
-
-            const postLimit = isBusiness ? (hasActiveSubscription ? 50 : 10) : 5;
-            if (activeJobsSnap.size >= postLimit) {
-              throw new ForbiddenError(`Job posting monthly quota reached (${postLimit} jobs). Please upgrade your subscription.`);
-            }
-          }
-        }
-      }
-
-      // 2. Validate state machine transition from draft to posted
-      const initialStatus = sanitizedPayload.status || "posted";
-      validateJobTransition("draft", initialStatus);
-
-      // 3. Insert sanitized job record
-      const jobRef = db.collection("jobs").doc();
-      const sanitizedJob = {
-        ...sanitizedPayload,
-        id: jobRef.id,
-        homeownerId,
-        status: initialStatus,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      };
-
-      await jobRef.set(sanitizedJob);
-      res.json({ success: true, jobId: jobRef.id, job: sanitizedJob });
+      res.status(result.wasReplayed ? 200 : 201).json({
+        success: true,
+        jobId: result.jobId,
+        status: result.job.status,
+        job: result.job,
+        wasReplayed: result.wasReplayed,
+      });
     } catch (error: any) {
       console.error("Server Job Creation Error:", error);
       sendHttpError(res, error, req);

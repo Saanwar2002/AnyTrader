@@ -725,18 +725,10 @@ service cloud.firestore {
         isJobOwner(resource.data) || 
         isJobTradesperson(resource.data)
       );
-      allow create: if isSignedIn() && (
-        isAdmin() ||
-        ((request.resource.data.get('homeownerId', '') == request.auth.uid || 
-          request.resource.data.get('userId', '') == request.auth.uid || 
-          request.resource.data.get('ownerId', '') == request.auth.uid || 
-          request.resource.data.get('posterId', '') == request.auth.uid || 
-          request.resource.data.get('customerId', '') == request.auth.uid || 
-          request.resource.data.get('isRecurringInstance', false) == true) &&
-         request.resource.data.get('payoutTransferred', false) == false &&
-         request.resource.data.get('payoutStatus', 'pending') != 'transferred' &&
-         request.resource.data.get('completed', false) == false)
-      );
+      // Authoritative job creation is server-only. Clients must use /api/jobs/create,
+      // which binds ownership to verified Firebase Auth, enforces schema/protected-field
+      // rejection, atomic quota, idempotency, lifecycle validation and projection.
+      allow create: if false;
       // Owner has update rights (without changing ownerId or forging financial payout status); accepted trader can only update operational fields; admin has full rights
       allow update: if isSignedIn() && (
         isAdmin() ||

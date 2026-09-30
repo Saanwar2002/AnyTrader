@@ -9,6 +9,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
 import MediaGalleryModal from "./MediaGalleryModal";
+import { createJobViaCommand } from "../services/jobCommandService";
 
 export default function MyJobs() {
   const { user, profile, isAuthReady, loading: authLoading } = useAuth();
@@ -117,19 +118,19 @@ export default function MyJobs() {
       
       let tempJobId = "";
       try {
-        const jobRef = await addDoc(collection(db, "jobs"), {
-          homeownerId: user.uid,
-          title: "Fix leaking washing machine",
-          description: "My Bosch washing machine is leaking from the bottom front door when running a hot wash. Need someone to fix it ASAP.",
-          category: "Appliance Repair",
-          subcategory: "Washing Machine Repair",
-          urgency: "specific_date",
-          status: "posted",
-          postcode: "HD5 9BW",
-          city: "Huddersfield",
-          createdAt: serverTimestamp(),
+        const result = await createJobViaCommand({
+          user,
+          payload: {
+            title: "Fix leaking washing machine",
+            description: "My Bosch washing machine is leaking from the bottom front door when running a hot wash. Need someone to fix it ASAP.",
+            category: "Appliance Repair",
+            subCategory: "Washing Machine Repair",
+            urgency: "standard",
+            postcode: "HD5 9BW",
+            city: "Huddersfield",
+          },
         });
-        tempJobId = jobRef.id;
+        tempJobId = result.jobId;
       } catch (e: any) {
         throw new Error(`Job creation failed: ${e.message}`);
       }
@@ -194,33 +195,27 @@ export default function MyJobs() {
     if (!user) return;
     setIsProcessing(job.id);
     try {
-      const {
-        id, createdAt, postedDate, status, quoteCount,
-        acceptedTradespersonId, paymentStatus, isPaid, completedAt,
-        startedAt, scheduledDate, isConfirmedByTradesperson,
-        trackingStatus, trackingHistory, verificationPin,
-        clientDeleted,
-        hasReview, hasTradespersonReview, dispute, rescheduleProposal,
-        recurringConfig, isRecurringTemplate, isRecurringInstance, recurringDismissedBy,
-        beforePhotos, afterPhotos,
-        boostTier, isBoosted, isInstantMatch,
-        ...baseJob
-      } = job;
-
-      await addDoc(collection(db, "jobs"), {
-        ...baseJob,
-        homeownerId: baseJob.homeownerId || user.uid,
-        userId: user.uid,
-        status: "posted",
-        quoteCount: 0,
-        createdAt: serverTimestamp(),
-        postedDate: serverTimestamp()
+      await createJobViaCommand({
+        user,
+        payload: {
+          title: job.title || "Untitled Job",
+          description: job.description || "No description provided",
+          category: job.category || "General Maintenance",
+          subCategory: job.subCategory || job.subcategory || null,
+          postcode: job.postcode || "SW1A 1AA",
+          city: job.city || null,
+          area: job.area || null,
+          urgency: job.urgency === "emergency" ? "emergency" : "standard",
+          budget: job.budget || null,
+          photos: Array.isArray(job.photos) ? job.photos : [],
+          propertyId: job.propertyId || null,
+        },
       });
       setActionId(null);
       toast.success("Job reposted successfully!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error reposting job:", error);
-      toast.error("Failed to repost job");
+      toast.error(error.message || "Failed to repost job");
     } finally {
       setIsProcessing(null);
     }

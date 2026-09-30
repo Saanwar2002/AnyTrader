@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { PropertyPassportModal } from "./PropertyPassportModal";
 import { ClaimPropertyPassportModal } from "./property/ClaimPropertyPassportModal";
 import { EstateAgentQRGeneratorModal } from "./property/EstateAgentQRGeneratorModal";
+import { createJobViaCommand } from "../services/jobCommandService";
 import { toast } from "sonner";
 
 export default function Portfolio() {
@@ -105,73 +106,53 @@ export default function Portfolio() {
         const fullAddr = `${resolvedAddressLine}${prop.address?.line2 ? ', ' + prop.address.line2 : ''}${resolvedCity ? ', ' + resolvedCity : ''}${resolvedPostcode ? ' ' + resolvedPostcode : ''}`;
 
         if (needGas) {
-          await addDoc(collection(db, "jobs"), {
-            ownerId: user.uid,
-            userId: user.uid,
-            homeownerId: user.uid,
-            title: `CP12 Gas Safety Inspection (${prop.name || resolvedAddressLine})`,
-            category: "Heating & Gas",
-            subcategory: "Gas Safety Certificate (CP12)",
-            description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}\n\n(Exact address details will be released upon quote acceptance)`,
-            budget: "110",
-            agreedAmount: "110",
-            status: "posted",
-            urgency: "urgent",
-            postcode: resolvedPostcode,
-            city: resolvedCity,
-            area: displayLocation,
-            fullAddress: fullAddr,
-            propertyId: prop.id,
-            linkedPropertyId: prop.id,
-            assetId: prop.id,
-            propertyName: prop.name || resolvedAddressLine,
-            assetName: prop.name || resolvedAddressLine,
-            address: prop.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
-            passportSpecsAttached: true,
-            jobNo: generateJobNumber(),
-            quoteCount: 0,
-            quotesCount: 0,
-            viewsCount: 0,
-            clientDeleted: false,
-            createdAt: serverTimestamp(),
-            postedDate: serverTimestamp(),
-            updatedAt: serverTimestamp()
+          await createJobViaCommand({
+            user,
+            payload: {
+              title: `CP12 Gas Safety Inspection (${prop.name || resolvedAddressLine})`,
+              category: "Heating & Gas",
+              subCategory: "Gas Safety Certificate (CP12)",
+              description: `Bulk compliance dispatch: Annual Gas Safety CP12 Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\nBoiler Spec: ${prop.boilerInfo?.brand || 'Standard Boiler'} ${prop.boilerInfo?.model || ''}\n\n(Exact address details will be released upon quote acceptance)`,
+              budget: "110",
+              urgency: "urgent",
+              postcode: resolvedPostcode,
+              city: resolvedCity || undefined,
+              area: displayLocation,
+              propertyId: prop.id,
+              propertyPassportId: prop.id,
+              address: fullAddr,
+              metadata: {
+                propertyName: prop.name || resolvedAddressLine,
+                passportSpecsAttached: true,
+                agreedAmount: "110",
+              },
+            },
           });
           count++;
         }
 
         if (needEicr) {
-          await addDoc(collection(db, "jobs"), {
-            ownerId: user.uid,
-            userId: user.uid,
-            homeownerId: user.uid,
-            title: `EICR Electrical Inspection (${prop.name || resolvedAddressLine})`,
-            category: "Electrical",
-            subcategory: "EICR Electrical Safety Certificate",
-            description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n\n(Exact address details will be released upon quote acceptance)`,
-            budget: "180",
-            agreedAmount: "180",
-            status: "posted",
-            urgency: "urgent",
-            postcode: resolvedPostcode,
-            city: resolvedCity,
-            area: displayLocation,
-            fullAddress: fullAddr,
-            propertyId: prop.id,
-            linkedPropertyId: prop.id,
-            assetId: prop.id,
-            propertyName: prop.name || resolvedAddressLine,
-            assetName: prop.name || resolvedAddressLine,
-            address: prop.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
-            passportSpecsAttached: true,
-            jobNo: generateJobNumber(),
-            quoteCount: 0,
-            quotesCount: 0,
-            viewsCount: 0,
-            clientDeleted: false,
-            createdAt: serverTimestamp(),
-            postedDate: serverTimestamp(),
-            updatedAt: serverTimestamp()
+          await createJobViaCommand({
+            user,
+            payload: {
+              title: `EICR Electrical Inspection (${prop.name || resolvedAddressLine})`,
+              category: "Electrical",
+              subCategory: "EICR Electrical Safety Certificate",
+              description: `Bulk compliance dispatch: 5-Year EICR Electrical Safety Certificate Inspection required.\nLocation Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n\n(Exact address details will be released upon quote acceptance)`,
+              budget: "180",
+              urgency: "urgent",
+              postcode: resolvedPostcode,
+              city: resolvedCity || undefined,
+              area: displayLocation,
+              propertyId: prop.id,
+              propertyPassportId: prop.id,
+              address: fullAddr,
+              metadata: {
+                propertyName: prop.name || resolvedAddressLine,
+                passportSpecsAttached: true,
+                agreedAmount: "180",
+              },
+            },
           });
           count++;
         }

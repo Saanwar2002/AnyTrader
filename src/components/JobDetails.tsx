@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { GoogleDocsContractModal } from "@/src/components/shared/GoogleDocsContractModal";
 import { BomOneClickOrderingModal } from "./BomOneClickOrderingModal";
 import { extractBillOfMaterials } from "@/src/services/bomMerchantService";
+import { createJobViaCommand } from "@/src/services/jobCommandService";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -1927,39 +1928,31 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleRepostJob = async () => {
-    if (!id || !job) return;
+    if (!id || !job || !user) return;
     setIsProcessing(true);
     try {
-      const {
-        id: _id, createdAt, postedDate, status, quoteCount,
-        acceptedTradespersonId, paymentStatus, isPaid, completedAt,
-        startedAt, scheduledDate, isConfirmedByTradesperson,
-        trackingStatus, trackingHistory, verificationPin,
-        clientDeleted,
-        hasReview, hasTradespersonReview, dispute, rescheduleProposal,
-        recurringConfig, isRecurringTemplate, isRecurringInstance, recurringDismissedBy,
-        beforePhotos, afterPhotos,
-        boostTier, isBoosted, isInstantMatch,
-        ...baseJob
-      } = job;
-
-      if (!user) return;
-
-      const jobRef = await addDoc(collection(db, "jobs"), {
-        ...baseJob,
-        homeownerId: baseJob.homeownerId || user.uid,
-        userId: user.uid,
-        status: "posted",
-        quoteCount: 0,
-        createdAt: serverTimestamp(),
-        postedDate: serverTimestamp()
+      const result = await createJobViaCommand({
+        user,
+        payload: {
+          title: job.title || "Untitled Job",
+          description: job.description || "No description provided",
+          category: job.category || "General Maintenance",
+          subCategory: job.subCategory || job.subcategory || null,
+          postcode: job.postcode || "SW1A 1AA",
+          city: job.city || null,
+          area: job.area || null,
+          urgency: job.urgency === "emergency" ? "emergency" : "standard",
+          budget: job.budget || null,
+          photos: Array.isArray(job.photos) ? job.photos : [],
+          propertyId: job.propertyId || null,
+        },
       });
       setShowActions(false);
       toast.success("Job reposted successfully!");
-      navigate(`/job/${jobRef.id}`); // navigate to the new job
-    } catch (err) {
+      navigate(`/job/${result.jobId}`); // navigate to the new job
+    } catch (err: any) {
       console.error(err);
-      toast.error("Failed to repost job");
+      toast.error(err.message || "Failed to repost job");
     } finally {
       setIsProcessing(false);
     }

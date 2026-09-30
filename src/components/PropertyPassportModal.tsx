@@ -11,6 +11,7 @@ import { TransferOwnershipModal } from "./property/TransferOwnershipModal";
 import { BuyerPackModal } from "./property/BuyerPackModal";
 import { EstateAgentQRGeneratorModal } from "./property/EstateAgentQRGeneratorModal";
 import { calculatePropertyHealthScore } from "./property/propertyUtils";
+import { createJobViaCommand } from "../services/jobCommandService";
 
 interface PropertyPassportModalProps {
   property: any;
@@ -141,37 +142,28 @@ export function PropertyPassportModal({ property, onClose, onUpdated }: Property
 
       const fullAddr = `${resolvedAddressLine}${property.address?.line2 ? ', ' + property.address.line2 : ''}${resolvedCity ? ', ' + resolvedCity : ''}${resolvedPostcode ? ' ' + resolvedPostcode : ''}`;
 
-      await addDoc(collection(db, "jobs"), {
-        ownerId: user.uid,
-        userId: user.uid,
-        homeownerId: user.uid,
-        title: jobDetails.title,
-        category: jobDetails.category,
-        subcategory: jobDetails.subcategory || "Property Maintenance",
-        description: `${jobDetails.description}\n\n--- PRE-LOADED PROPERTY PASSPORT SPECS ---\n- Location Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n- Boiler Spec: ${boilerBrand || 'Standard'} ${boilerModel || ''} (${boilerAge || 'N/A'} yrs old)\n- Roof Condition: ${roofCondition || 'Good'}\n- EPC Rating: Grade ${epcRating || 'C'}\n\n(Full property street address & direct contact details will be automatically revealed to the assigned tradesperson once a quote is accepted)`,
-        budget: jobDetails.budget || "120",
-        agreedAmount: jobDetails.budget || "120",
-        status: "posted",
-        urgency: jobDetails.urgency || "urgent",
-        postcode: resolvedPostcode,
-        city: resolvedCity,
-        area: displayLocation,
-        fullAddress: fullAddr,
-        propertyId: property.id,
-        linkedPropertyId: property.id,
-        assetId: property.id,
-        propertyName: property.name || resolvedAddressLine || "Property",
-        assetName: property.name || resolvedAddressLine || "Property",
-        address: property.address || { line1: resolvedAddressLine, postcode: resolvedPostcode, city: resolvedCity },
-        passportSpecsAttached: true,
-        jobNo: generateJobNumber(),
-        quoteCount: 0,
-        quotesCount: 0,
-        viewsCount: 0,
-        clientDeleted: false,
-        createdAt: serverTimestamp(),
-        postedDate: serverTimestamp(),
-        updatedAt: serverTimestamp()
+      if (!user) return;
+      await createJobViaCommand({
+        user,
+        payload: {
+          title: jobDetails.title,
+          category: jobDetails.category,
+          subCategory: jobDetails.subcategory || "Property Maintenance",
+          description: `${jobDetails.description}\n\n--- PRE-LOADED PROPERTY PASSPORT SPECS ---\n- Location Area: ${displayLocation !== "Area on Request" ? displayLocation : "Provided on Booking"}\n- Boiler Spec: ${boilerBrand || 'Standard'} ${boilerModel || ''} (${boilerAge || 'N/A'} yrs old)\n- Roof Condition: ${roofCondition || 'Good'}\n- EPC Rating: Grade ${epcRating || 'C'}\n\n(Full property street address & direct contact details will be automatically revealed to the assigned tradesperson once a quote is accepted)`,
+          budget: jobDetails.budget ? String(jobDetails.budget) : "120",
+          urgency: jobDetails.urgency === "emergency" ? "emergency" : "urgent",
+          postcode: resolvedPostcode,
+          city: resolvedCity || undefined,
+          area: displayLocation,
+          propertyId: property.id,
+          propertyPassportId: property.id,
+          address: fullAddr,
+          metadata: {
+            propertyName: property.name || resolvedAddressLine || "Property",
+            passportSpecsAttached: true,
+            agreedAmount: jobDetails.budget || "120",
+          },
+        },
       });
 
       // Backfill property address if it was missing

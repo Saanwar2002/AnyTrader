@@ -142,6 +142,18 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       await assertSucceeds(getDocs(collection(adminDb, "jobs")));
     });
 
+    it("8b. Direct client job creation is denied (Task 2: server-authoritative command required)", async () => {
+      const userADb = testEnv.authenticatedContext("user_alice").firestore();
+      await assertFails(
+        setDoc(doc(userADb, "jobs", "direct_client_job_fail"), {
+          title: "Bypassed Client Job",
+          homeownerId: "user_alice",
+          status: "open",
+          category: "Plumbing",
+        })
+      );
+    });
+
     it("9. Public job projection is readable anonymously", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         const adminDb = context.firestore();

@@ -1,4 +1,5 @@
-import { db, collection, query, where, or, and, getDocs, addDoc, updateDoc, setDoc, doc, serverTimestamp, sendNotification, handleFirestoreError, OperationType } from "@/src/firebase";
+import { auth, db, collection, query, where, or, and, getDocs, addDoc, updateDoc, setDoc, doc, serverTimestamp, sendNotification, handleFirestoreError, OperationType } from "@/src/firebase";
+import { createJobViaCommand } from "./jobCommandService";
 
 export async function processRecurringSchedules(userId: string) {
   try {
@@ -32,37 +33,33 @@ export async function processRecurringSchedules(userId: string) {
       const threeDaysFromNow = new Date();
       threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
 
-      if (nextJobDate <= threeDaysFromNow) {
-        // Generate the job
-        const jobRef = doc(collection(db, "jobs"));
-        const jobData = {
-          id: jobRef.id,
-          title: `[Recurring] ${schedule.title}`,
-          description: `Automatically generated recurring service (${schedule.frequency}).`,
-          category: schedule.category,
-          homeownerId: schedule.homeownerId,
-          postcode: schedule.postcode || "N/A", // Fallback for older schedules
-          status: "accepted", // Automatically accepted
-          urgency: "specific_date",
-          jobDate: nextJobDate.toISOString(),
-          postedDate: serverTimestamp(),
-          createdAt: serverTimestamp(),
-          paymentPreference: schedule.paymentPreference || "negotiable",
-          quoteScope: schedule.quoteScope || "labor_only",
-          isRecurringInstance: true,
-          recurringScheduleId: schedule.id,
-          location: "As per previous arrangement"
-        };
+      if (nextJobDate <= threeDaysFromNow && auth.currentUser) {
+        // Generate the job via canonical createJobCommand with deterministic schedule/date idempotency key
+        const idempotencyKey = `recurring_${schedule.id}_${nextJobDate.toISOString().slice(0, 10)}`;
+        const commandResult = await createJobViaCommand({
+          user: auth.currentUser,
+          idempotencyKey,
+          payload: {
+            title: `[Recurring] ${schedule.title}`,
+            description: `Automatically generated recurring service (${schedule.frequency}).`,
+            category: schedule.category,
+            postcode: schedule.postcode || "SW1A 1AA",
+            urgency: "standard",
+            recurringScheduleId: schedule.id,
+            preferredDate: nextJobDate.toISOString(),
+            metadata: {
+              paymentPreference: schedule.paymentPreference || "negotiable",
+              quoteScope: schedule.quoteScope || "labor_only",
+              isRecurringInstance: true,
+              location: "As per previous arrangement",
+              originalHomeownerId: schedule.homeownerId,
+            },
+          },
+        });
+        const createdJobId = commandResult.jobId;
 
-        try {
-          await setDoc(jobRef, jobData);
-        } catch (e) {
-          handleFirestoreError(e, OperationType.WRITE, `jobs/${jobRef.id} (recurring)`);
-          throw e;
-        }
-        
         // Create the accepted quote automatically
-        const quoteRef = doc(collection(db, "jobs", jobRef.id, "quotes"));
+        const quoteRef = doc(collection(db, "jobs", createdJobId, "quotes"));
         try {
           await setDoc(quoteRef, {
             id: quoteRef.id,
@@ -74,7 +71,7 @@ export async function processRecurringSchedules(userId: string) {
             createdAt: serverTimestamp()
           });
         } catch (e) {
-          handleFirestoreError(e, OperationType.WRITE, `jobs/${jobRef.id}/quotes/${quoteRef.id} (recurring)`);
+          handleFirestoreError(e, OperationType.WRITE, `jobs/${createdJobId}/quotes/${quoteRef.id} (recurring)`);
           throw e;
         }
 
@@ -94,7 +91,7 @@ export async function processRecurringSchedules(userId: string) {
           "Upcoming Recurring Job",
           `A new instance of "${schedule.title}" has been scheduled for ${nextJobDate.toLocaleDateString()}.`,
           "status",
-          `/job/${jobRef.id}`
+          `/job/${createdJobId}`
         );
 
         await sendNotification(
@@ -102,7 +99,7 @@ export async function processRecurringSchedules(userId: string) {
           "New Recurring Job Instance",
           `You have a recurring job for "${schedule.title}" scheduled for ${nextJobDate.toLocaleDateString()}.`,
           "status",
-          `/job/${jobRef.id}`
+          `/job/${createdJobId}`
         );
       }
     }
