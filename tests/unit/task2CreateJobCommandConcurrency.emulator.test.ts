@@ -1,13 +1,18 @@
+process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8088";
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as admin from "firebase-admin";
+import { initializeTestEnvironment, RulesTestEnvironment } from "@firebase/rules-unit-testing";
+import * as fs from "fs";
+import * as path from "path";
 import { executeCreateJobCommand } from "../../src/server/createJobCommand.ts";
 import { ForbiddenError } from "../../src/server/httpErrors.ts";
 import { CanonicalIdentity } from "../../src/server/identity.ts";
 
 describe("Task 2: CreateJob Command Real Firestore Emulator Concurrency Test", () => {
   const PROJECT_ID = "demo-anytrader";
+  let testEnv: RulesTestEnvironment | null = null;
   let db: admin.firestore.Firestore;
 
   const homeownerIdentity: CanonicalIdentity = {
@@ -26,12 +31,37 @@ describe("Task 2: CreateJob Command Real Firestore Emulator Concurrency Test", (
     urgency: "standard" as const,
   };
 
-  beforeAll(() => {
-    if (admin.apps.length > 0) {
-      db = admin.apps[0]!.firestore();
-    } else {
-      const app = admin.initializeApp({ projectId: PROJECT_ID });
+  beforeAll(async () => {
+    try {
+      const firestoreRules = fs.readFileSync(path.resolve(process.cwd(), "firestore.rules"), "utf-8");
+      const storageRules = fs.readFileSync(path.resolve(process.cwd(), "storage.rules"), "utf-8");
+
+      testEnv = await initializeTestEnvironment({
+        projectId: PROJECT_ID,
+        firestore: {
+          rules: firestoreRules,
+          host: "127.0.0.1",
+          port: 8088,
+        },
+        storage: {
+          rules: storageRules,
+          host: "127.0.0.1",
+          port: 9199,
+        },
+      });
+
+      const app = admin.apps.length > 0 ? admin.apps[0]! : admin.initializeApp({ projectId: PROJECT_ID });
       db = app.firestore();
+    } catch (err) {
+      console.error("Firebase emulator setup warning:", err);
+      const app = admin.apps.length > 0 ? admin.apps[0]! : admin.initializeApp({ projectId: PROJECT_ID });
+      db = app.firestore();
+    }
+  });
+
+  afterAll(async () => {
+    if (testEnv) {
+      await testEnv.cleanup();
     }
   });
 
