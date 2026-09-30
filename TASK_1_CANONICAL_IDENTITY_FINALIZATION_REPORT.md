@@ -81,15 +81,19 @@ Authenticated Request (Firebase Auth Token)
 ### B. `src/server/authorization.ts`
 - **What Changed**:
   - Replaced legacy `user.role` check in `assertUserRole()` with 100% canonical resolution (`accountType` and `capabilities`).
-  - Re-exported `requireAccountType()`, `requireAccountTypeIn()`, and `requireCapability()`.
-- **Why**: Ensures there is only ONE authorization authority (the canonical identity).
-- **Security Impact**: Eliminates dual-authority vulnerabilities and legacy role bypasses.
+  - Added `"admin"` to `SERVER_OWNED_PROTECTED_KEYS` alongside `"isAdmin"` and `"role"`.
+  - Updated `resolveUserCanonicalIdentity()` to pass through pre-resolved `user.identity` directly when present.
+  - Re-exported `resolveTrustedCanonicalIdentity()`, `requireAccountType()`, `requireAccountTypeIn()`, and `requireCapability()`.
+- **Why**: Ensures there is only ONE authorization authority (the canonical identity) and closes mass-assignment vectors.
+- **Security Impact**: Eliminates dual-authority vulnerabilities, legacy role bypasses, and client payload key injection.
 
 ### C. `server.ts`
 - **What Changed**:
   - Replaced `user.isAdmin === true || user.role === "admin"` with server-authoritative `await checkIsAdmin(user)`.
-- **Why**: Unifies admin authority under server-verified custom claims and the authoritative `admins` collection.
-- **Security Impact**: Prevents client-injected `role: "admin"` in user documents from unlocking administrative backend routes.
+  - Reconciled admin claim auto-migration in `requireAdmin` to enforce `admin: true` and `isAdmin: true` without relying on legacy `decodedToken.role`.
+  - Unified `api/ads/:id/toggle-active` to use `await checkIsAdmin((req as any).user)`.
+- **Why**: Unifies admin authority under server-verified custom claims and the authoritative `admins` collection across all production routes.
+- **Security Impact**: Prevents client-injected `role: "admin"` in user documents or tokens from bypassing administrative checks.
 
 ### D. `src/components/Onboarding.tsx` & `src/components/MasterAdminLayout.tsx`
 - **What Changed**:
@@ -107,8 +111,8 @@ Authenticated Request (Firebase Auth Token)
 ### F. `tests/unit/task1CanonicalIdentity.test.ts`
 - **What Changed**:
   - Added Test H (testing `requireAccountType`, `requireAccountTypeIn`, and `requireCapability`).
-  - Added Test I (testing required adversarial vectors: role spoofing, capability spoofing, UID substitution, admin spoofing, legacy compatibility, and legacy role alone admin rejection).
-- **Why**: Validates all Task 1 security boundaries with rigorous adversarial tests (33 dedicated tests).
+  - Added Test I (testing required adversarial vectors: role spoofing, capability spoofing, UID substitution, admin spoofing, legacy compatibility, legacy role alone admin rejection, request body escalation rejection, and the adversarial multi-vector matrix).
+- **Why**: Validates all Task 1 security boundaries with rigorous adversarial tests (35 dedicated tests).
 - **Security Impact**: Guarantees zero regression on all identity and authorization paths.
 
 ---
@@ -126,8 +130,8 @@ Authenticated Request (Firebase Auth Token)
 ### B. Task 1 Dedicated Test Suite
 - **Command**: `npx vitest run tests/unit/task1CanonicalIdentity.test.ts`
 - **Exit code**: `0`
-- **Total tests**: `34`
-- **Passed**: `34`
+- **Total tests**: `35`
+- **Passed**: `35`
 - **Failed**: `0`
 - **Skipped**: `0`
 
@@ -143,7 +147,7 @@ Authenticated Request (Firebase Auth Token)
 - **Command**: `npm test`
 - **Exit code**: `0`
 - **Test Files**: `47 passed (47)`
-- **Total tests**: `762 passed (762)`
+- **Total tests**: `763 passed (763)`
 - **Failed**: `0`
 - **Skipped**: `0`
 

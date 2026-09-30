@@ -574,5 +574,55 @@ describe("Task 1: Canonical Identity & Capability Model", () => {
       expect(identity.capabilities).not.toContain("admin:all");
       expect(() => requireAccountType(identity, "admin")).toThrow(ForbiddenError);
     });
+
+    it("H. Adversarial privilege-escalation matrix: rejects attacker UID substitutions, portal spoofing, query param spoofing, and forged ownership", async () => {
+      // 1. Attacker UID + Victim UID in payload
+      const attackerAuth = {
+        auth: { uid: "attacker_uid", token: { admin: false, isAdmin: false } },
+        body: { uid: "victim_uid", userId: "victim_uid", ownerId: "victim_uid" },
+      };
+      const identityAttacker = await resolveTrustedCanonicalIdentity(attackerAuth);
+      expect(identityAttacker.uid).toBe("attacker_uid");
+      expect(identityAttacker.uid).not.toBe("victim_uid");
+
+      // 2. Attacker UID + Victim Role / Admin Role in payload
+      const attackerRolePayload = {
+        auth: { uid: "attacker_uid", token: {} },
+        body: { role: "admin", accountType: "admin" },
+      };
+      const identityRole = await resolveTrustedCanonicalIdentity(attackerRolePayload);
+      expect(identityRole.accountType).toBe("consumer");
+      expect(identityRole.accountType).not.toBe("admin");
+
+      // 3. Attacker portal = admin / query parameter = admin
+      const attackerQueryPortal = {
+        auth: { uid: "attacker_uid", token: {} },
+        query: { portal: "super_admin", role: "admin", isAdmin: "true" },
+        body: { portal: "admin" },
+      };
+      const identityQuery = await resolveTrustedCanonicalIdentity(attackerQueryPortal);
+      expect(identityQuery.accountType).not.toBe("admin");
+      expect(() => requireAccountType(identityQuery, "admin")).toThrow(ForbiddenError);
+
+      // 4. Attacker UID + Admin capability in payload
+      const attackerCapPayload = {
+        auth: { uid: "attacker_uid", token: {} },
+        body: { capabilities: ["admin", "fleet_driver", "contractor"] },
+      };
+      const identityCap = await resolveTrustedCanonicalIdentity(attackerCapPayload);
+      expect(identityCap.capabilities).not.toContain("admin");
+      expect(identityCap.capabilities).not.toContain("fleet_driver");
+      expect(identityCap.capabilities).not.toContain("contractor");
+
+      // 5. Attacker UID + Victim Ownership in assertResourceOwner
+      const attackerUser: AuthenticatedUser = {
+        uid: "attacker_uid",
+        role: "customer",
+        isAdmin: false,
+        identity: identityAttacker,
+      };
+      expect(() => assertResourceOwner(attackerUser, "victim_uid", "Job")).toThrow(ForbiddenError);
+      expect(() => assertResourceOwner(attackerUser, "attacker_uid", "Job")).not.toThrow();
+    });
   });
 });

@@ -1483,14 +1483,14 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
     }
 
     // Auto-migrate verified admin by applying custom claim for future requests if missing
-    if (decodedToken.admin !== true && decodedToken.role !== "admin") {
+    if (decodedToken.admin !== true || decodedToken.isAdmin !== true) {
       try {
         const userRecord = await admin.auth().getUser(decodedToken.uid);
         const currentClaims = userRecord.customClaims || {};
         await admin.auth().setCustomUserClaims(decodedToken.uid, {
           ...currentClaims,
           admin: true,
-          role: decodedToken.role || "admin",
+          isAdmin: true,
         });
       } catch (claimErr) {
         // Non-blocking if identity toolkit is disabled
@@ -2920,7 +2920,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       const authUid = (req as any).user.uid;
-      const isAdminUser = (req as any).user.admin === true || (req as any).user.isAdmin === true;
+      const isAdminUser = await checkIsAdmin((req as any).user);
 
       if (!db) {
         return res.status(500).json({ error: "Database service unavailable" });

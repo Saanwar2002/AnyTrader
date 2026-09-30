@@ -138,6 +138,12 @@ export function assertUserRole(
  * Resolves the full canonical identity representation for an authenticated user.
  */
 export function resolveUserCanonicalIdentity(user: AuthenticatedUser | Record<string, any>): CanonicalIdentity {
+  if (user && "identity" in user && user.identity && typeof user.identity === "object" && "accountType" in user.identity) {
+    return user.identity;
+  }
+  if (user && "accountType" in user && "capabilities" in user && Array.isArray(user.capabilities)) {
+    return user as CanonicalIdentity;
+  }
   return resolveCanonicalIdentity(user);
 }
 
@@ -485,6 +491,7 @@ export const SERVER_OWNED_PROTECTED_KEYS = new Set([
 
   // Role & Admin privilege escalation
   "isAdmin",
+  "admin",
   "role",
   "permissions",
   "tierId",
