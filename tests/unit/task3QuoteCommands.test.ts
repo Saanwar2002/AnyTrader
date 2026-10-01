@@ -188,6 +188,16 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
         "createdAt",
         "revisionCount",
         "payoutTransferred",
+        // Inherited Task 1 protected keys
+        "accountType",
+        "capabilities",
+        "customClaims",
+        "permissions",
+        "tierId",
+        "subscriptionStatus",
+        "verified",
+        "rating",
+        "trustScore",
       ]) {
         expect(() =>
           validateQuoteCommandPayload("CreateQuote", {
@@ -197,6 +207,47 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
           })
         ).toThrow(BadRequestError);
       }
+    });
+
+    it("enforces mandatory idempotency key bounds (8 <= length <= 200)", async () => {
+      // 1. Missing idempotency key
+      await expect(
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "CreateQuote",
+            payload: { jobId: "job_roof_100", amount: 500 },
+          },
+          idempotencyKey: "",
+        })
+      ).rejects.toThrow(BadRequestError);
+
+      // 2. Too short (< 8 chars)
+      await expect(
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "CreateQuote",
+            payload: { jobId: "job_roof_100", amount: 500 },
+          },
+          idempotencyKey: "short",
+        })
+      ).rejects.toThrow(BadRequestError);
+
+      // 3. Too long (> 200 chars)
+      await expect(
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "CreateQuote",
+            payload: { jobId: "job_roof_100", amount: 500 },
+          },
+          idempotencyKey: "a".repeat(201),
+        })
+      ).rejects.toThrow(BadRequestError);
     });
 
     it("rejects non-positive amounts or invalid schemas", () => {
@@ -238,6 +289,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
           db,
           identity: homeownerIdentity,
           command,
+          idempotencyKey: "test_idemp_self_quote_123",
         })
       ).rejects.toThrow(BadRequestError);
     });
@@ -257,6 +309,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
           db,
           identity: rivalTraderIdentity,
           command,
+          idempotencyKey: "test_idemp_direct_intercept_123",
         })
       ).rejects.toThrow(ForbiddenError);
     });
@@ -275,6 +328,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
         db,
         identity: traderIdentity,
         command,
+        idempotencyKey: "test_idemp_direct_valid_123",
       });
 
       expect(result.success).toBe(true);
@@ -295,6 +349,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             coverNote: "Dave's roofing quote",
           },
         },
+        idempotencyKey: "test_idemp_dave_create_123",
       });
 
       // 2. Rival trader tries to update Dave's quote
@@ -313,6 +368,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
           db,
           identity: rivalTraderIdentity,
           command: updateCommand,
+          idempotencyKey: "test_idemp_rival_update_123",
         })
       ).rejects.toThrow(ForbiddenError);
     });
@@ -328,6 +384,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             amount: 500,
           },
         },
+        idempotencyKey: "test_idemp_create_for_withdraw_123",
       });
 
       await expect(
@@ -342,6 +399,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
               reason: "Malicious withdrawal by competitor",
             },
           },
+          idempotencyKey: "test_idemp_rival_withdraw_123",
         })
       ).rejects.toThrow(ForbiddenError);
     });
@@ -357,6 +415,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             amount: 500,
           },
         },
+        idempotencyKey: "test_idemp_create_for_eve_123",
       });
 
       // Attacker Homeowner Eve tries to reject Alice's received quote
@@ -372,6 +431,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
               reason: "Unauthorized rejection",
             },
           },
+          idempotencyKey: "test_idemp_eve_reject_123",
         })
       ).rejects.toThrow(ForbiddenError);
 
@@ -388,6 +448,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
               message: "Unauthorized requote request",
             },
           },
+          idempotencyKey: "test_idemp_eve_requote_123",
         })
       ).rejects.toThrow(ForbiddenError);
     });
@@ -406,6 +467,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             coverNote: "Full roofing overhaul",
           },
         },
+        idempotencyKey: "test_idemp_calc_fee_123",
       });
 
       expect(result.quote).toBeDefined();
@@ -432,6 +494,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             ],
           },
         },
+        idempotencyKey: "test_idemp_multi_ms_123",
       });
 
       expect(result.quote?.milestones).toHaveLength(3);
@@ -457,6 +520,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
               ],
             },
           },
+          idempotencyKey: "test_idemp_invalid_ms_sum_123",
         })
       ).rejects.toThrow(BadRequestError);
     });
@@ -476,6 +540,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             coverNote: "Initial quote",
           },
         },
+        idempotencyKey: "test_idemp_seq_create_123",
       });
       expect(createRes.status).toBe("pending");
       expect(createRes.quote?.revisionCount).toBe(1);
@@ -498,6 +563,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             suggestedBudget: 550,
           },
         },
+        idempotencyKey: "test_idemp_seq_requote_123",
       });
       expect(requoteRes.status).toBe("requote_requested");
       expect(requoteRes.quote?.requoteMessage).toBe("Can you do £550 if we provide the tiles?");
@@ -515,6 +581,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             coverNote: "Agreed, revised to £550 with homeowner-supplied tiles.",
           },
         },
+        idempotencyKey: "test_idemp_seq_respond_123",
       });
       expect(respondRes.status).toBe("requoted");
       expect(respondRes.quote?.amount).toBe(550);
@@ -534,6 +601,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             reason: "Fully booked next week",
           },
         },
+        idempotencyKey: "test_idemp_seq_withdraw_123",
       });
       expect(withdrawRes.status).toBe("withdrawn");
 
@@ -553,6 +621,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             amount: 800,
           },
         },
+        idempotencyKey: "test_idemp_create_reject_123",
       });
 
       const rejectRes = await executeQuoteCommand({
@@ -566,6 +635,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             reason: "Found alternative contractor",
           },
         },
+        idempotencyKey: "test_idemp_do_reject_123",
       });
 
       expect(rejectRes.status).toBe("rejected");
@@ -631,6 +701,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
             amount: 500,
           },
         },
+        idempotencyKey: "test_idemp_spam_quote_1_123",
       });
 
       // 2. Dave tries to create a second quote without withdrawing the first
@@ -645,6 +716,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
               amount: 600,
             },
           },
+          idempotencyKey: "test_idemp_spam_quote_2_123",
         })
       ).rejects.toThrow(ConflictError);
     });

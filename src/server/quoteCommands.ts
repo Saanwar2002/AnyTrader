@@ -23,12 +23,16 @@ import { SERVER_OWNED_PROTECTED_KEYS } from "./authorization.ts";
 import { validateQuoteTransition, QuoteStatus } from "./stateMachine.ts";
 import { domainEvents } from "./domainEvents.ts";
 
+const INHERITED_SERVER_OWNED_KEYS = new Set(SERVER_OWNED_PROTECTED_KEYS);
+INHERITED_SERVER_OWNED_KEYS.delete("amount");
+
 /**
  * Server-owned & privileged fields that clients are strictly forbidden from supplying
  * in any quote command payload. Attempts to supply any of these keys trigger an immediate
  * BadRequestError (OWASP API Mass Assignment Defense).
  */
 export const QUOTE_MUTATION_PROTECTED_KEYS = new Set([
+  ...INHERITED_SERVER_OWNED_KEYS,
   "id",
   "tradespersonId",
   "traderId",
@@ -285,18 +289,10 @@ export async function executeQuoteCommand(
   const validatedInput = validateQuoteCommandPayload(commandType, command.payload);
   const jobId = validatedInput.jobId;
 
-  // 1. Persistent Idempotency Key Normalization
-  let rawIdempotencyKey = options.idempotencyKey || "";
-  if (!rawIdempotencyKey) {
-    const hashPayload = JSON.stringify({
-      uid: identity.uid,
-      commandType,
-      jobId,
-      quoteId: (validatedInput as any).quoteId || "new",
-      amount: (validatedInput as any).amount,
-      message: (validatedInput as any).message || (validatedInput as any).coverNote,
-    });
-    rawIdempotencyKey = `quote_cmd_${crypto.createHash("sha256").update(hashPayload).digest("hex").substring(0, 32)}`;
+  // 1. Persistent Idempotency Key Normalization & Validation
+  const rawIdempotencyKey = (options.idempotencyKey || "").trim();
+  if (!rawIdempotencyKey || rawIdempotencyKey.length < 8 || rawIdempotencyKey.length > 200) {
+    throw new BadRequestError("Idempotency key is required and must be between 8 and 200 characters.");
   }
   const idempotencyDocId = rawIdempotencyKey.replace(/\//g, "_");
   const idempotencyRef = db.collection("idempotency_keys").doc(idempotencyDocId);

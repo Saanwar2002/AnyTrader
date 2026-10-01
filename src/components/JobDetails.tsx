@@ -1087,13 +1087,20 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleFinalizeMaterialList = async () => {
-    if (!id || !finalizingQuoteId) return;
+    if (!id || !finalizingQuoteId || !user) return;
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "jobs", id, "quotes", finalizingQuoteId), {
-        materialsFinalized: true,
-        materialList: materialList.length > 0 ? materialList : [],
-        updatedAt: serverTimestamp()
+      await updateQuoteViaCommand({
+        user: user as any,
+        jobId: id,
+        quoteId: finalizingQuoteId,
+        payload: {
+          materialsIncluded: true,
+          metadata: {
+            materialsFinalized: true,
+            materialList: materialList.length > 0 ? materialList : [],
+          },
+        },
       });
       // Allow homeowner to immediately see it.
       setQuotes(prev => prev.map(q => q.id === finalizingQuoteId ? { ...q, materialsFinalized: true, materialList } : q));

@@ -4412,6 +4412,11 @@ async function startServer() {
       delete rawPayload.idempotencyKey;
       delete rawBody.idempotencyKey;
 
+      const trimmedIdempotencyKey = typeof idempotencyKey === "string" ? idempotencyKey.trim() : "";
+      if (!trimmedIdempotencyKey || trimmedIdempotencyKey.length < 8 || trimmedIdempotencyKey.length > 200) {
+        throw new BadRequestError("Idempotency key is required and must be between 8 and 200 characters.");
+      }
+
       const result = await executeQuoteCommand({
         db,
         identity,
@@ -4419,7 +4424,7 @@ async function startServer() {
           type: commandType,
           payload: rawPayload,
         },
-        idempotencyKey,
+        idempotencyKey: trimmedIdempotencyKey,
       });
 
       res.status(result.wasReplayed ? 200 : (commandType === "CreateQuote" ? 201 : 200)).json({
