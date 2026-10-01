@@ -1297,6 +1297,11 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
           emulatorAppName
         );
       const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
 
       const homeownerIdentity: CanonicalIdentity = {
         uid: "real_emulator_homeowner_123",
