@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db, collection, collectionGroup, query, where, orderBy, onSnapshot, handleFirestoreError, OperationType, doc, getDoc, updateDoc, serverTimestamp, arrayUnion } from "@/src/firebase";
 import { useAuth } from "./AuthProvider";
+import { withdrawQuoteViaCommand } from "../services/quoteCommandService.ts";
 import { motion, AnimatePresence } from "motion/react";
 import { PoundSterling, Clock, MapPin, ChevronRight, AlertCircle, CheckCircle2, XCircle, Briefcase, Trash2, Sparkles, Calendar, FileSpreadsheet } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -49,31 +50,25 @@ export default function MyQuotes() {
   };
 
   const handleDeleteQuote = async () => {
-    if (!deletingQuote) return;
+    if (!deletingQuote || !user) return;
     setIsDeleting(true);
     
     try {
-      const { deleteDoc } = await import("firebase/firestore");
-      const quoteRef = doc(db, "jobs", deletingQuote.jobId, "quotes", deletingQuote.id);
-      await deleteDoc(quoteRef);
+      if (!deletingQuote.status || deletingQuote.status === "pending" || deletingQuote.status === "submitted" || deletingQuote.status === "requoted" || deletingQuote.status === "requote_requested") {
+        await withdrawQuoteViaCommand({
+          user: user as any,
+          jobId: deletingQuote.jobId,
+          quoteId: deletingQuote.id,
+          reason: "Deleted by tradesperson",
+        });
+      }
       
       // Update local state to remove the quote immediately
       setQuotes(prev => prev.filter(q => q.id !== deletingQuote.id));
-
-      // Decrement quoteCount on job if quote was active
-      if (!deletingQuote.status || deletingQuote.status === "pending" || deletingQuote.status === "submitted") {
-        try {
-          const { increment, updateDoc } = await import("firebase/firestore");
-          await updateDoc(doc(db, "jobs", deletingQuote.jobId), {
-            quoteCount: increment(-1)
-          });
-        } catch (err) {
-          console.warn("Could not decrement quoteCount on parent job:", err);
-        }
-      }
     } catch (error) {
-      console.error("Error deleting quote:", error);
-      handleFirestoreError(error, OperationType.DELETE, `jobs/${deletingQuote.jobId}/quotes/${deletingQuote.id}`);
+      console.error("Error withdrawing/deleting quote:", error);
+      // Still update local UI optimistically
+      setQuotes(prev => prev.filter(q => q.id !== deletingQuote.id));
     } finally {
       setIsDeleting(false);
       setDeletingQuote(null);
@@ -81,44 +76,26 @@ export default function MyQuotes() {
   };
 
   const handleWithdrawQuote = async () => {
-    if (!withdrawingQuote || !withdrawReason.trim()) return;
+    if (!withdrawingQuote || !withdrawReason.trim() || !user) return;
     setIsWithdrawing(true);
     
     try {
-      const quoteRef = doc(db, "jobs", withdrawingQuote.jobId, "quotes", withdrawingQuote.id);
-      await updateDoc(quoteRef, {
-        status: "withdrawn",
-        withdrawReason: withdrawReason.trim(),
-        updatedAt: serverTimestamp(),
-        history: arrayUnion({
-          amount: withdrawingQuote.amount,
-          message: withdrawingQuote.message,
-          paymentPreference: withdrawingQuote.paymentPreference,
-          quoteScope: withdrawingQuote.quoteScope,
-          timestamp: new Date().toISOString(),
-          reason: `Withdrawn by tradesperson: ${withdrawReason.trim()}`
-        })
+      await withdrawQuoteViaCommand({
+        user: user as any,
+        jobId: withdrawingQuote.jobId,
+        quoteId: withdrawingQuote.id,
+        reason: withdrawReason.trim(),
       });
-    } catch (error) {
-      console.error("Error updating quote status:", error);
-      handleFirestoreError(error, OperationType.UPDATE, `jobs/${withdrawingQuote.jobId}/quotes/${withdrawingQuote.id}`);
+
+      setQuotes(prev => prev.map(q => q.id === withdrawingQuote.id ? { ...q, status: "withdrawn", withdrawReason: withdrawReason.trim() } : q));
+    } catch (error: any) {
+      console.error("Error withdrawing quote:", error);
+      alert(error?.message || "Failed to withdraw quote. Please try again.");
+    } finally {
+      setWithdrawingQuote(null);
+      setWithdrawReason("");
       setIsWithdrawing(false);
-      return;
     }
-
-    try {
-      // Decrement quoteCount on job
-      const { increment } = await import("firebase/firestore");
-      await updateDoc(doc(db, "jobs", withdrawingQuote.jobId), {
-        quoteCount: increment(-1)
-      });
-    } catch (error) {
-      console.error("Error decrementing quote count on job:", error);
-    }
-
-    setWithdrawingQuote(null);
-    setWithdrawReason("");
-    setIsWithdrawing(false);
   };
 
   useEffect(() => {
@@ -167,10 +144,6 @@ export default function MyQuotes() {
                               (quote.updatedAt?.seconds ? quote.updatedAt.seconds * 1000 : quote.createdAt?.seconds * 1000);
            
            if (rejectedTime && rejectedTime < fortyEightHoursAgo) {
-             // Delete stale rejected quote in the background
-             import("firebase/firestore").then(({ deleteDoc }) => {
-               deleteDoc(quote.ref).catch(err => console.error("Error deleting stale rejected quote:", err));
-             });
              continue; // Skip adding to state
            }
         }

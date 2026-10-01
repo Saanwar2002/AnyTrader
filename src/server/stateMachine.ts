@@ -196,3 +196,35 @@ export function validateDisputeTransition(from: DisputeStatus, to: DisputeStatus
     throw new InvalidStateTransitionError("Dispute", from, to);
   }
 }
+
+// -------------------------------------------------------------
+// 6. Quote Lifecycle
+// -------------------------------------------------------------
+export type QuoteStatus =
+  | "pending"
+  | "requote_requested"
+  | "requoted"
+  | "accepted"
+  | "rejected"
+  | "withdrawn";
+
+export const VALID_QUOTE_TRANSITIONS: Record<QuoteStatus, readonly QuoteStatus[]> = {
+  pending: ["requote_requested", "accepted", "rejected", "withdrawn"],
+  requote_requested: ["requoted", "rejected", "withdrawn"],
+  requoted: ["requote_requested", "accepted", "rejected", "withdrawn"],
+  accepted: [], // Terminal
+  rejected: [], // Terminal
+  withdrawn: [], // Terminal
+};
+
+export function canTransitionQuote(from: QuoteStatus, to: QuoteStatus): boolean {
+  return VALID_QUOTE_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+export function validateQuoteTransition(from: QuoteStatus, to: QuoteStatus): void {
+  if (from === to) return;
+  if (!canTransitionQuote(from, to)) {
+    throw new InvalidStateTransitionError("Quote", from, to);
+  }
+}
+

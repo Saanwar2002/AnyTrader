@@ -775,6 +775,7 @@ service cloud.firestore {
       // Quote Privacy: only quoting trader, job owner, or admin can read quotes
       allow read, list: if isSignedIn() && (
         resource.data.get('tradespersonId', '') == request.auth.uid || 
+        resource.data.get('traderId', '') == request.auth.uid || 
         resource.data.get('proId', '') == request.auth.uid || 
         resource.data.get('homeownerId', '') == request.auth.uid || 
         resource.data.get('userId', '') == request.auth.uid || 
@@ -784,38 +785,8 @@ service cloud.firestore {
         )) ||
         isAdmin()
       );
-      allow create: if isSignedIn() && (
-        request.resource.data.get('tradespersonId', '') == request.auth.uid || 
-        request.resource.data.get('proId', '') == request.auth.uid || 
-        isAdmin()
-      );
-      allow update: if isSignedIn() && (
-        isAdmin() ||
-        (
-          (
-            resource.data.get('tradespersonId', '') == request.auth.uid || 
-            resource.data.get('proId', '') == request.auth.uid || 
-            resource.data.get('homeownerId', '') == request.auth.uid || 
-            resource.data.get('userId', '') == request.auth.uid
-          ) &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'payoutTransferred', 'payoutStatus', 'funded', 'paymentStatus', 'status',
-            'tradespersonId', 'proId', 'jobId', 'homeownerId'
-          ])
-        )
-      );
-      allow delete: if isSignedIn() && (
-        resource == null || 
-        resource.data.get('tradespersonId', '') == request.auth.uid || 
-        resource.data.get('proId', '') == request.auth.uid || 
-        resource.data.get('homeownerId', '') == request.auth.uid || 
-        resource.data.get('userId', '') == request.auth.uid || 
-        isAdmin() ||
-        (exists(/databases/$(database)/documents/jobs/$(jobId)) && (
-          get(/databases/$(database)/documents/jobs/$(jobId)).data.get('homeownerId', '') == request.auth.uid ||
-          get(/databases/$(database)/documents/jobs/$(jobId)).data.get('userId', '') == request.auth.uid
-        ))
-      );
+      // Canonical Quote Commands: all mutations must execute through the authoritative server command endpoint
+      allow create, update, delete: if false;
     }
 
     // --- Consultancy System ---

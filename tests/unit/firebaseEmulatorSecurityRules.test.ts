@@ -4,7 +4,8 @@ process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8088";
 import { describe, it, beforeAll, afterAll, beforeEach, expect } from "vitest";
 import * as admin from "firebase-admin";
 import { executeCreateJobCommand } from "../../src/server/createJobCommand.ts";
-import { ForbiddenError } from "../../src/server/httpErrors.ts";
+import { executeQuoteCommand } from "../../src/server/quoteCommands.ts";
+import { ForbiddenError, ConflictError } from "../../src/server/httpErrors.ts";
 import { CanonicalIdentity } from "../../src/server/identity.ts";
 import {
   initializeTestEnvironment,
@@ -631,7 +632,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       }));
     });
 
-    it("36. FINDING 4: Client cannot directly set quote status to accepted or modify financial fields", async () => {
+    it("36. Task 3 — Direct client quote mutations to /jobs/{jobId}/quotes/{quoteId} are strictly DENIED", async () => {
       await testEnv.withSecurityRulesDisabled(async (context) => {
         await setDoc(doc(context.firestore(), "jobs/job_roof_quote"), {
           homeownerId: "user_alice",
@@ -640,7 +641,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         await setDoc(doc(context.firestore(), "jobs/job_roof_quote/quotes/quote_1"), {
           tradespersonId: "trader_dave",
           homeownerId: "user_alice",
-          price: 450,
+          amount: 450,
           status: "pending",
           details: "Fix 5 tiles",
         });
@@ -649,20 +650,34 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       const aliceDb = testEnv.authenticatedContext("user_alice").firestore();
       const daveDb = testEnv.authenticatedContext("trader_dave").firestore();
 
-      // Alice cannot directly set quote to accepted (escrow bypass)
-      await assertFails(updateDoc(doc(aliceDb, "jobs/job_roof_quote/quotes/quote_1"), {
-        status: "accepted",
-      }));
+      // 1. Direct client quote creation is DENIED
+      await assertFails(
+        setDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_direct_inject"), {
+          tradespersonId: "trader_dave",
+          amount: 500,
+          status: "pending",
+        })
+      );
 
-      // Dave cannot set payoutTransferred on quote
-      await assertFails(updateDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_1"), {
-        payoutTransferred: true,
-      }));
+      // 2. Direct client quote update is DENIED
+      await assertFails(
+        updateDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_1"), {
+          details: "Fix 5 tiles including weather sealing",
+        })
+      );
 
-      // Dave can update legitimate notes on his quote
-      await assertSucceeds(updateDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_1"), {
-        details: "Fix 5 tiles including weather sealing",
-      }));
+      // 3. Direct client quote deletion is DENIED
+      await assertFails(
+        deleteDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_1"))
+      );
+
+      // 4. Authorized read remains PERMITTED
+      await assertSucceeds(
+        getDoc(doc(daveDb, "jobs/job_roof_quote/quotes/quote_1"))
+      );
+      await assertSucceeds(
+        getDoc(doc(aliceDb, "jobs/job_roof_quote/quotes/quote_1"))
+      );
     });
 
     it("37. FINDING 5: Homeowner cannot directly mutate payment status or accepted trader on Job", async () => {
@@ -1400,6 +1415,222 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         .get();
       expect(jobsSnap.size).toBe(1);
       expect(jobsSnap.docs[0].id).toBe(fulfilled[0].value.jobId);
+    }, 30000);
+
+    it("72. Task 3 — Authoritative CreateQuote command real Firestore emulator concurrency under same trader + same job", async () => {
+      const emulatorAppName = "task3-real-firestore-concurrency";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
+      const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      const jobId = `job_task3_concurrency_${Date.now()}`;
+      const homeownerId = "real_homeowner_task3_alice";
+      const traderId = "real_trader_task3_dave";
+
+      const traderIdentity: CanonicalIdentity = {
+        uid: traderId,
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      // 1. Seed authoritative job
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        title: "Leaking Pipe Emergency",
+        description: "Need urgent plumbing assistance in bathroom.",
+        category: "Plumbing",
+        status: "open",
+        quoteCount: 0,
+        quotesCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 2. Clean up any locks or quotes for this test run
+      const traderLockRef = db.collection("trader_quote_locks").doc(`${jobId}_${traderId}`);
+      await traderLockRef.delete().catch(() => {});
+
+      const key1 = `race_quote_key_1_${Date.now()}`;
+      const key2 = `race_quote_key_2_${Date.now()}`;
+
+      // 3. Call executeQuoteCommand() simultaneously for same trader + same job
+      const results = await Promise.allSettled([
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "CreateQuote",
+            payload: {
+              jobId,
+              amount: 500,
+              coverNote: "Dave Racing Quote 1",
+            },
+          },
+          idempotencyKey: key1,
+        }),
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "CreateQuote",
+            payload: {
+              jobId,
+              amount: 550,
+              coverNote: "Dave Racing Quote 2",
+            },
+          },
+          idempotencyKey: key2,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // 4. Assert exactly one quote persisted and one conflict rejection
+      expect(fulfilled.length).toBe(1);
+      expect(fulfilled[0].value.quoteId).toBeDefined();
+      expect(fulfilled[0].value.status).toBe("pending");
+
+      expect(rejected.length).toBe(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+      expect(rejected[0].reason.message).toMatch(/already have an active quote/i);
+
+      // 5. Query actual /jobs/{jobId}/quotes and assert exactly one quote exists
+      const quotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").get();
+      expect(quotesSnap.size).toBe(1);
+      expect(quotesSnap.docs[0].id).toBe(fulfilled[0].value.quoteId);
+
+      // 6. Query actual job document and assert quoteCount === 1
+      const jobSnap = await db.collection("jobs").doc(jobId).get();
+      expect(jobSnap.data()?.quoteCount).toBe(1);
+      expect(jobSnap.data()?.status).toBe("quoted");
+    }, 30000);
+
+    it("73. Task 3 — Authoritative CreateQuote real Firestore emulator concurrency under maximum 5 quotes limit", async () => {
+      const emulatorAppName = "task3-real-firestore-quote-limit";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
+      const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      const jobId = `job_task3_limit_${Date.now()}`;
+      const homeownerId = "real_homeowner_task3_bob";
+
+      // Seed job with 4 existing quotes
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        title: "Major Roof Overhaul",
+        description: "Roof replacement needed with multiple quotes.",
+        category: "Roofing",
+        status: "quoted",
+        quoteCount: 4,
+        quotesCount: 4,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Seed 4 quotes in subcollection
+      for (let i = 1; i <= 4; i++) {
+        await db.collection("jobs").doc(jobId).collection("quotes").doc(`quote_seed_${i}`).set({
+          id: `quote_seed_${i}`,
+          jobId,
+          tradespersonId: `trader_seed_${i}`,
+          amount: 1000 + i * 50,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      const trader5Identity: CanonicalIdentity = {
+        uid: "real_trader_task3_5",
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      const trader6Identity: CanonicalIdentity = {
+        uid: "real_trader_task3_6",
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      const key5 = `race_quote_limit_key_5_${Date.now()}`;
+      const key6 = `race_quote_limit_key_6_${Date.now()}`;
+
+      // Two distinct traders compete for the 5th and final quote slot simultaneously
+      const results = await Promise.allSettled([
+        executeQuoteCommand({
+          db,
+          identity: trader5Identity,
+          command: {
+            type: "CreateQuote",
+            payload: {
+              jobId,
+              amount: 1200,
+              coverNote: "Trader 5's quote for 5th slot",
+            },
+          },
+          idempotencyKey: key5,
+        }),
+        executeQuoteCommand({
+          db,
+          identity: trader6Identity,
+          command: {
+            type: "CreateQuote",
+            payload: {
+              jobId,
+              amount: 1250,
+              coverNote: "Trader 6's quote for 5th slot",
+            },
+          },
+          idempotencyKey: key6,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Exactly one succeeds to take slot 5, the other is rejected because limit of 5 is reached
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+      expect(rejected[0].reason).toBeInstanceOf(ForbiddenError);
+      expect(rejected[0].reason.message).toMatch(/maximum limit of 5 quotes/i);
+
+      // Verify total quotes in subcollection is exactly 5
+      const quotesSnap = await db.collection("jobs").doc(jobId).collection("quotes").get();
+      expect(quotesSnap.size).toBe(5);
+
+      // Verify job document quoteCount is 5
+      const jobSnap = await db.collection("jobs").doc(jobId).get();
+      expect(jobSnap.data()?.quoteCount).toBe(5);
     }, 30000);
   });
 });

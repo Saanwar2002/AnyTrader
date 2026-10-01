@@ -10,6 +10,8 @@ import { calculatePayoutBreakdown } from "@/src/services/stripeIntegrationServic
 import { toast } from "sonner";
 import { cn, formatJobLocation } from "@/src/lib/utils";
 
+import { createQuoteViaCommand, updateQuoteViaCommand } from "../../services/quoteCommandService.ts";
+
 interface QuickQuoteModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -140,82 +142,53 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const quoteRef = existingQuoteId 
-        ? doc(db, "jobs", job.id, "quotes", existingQuoteId) 
-        : doc(collection(db, "jobs", job.id, "quotes"));
-
       const isQuickTrack = numAmount < 400;
 
       const milestones = !isQuickTrack
         ? [
-            { id: "m1", title: "Commencement & Materials", amount: Math.floor(numAmount * 0.3), status: "pending_funding" },
-            { id: "m2", title: "Mid-way Progress", amount: Math.floor(numAmount * 0.4), status: "pending_funding" },
-            { id: "m3", title: "Final Completion & Handover", amount: numAmount - Math.floor(numAmount * 0.3) - Math.floor(numAmount * 0.4), status: "pending_funding" }
+            { id: "m1", title: "Commencement & Materials", amount: Math.floor(numAmount * 0.3), description: "Commencement and initial materials" },
+            { id: "m2", title: "Mid-way Progress", amount: Math.floor(numAmount * 0.4), description: "Mid-way milestone verification" },
+            { id: "m3", title: "Final Completion & Handover", amount: numAmount - Math.floor(numAmount * 0.3) - Math.floor(numAmount * 0.4), description: "Final delivery and customer sign-off" }
           ]
         : [
-            { id: "m1", title: "Service Delivery", amount: numAmount, status: "pending_funding" }
+            { id: "m1", title: "Service Delivery", amount: numAmount, description: "Full job service completion" }
           ];
 
       const resolvedStartDate = calculateActualStartDate();
+      const mappedStartDateType: "immediate" | "flexible" | "specific" =
+        startDateType === "immediate" ? "immediate" : (startDateType === "custom" ? "specific" : "flexible");
 
-      const quoteData: any = {
-        id: quoteRef.id,
-        jobId: job.id,
-        jobTitle: job.title || "",
-        tradespersonId: user.uid,
-        tradespersonName: profile?.businessName || profile?.name || "Tradesperson",
-        tradespersonPhone: profile?.phone || "",
-        tradespersonRating: profile?.rating || 5.0,
-        tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category || "",
-        homeownerId: job.homeownerId || "",
+      const quotePayload = {
         amount: numAmount,
-        originalAmount: numAmount,
-        pricingType,
-        netPayoutValue: payout.netPayout || 0,
-        stripeFeeAmount: payout.stripeFee || 0,
-        platformCommission: payout.platformCommission || 0,
-        paymentRail: payout.paymentRail || "card",
+        coverNote: (quoteMessage || "").trim(),
         message: (quoteMessage || "").trim(),
+        estimatedDuration: (estimatedDuration || "").replace(/_/g, " "),
         startDate: resolvedStartDate,
+        startDateType: mappedStartDateType,
         isImmediateStart: startDateType === "immediate",
-        estimatedTimeline: (estimatedDuration || "").replace(/_/g, " "),
-        paymentPreference: "fixed_price",
-        quoteScope,
+        paymentPreference: "fixed_price" as const,
+        paymentTrack: isQuickTrack ? ("quick" as const) : ("project" as const),
+        quoteScope: quoteScope as "labor_only" | "materials_included" | "custom" | "full_project",
         depositTerm: "0_percent_completion",
         guaranteeTerm: "1_year_workmanship",
         partsWarranty: "standard_parts",
-        status: "pending",
-        paymentTrack: isQuickTrack ? "quick" : "project",
         milestones,
-        updatedAt: serverTimestamp(),
       };
 
-      if (job.jobNo !== undefined) {
-        quoteData.jobNo = job.jobNo;
-      }
-
+      let commandResult;
       if (existingQuoteId) {
-        const { arrayUnion } = await import("firebase/firestore");
-        quoteData.history = arrayUnion({
-          amount: numAmount,
-          message: (quoteMessage || "").trim(),
-          timestamp: new Date().toISOString(),
-          reason: "Quick Quote Update"
+        commandResult = await updateQuoteViaCommand({
+          user: user as any,
+          jobId: job.id,
+          quoteId: existingQuoteId,
+          payload: quotePayload,
         });
-        await setDoc(quoteRef, quoteData, { merge: true });
       } else {
-        quoteData.createdAt = serverTimestamp();
-        await setDoc(quoteRef, quoteData);
-
-        try {
-          const { increment } = await import("firebase/firestore");
-          await updateDoc(doc(db, "jobs", job.id), {
-            quoteCount: increment(1),
-            lastQuoteDate: serverTimestamp(),
-          });
-        } catch (updateErr) {
-          console.warn("Non-fatal: Could not update job quote count:", updateErr);
-        }
+        commandResult = await createQuoteViaCommand({
+          user: user as any,
+          jobId: job.id,
+          payload: quotePayload,
+        });
       }
 
       // Send in-app notification to homeowner
@@ -231,7 +204,7 @@ export const QuickQuoteModal: React.FC<QuickQuoteModalProps> = ({
 
       toast.success(existingQuoteId ? `Quote updated to £${numAmount}!` : `Quote of £${numAmount} submitted successfully!`);
       if (onQuoteSubmitted) {
-        onQuoteSubmitted(job.id, quoteData);
+        onQuoteSubmitted(job.id, commandResult.quote || { id: commandResult.quoteId, ...quotePayload });
       }
       onClose();
     } catch (err: any) {

@@ -26,6 +26,7 @@ import { domainEvents } from "./src/server/domainEvents.ts";
 import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
 import { resolveTrustedCanonicalIdentity } from "./src/server/identity.ts";
 import { executeCreateJobCommand, resolveCreateJobQuota } from "./src/server/createJobCommand.ts";
+import { executeQuoteCommand } from "./src/server/quoteCommands.ts";
 import { 
   startPublicJobCardsSync, 
   backfillPublicJobCards, 
@@ -4376,6 +4377,62 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Server Job Creation Error:", error);
+      sendHttpError(res, error, req);
+    }
+  });
+
+  // Server-Authoritative Canonical Quote Commands Route (Task 3)
+  app.post("/api/quotes/command", requireAuth, async (req, res) => {
+    try {
+      if (!db) throw new BadRequestError("Database service is not initialized");
+
+      let trustedProfile: Record<string, any> | null = null;
+      const identity = await resolveTrustedCanonicalIdentity(req as any, async (uid) => {
+        const profileSnap = await db!.collection("users").doc(uid).get();
+        trustedProfile = profileSnap.exists ? (profileSnap.data() || null) : null;
+        return trustedProfile;
+      });
+
+      const rawBody = { ...(req.body || {}) };
+      const commandType = rawBody.type;
+      const rawPayload = rawBody.payload || {};
+
+      if (!commandType) {
+        throw new BadRequestError("Quote command 'type' is required (e.g. 'CreateQuote', 'UpdateQuote', 'WithdrawQuote', 'RejectQuote', 'RequestRequote', 'RespondToRequote').");
+      }
+
+      // Extract idempotency key from headers or payload
+      const idempotencyKey =
+        (req.headers["x-idempotency-key"] as string) ||
+        (req.headers["idempotency-key"] as string) ||
+        rawBody.idempotencyKey ||
+        rawPayload.idempotencyKey ||
+        "";
+
+      delete rawPayload.idempotencyKey;
+      delete rawBody.idempotencyKey;
+
+      const result = await executeQuoteCommand({
+        db,
+        identity,
+        command: {
+          type: commandType,
+          payload: rawPayload,
+        },
+        idempotencyKey,
+      });
+
+      res.status(result.wasReplayed ? 200 : (commandType === "CreateQuote" ? 201 : 200)).json({
+        success: true,
+        commandType: result.commandType,
+        quoteId: result.quoteId,
+        jobId: result.jobId,
+        status: result.status,
+        quote: result.quote,
+        wasReplayed: result.wasReplayed,
+      });
+    } catch (error: any) {
+      console.error("Quote Command Execution Error:", error);
       sendHttpError(res, error, req);
     }
   });

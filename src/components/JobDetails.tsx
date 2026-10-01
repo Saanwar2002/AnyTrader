@@ -23,6 +23,14 @@ import { ReviewForm } from "./ReviewForm";
 import { AnimatePresence } from "motion/react";
 import MediaGalleryModal from "./MediaGalleryModal";
 import QuoteComparisonModal from "./QuoteComparisonModal";
+import { 
+  createQuoteViaCommand, 
+  updateQuoteViaCommand, 
+  withdrawQuoteViaCommand, 
+  rejectQuoteViaCommand, 
+  requestRequoteViaCommand, 
+  respondToRequoteViaCommand 
+} from "@/src/services/quoteCommandService";
 import { SEO } from "./SEO";
 import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
 import { isDealApplicableOnDay, formatDealScheduleText } from "@/src/lib/flashDeals";
@@ -405,24 +413,11 @@ const libraries: any[] = ['places', 'geometry'];
                               (quote.updatedAt?.seconds ? quote.updatedAt.seconds * 1000 : quote.createdAt?.seconds * 1000);
            
            if (rejectedTime && rejectedTime < fortyEightHoursAgo) {
-             // Delete stale rejected quote in the background
-             import("firebase/firestore").then(({ deleteDoc }) => {
-               deleteDoc(quote.ref).catch(err => console.error("Error deleting stale rejected quote:", err));
-             });
              deletedCount++;
              continue; // Skip adding to state
            }
         }
         validQuotes.push(quote);
-      }
-      
-      // Update quote count if any were deleted or out of sync
-      if (user?.uid === job.homeownerId && (deletedCount > 0 || (job.quoteCount !== undefined && job.quoteCount < 0) || (job.quoteCount !== undefined && job.quoteCount !== validQuotes.length))) {
-         import("firebase/firestore").then(({ updateDoc, doc }) => {
-            updateDoc(doc(db, "jobs", id), {
-              quoteCount: Math.max(0, validQuotes.length)
-            }).catch(console.error);
-         });
       }
 
       setQuotes(validQuotes);
@@ -691,83 +686,49 @@ const libraries: any[] = ['places', 'geometry'];
 
       const isQuickTrack = finalAmount < 400;
       const defaultMilestones = !isQuickTrack ? [
-        { id: "m1", title: "Commencement & Materials", amount: Math.floor(finalAmount * 0.3), status: "pending_funding" },
-        { id: "m2", title: "Mid-way Progress", amount: Math.floor(finalAmount * 0.4), status: "pending_funding" },
-        { id: "m3", title: "Final Completion & Handover", amount: finalAmount - Math.floor(finalAmount * 0.3) - Math.floor(finalAmount * 0.4), status: "pending_funding" }
+        { id: "m1", title: "Commencement & Materials", amount: Math.floor(finalAmount * 0.3), description: "Commencement and initial materials" },
+        { id: "m2", title: "Mid-way Progress", amount: Math.floor(finalAmount * 0.4), description: "Mid-way milestone verification" },
+        { id: "m3", title: "Final Completion & Handover", amount: finalAmount - Math.floor(finalAmount * 0.3) - Math.floor(finalAmount * 0.4), description: "Final completion and sign-off" }
       ] : [
-        { id: "m1", title: "Service Delivery", amount: finalAmount, status: "pending_funding" }
+        { id: "m1", title: "Service Delivery", amount: finalAmount, description: "Full job service completion" }
       ];
 
       const resolvedStartDate = isImmediateStart 
         ? new Date().toISOString().split('T')[0] 
         : (quoteStartDate || new Date().toISOString().split('T')[0]);
 
-      const targetQuoteRef = existingQuote 
-        ? doc(db, "jobs", id, "quotes", existingQuote.id) 
-        : doc(collection(db, "jobs", id, "quotes"));
-
-      const quoteDataPayload: any = {
-        id: targetQuoteRef.id,
-        jobId: id,
-        jobTitle: job.title || "",
-        tradespersonId: user.uid,
-        tradespersonName: profile?.businessName || profile?.name || "Tradesperson",
-        tradespersonPhone: profile?.phone || "",
-        tradespersonRating: profile?.rating || 5.0,
-        tradespersonCategory: profile?.trades?.[0] || profile?.trade || profile?.category || job.category || "",
-        homeownerId: job.homeownerId || "",
+      const quotePayload = {
         amount: finalAmount,
-        originalAmount: originalAmountVal,
-        isDiscountApplied,
-        discountPercentage: discountPercentageVal,
-        appliedFlashDealId: appliedFlashDealIdVal,
-        netPayoutValue: payoutBreakdown.netPayout || 0,
-        stripeFeeAmount: payoutBreakdown.stripeFee || 0,
-        platformCommission: payoutBreakdown.platformCommission || 0,
-        paymentRail: payoutBreakdown.paymentRail || "card",
+        coverNote: (quoteMessage || "").trim(),
         message: (quoteMessage || "").trim(),
+        estimatedDuration: estimatedTimeline || "1 Full day (8h)",
         startDate: resolvedStartDate,
+        startDateType: isImmediateStart ? ("immediate" as const) : ("flexible" as const),
         isImmediateStart: Boolean(isImmediateStart),
-        estimatedTimeline: estimatedTimeline || "1 Full day (8h)",
-        paymentPreference: paymentPreference || "fixed_price",
-        quoteScope: quoteScope || "complete_package",
-        lineItems: useLineItems ? lineItems.filter(item => item.description && item.amount) : [],
+        paymentPreference: (paymentPreference || "fixed_price") as any,
+        paymentTrack: isQuickTrack ? ("quick" as const) : ("project" as const),
+        quoteScope: (quoteScope || "labor_only") as any,
         depositTerm: depositTerm || "0_percent_completion",
         guaranteeTerm: guaranteeTerm || "1_year_workmanship",
         partsWarranty: partsWarranty || "standard_parts",
-        status: "pending",
-        paymentTrack: isQuickTrack ? "quick" : "project",
         milestones: defaultMilestones,
-        updatedAt: serverTimestamp(),
+        materialsIncluded: quoteScope === "materials_included" || quoteScope === "full_project",
       };
 
-      if (job.jobNo !== undefined) {
-        quoteDataPayload.jobNo = job.jobNo;
-      }
-
+      let commandResult;
       if (existingQuote) {
-        quoteDataPayload.history = arrayUnion({
-          amount: existingQuote.amount,
-          message: existingQuote.message,
-          paymentPreference: existingQuote.paymentPreference,
-          quoteScope: existingQuote.quoteScope,
-          timestamp: new Date().toISOString(),
-          reason: "Manual Update"
+        commandResult = await updateQuoteViaCommand({
+          user: user as any,
+          jobId: id,
+          quoteId: existingQuote.id,
+          payload: quotePayload,
         });
-        quoteDataPayload.requoteMessage = deleteField();
-        await setDoc(targetQuoteRef, quoteDataPayload, { merge: true });
       } else {
-        quoteDataPayload.createdAt = serverTimestamp();
-        await setDoc(targetQuoteRef, quoteDataPayload);
-        try {
-          const { increment } = await import("firebase/firestore");
-          await updateDoc(doc(db, "jobs", id), {
-            quoteCount: increment(1),
-            lastQuoteDate: serverTimestamp()
-          });
-        } catch (jobUpdateErr) {
-          console.warn("Non-fatal: Could not update job quote count:", jobUpdateErr);
-        }
+        commandResult = await createQuoteViaCommand({
+          user: user as any,
+          jobId: id,
+          payload: quotePayload,
+        });
       }
 
       // Notify homeowner
@@ -792,7 +753,7 @@ const libraries: any[] = ['places', 'geometry'];
         });
 
         // Trigger Finalization Window for Materials
-        setFinalizingQuoteId(targetQuoteRef.id);
+        setFinalizingQuoteId(commandResult.quoteId);
         setIsFinalizingMaterials(true);
       }
 
@@ -820,54 +781,23 @@ const libraries: any[] = ['places', 'geometry'];
     setIsProcessing(true);
     
     try {
-      const quoteRef = doc(db, "jobs", id, "quotes", withdrawingQuote.id);
-      await updateDoc(quoteRef, {
-        status: "withdrawn",
-        withdrawReason: withdrawReason.trim(),
-        updatedAt: serverTimestamp(),
-        history: arrayUnion({
-          amount: withdrawingQuote.amount,
-          message: withdrawingQuote.message,
-          paymentPreference: withdrawingQuote.paymentPreference,
-          quoteScope: withdrawingQuote.quoteScope,
-          timestamp: new Date().toISOString(),
-          reason: `Withdrawn by tradesperson: ${withdrawReason.trim()}`
-        })
+      await withdrawQuoteViaCommand({
+        user: user as any,
+        jobId: id,
+        quoteId: withdrawingQuote.id,
+        reason: withdrawReason.trim(),
       });
-    } catch (err) {
-      console.error("Error updating quote status:", err);
-      handleFirestoreError(err, OperationType.UPDATE, `jobs/${id}/quotes/${withdrawingQuote.id}`);
-      setIsProcessing(false);
-      return;
-    }
-
-    try {
-      // Decrement quoteCount on job safely
-      const remainingCount = Math.max(0, quotes.filter(q => q.id !== withdrawingQuote.id).length);
-      await updateDoc(doc(db, "jobs", id), {
-        quoteCount: remainingCount
-      });
-    } catch (err) {
-      console.error("Error decrementing quote count on job:", err);
-      // We don't throw here to allow the process to continue even if job update fails
-    }
       
-    try {
-      // Notify homeowner
-      await sendNotification(
-        job.homeownerId,
-        "Quote Withdrawn",
-        `A tradesperson has withdrawn their quote for: ${job.title}`,
-        "quote",
-        `/job/${id}`
-      );
-    } catch (err) {
-      console.error("Error sending notification:", err);
+      toast.success("Quote withdrawn successfully.");
+      setWithdrawingQuote(null);
+      setWithdrawReason("");
+    } catch (err: any) {
+      console.error("Error withdrawing quote:", err);
+      setError(err?.message || "Failed to withdraw quote.");
+      toast.error(err?.message || "Failed to withdraw quote.");
+    } finally {
+      setIsProcessing(false);
     }
-
-    setWithdrawingQuote(null);
-    setWithdrawReason("");
-    setIsProcessing(false);
   };
 
   const handleAcceptQuote = async (quote: any) => {
@@ -1018,20 +948,17 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleRejectQuote = async (quote: any) => {
-    if (!id) return;
+    if (!id || !user) return;
     setError(null);
     try {
-      const { serverTimestamp } = await import("firebase/firestore");
-      await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        status: "rejected",
-        rejectedAt: serverTimestamp()
+      await rejectQuoteViaCommand({
+        user: user as any,
+        jobId: id,
+        quoteId: quote.id,
+        reason: "Declined by homeowner",
       });
 
-      // Decrement quoteCount on job safely
-      const remainingCount = Math.max(0, quotes.filter(q => q.id !== quote.id).length);
-      await updateDoc(doc(db, "jobs", id), {
-        quoteCount: remainingCount
-      });
+      toast.success("Quote declined.");
 
       // Notify tradesperson
       await sendNotification(
@@ -1041,19 +968,16 @@ const libraries: any[] = ['places', 'geometry'];
         "status",
         `/job/${id}`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error rejecting quote:", err);
-      try {
-        handleFirestoreError(err, OperationType.WRITE, `jobs/${id}/quotes/${quote.id}`);
-      } catch (e: any) {
-        setError(e.message);
-      }
+      setError(err?.message || "Failed to reject quote.");
+      toast.error(err?.message || "Failed to reject quote.");
     }
   };
 
   const handleRequoteQuote = async (quote: any, customMessage?: string) => {
     const message = customMessage || requoteMessage;
-    if (!id || !message) return;
+    if (!id || !user || !message) return;
     
     const currentRevisions = quote.revisionCount || 0;
     if (currentRevisions >= 5) {
@@ -1063,11 +987,14 @@ const libraries: any[] = ['places', 'geometry'];
 
     setError(null);
     try {
-      await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        status: "requote_requested",
-        requoteMessage: message,
-        revisionCount: currentRevisions + 1
+      await requestRequoteViaCommand({
+        user: user as any,
+        jobId: id,
+        quoteId: quote.id,
+        message,
       });
+
+      toast.success("Requote requested.");
 
       // Notify tradesperson
       await sendNotification(
@@ -1079,13 +1006,10 @@ const libraries: any[] = ['places', 'geometry'];
       );
       if (!customMessage) setRequoteMessage("");
       setActiveQuoteId(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error requesting requote:", err);
-      try {
-        handleFirestoreError(err, OperationType.WRITE, `jobs/${id}/quotes/${quote.id}`);
-      } catch (e: any) {
-        setError(e.message);
-      }
+      setError(err?.message || "Failed to request requote.");
+      toast.error(err?.message || "Failed to request requote.");
     }
   };
 
@@ -1788,23 +1712,38 @@ const libraries: any[] = ['places', 'geometry'];
 
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "jobs", id, "quotes", myQuote.id), {
-        pendingRevision: {
-          amount: parseFloat(revisionAmount),
-          message: revisionMessage,
-          quoteScope: revisionScope,
-          paymentPreference: revisionPaymentPreference,
-          status: "pending",
-          createdAt: serverTimestamp()
-        },
-        revisionCount: currentRevisions + 1
-      });
+      const revAmount = parseFloat(revisionAmount);
+      if (myQuote.status === "requote_requested") {
+        await respondToRequoteViaCommand({
+          user: user as any,
+          jobId: id,
+          quoteId: myQuote.id,
+          payload: {
+            amount: revAmount,
+            coverNote: revisionMessage,
+            message: revisionMessage,
+          },
+        });
+      } else {
+        await updateQuoteViaCommand({
+          user: user as any,
+          jobId: id,
+          quoteId: myQuote.id,
+          payload: {
+            amount: revAmount,
+            coverNote: revisionMessage,
+            message: revisionMessage,
+            quoteScope: (revisionScope || myQuote.quoteScope) as any,
+            paymentPreference: (revisionPaymentPreference || myQuote.paymentPreference) as any,
+          },
+        });
+      }
       
       // Notify homeowner
       await sendNotification(
         job.homeownerId,
-        "Quote Revision Requested",
-        `The tradesperson has requested a price/scope change for "${job.title}".`,
+        "Quote Revision Submitted",
+        `The tradesperson has submitted a revised quote of £${revAmount} for "${job.title}".`,
         "quote",
         `/job/${id}`
       );
@@ -1812,8 +1751,11 @@ const libraries: any[] = ['places', 'geometry'];
       setIsEditingRevision(false);
       setRevisionAmount("");
       setRevisionMessage("");
-    } catch (err) {
-      console.error("Error requesting revision:", err);
+      toast.success("Quote revision submitted successfully.");
+    } catch (err: any) {
+      console.error("Error submitting revision:", err);
+      setError(err?.message || "Failed to submit revision.");
+      toast.error(err?.message || "Failed to submit revision.");
     } finally {
       setIsProcessing(false);
     }
@@ -1823,33 +1765,7 @@ const libraries: any[] = ['places', 'geometry'];
     if (!id || !user) return;
     setIsProcessing(true);
     try {
-      const revision = quote.pendingRevision;
-      await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        history: arrayUnion({
-          amount: quote.amount,
-          message: quote.message,
-          paymentPreference: quote.paymentPreference,
-          quoteScope: quote.quoteScope,
-          timestamp: new Date().toISOString(),
-          reason: "Revision Approved"
-        }),
-        amount: revision.amount,
-        message: `${quote.message}\n\n[Revision Approved]: ${revision.message}`,
-        quoteScope: revision.quoteScope || quote.quoteScope,
-        paymentPreference: revision.paymentPreference || quote.paymentPreference,
-        pendingRevision: deleteField()
-      });
-      
-      // Notify tradesperson
-      await sendNotification(
-        quote.tradespersonId,
-        "Revision Approved!",
-        `The homeowner has approved your quote revision for "${job.title}".`,
-        "status",
-        `/job/${id}`
-      );
-    } catch (err) {
-      console.error("Error approving revision:", err);
+      toast.info("Please accept the quote directly to approve and fund milestones.");
     } finally {
       setIsProcessing(false);
     }
@@ -1859,8 +1775,11 @@ const libraries: any[] = ['places', 'geometry'];
     if (!id || !user) return;
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "jobs", id, "quotes", quote.id), {
-        pendingRevision: deleteField()
+      await rejectQuoteViaCommand({
+        user: user as any,
+        jobId: id,
+        quoteId: quote.id,
+        reason: "Revision declined by homeowner",
       });
       
       // Notify tradesperson
@@ -1871,8 +1790,11 @@ const libraries: any[] = ['places', 'geometry'];
         "status",
         `/job/${id}`
       );
-    } catch (err) {
+      toast.success("Quote revision declined.");
+    } catch (err: any) {
       console.error("Error rejecting revision:", err);
+      setError(err?.message || "Failed to decline revision.");
+      toast.error(err?.message || "Failed to decline revision.");
     } finally {
       setIsProcessing(false);
     }
