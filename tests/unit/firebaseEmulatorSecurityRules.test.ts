@@ -1287,7 +1287,15 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
     });
 
     it("71. Task 2 — Authoritative CreateJob command real Firestore emulator concurrency under quota=1", async () => {
-      const adminApp = admin.apps.length > 0 ? admin.apps[0]! : admin.initializeApp({ projectId: PROJECT_ID });
+      const emulatorAppName = "task2-real-firestore-concurrency";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
       const db = adminApp.firestore();
 
       const homeownerIdentity: CanonicalIdentity = {
@@ -1314,6 +1322,20 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
         tierId: "strict_race_tier",
         isUnlimited: false,
       };
+
+      // 0. Verify database connection before the race
+      const probeRef = db
+        .collection("task2_emulator_probes")
+        .doc(`probe_${Date.now()}`);
+
+      await probeRef.set({
+        projectId: PROJECT_ID,
+        createdAt: new Date().toISOString(),
+      });
+
+      const probeSnap = await probeRef.get();
+      expect(probeSnap.exists).toBe(true);
+      await probeRef.delete();
 
       // 1. Seed/clean quota document state and previous jobs for this user
       const quotaRef = db.collection("user_job_quotas").doc(`${homeownerIdentity.uid}_${quotaConfig.periodKey}`);
