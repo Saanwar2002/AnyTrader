@@ -474,4 +474,146 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
       expect(content).not.toMatch(directStatusUpdatePattern);
     });
   });
+
+  describe("7. Concurrency & Idempotency Detailed Scenarios", () => {
+    it("20. concurrent StartJob requests with different keys produce exactly one success and one ConflictError", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const keyA = "concurrent_start_key_a";
+      const keyB = "concurrent_start_key_b";
+
+      const res1 = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+
+      expect(res1.success).toBe(true);
+      expect(res1.status).toBe("in_progress");
+
+      await expect(
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: keyB,
+        })
+      ).rejects.toThrow(ConflictError);
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("21. same-key StartJob replay returns the stored result cleanly and does not produce duplicate events", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const keyA = "idemp_start_replay_key_a";
+
+      const res1 = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+      expect(res1.success).toBe(true);
+      expect(res1.wasReplayed).toBe(false);
+
+      const res2 = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+      expect(res2.success).toBe(true);
+      expect(res2.wasReplayed).toBe(true);
+      expect(res2.status).toBe(res1.status);
+
+      const res3 = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+      expect(res3.success).toBe(true);
+      expect(res3.wasReplayed).toBe(true);
+
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("22. different-key StartJob after successful StartJob is rejected", async () => {
+      const keyA = "success_key_a";
+      const keyB = "rejected_key_b";
+
+      await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+
+      await expect(
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: keyB,
+        })
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it("23. concurrent StartJob vs CancelJob produces exactly one success and one ConflictError when expectedStatus is passed", async () => {
+      const keyStart = "race_key_start";
+      const keyCancel = "race_key_cancel";
+
+      const resStart = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        expectedStatus: "accepted",
+        idempotencyKey: keyStart,
+      });
+      expect(resStart.success).toBe(true);
+
+      await expect(
+        executeCancelJobCommand({
+          db: mockDb,
+          identity: homeownerIdentity,
+          jobId: "job_accepted_1",
+          reason: "Raced Cancel",
+          expectedStatus: "accepted",
+          idempotencyKey: keyCancel,
+        })
+      ).rejects.toThrow(ConflictError);
+    });
+
+    it("24. normal sequential in_progress -> cancelled transition works perfectly", async () => {
+      const keyStart = "normal_key_start";
+      const keyCancel = "normal_key_cancel";
+
+      await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyStart,
+      });
+
+      const resCancel = await executeCancelJobCommand({
+        db: mockDb,
+        identity: homeownerIdentity,
+        jobId: "job_accepted_1",
+        reason: "Sequential cancellation",
+        idempotencyKey: keyCancel,
+      });
+
+      expect(resCancel.success).toBe(true);
+      expect(resCancel.status).toBe("cancelled");
+    });
+  });
 });

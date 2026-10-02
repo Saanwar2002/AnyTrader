@@ -67,17 +67,20 @@ export const START_JOB_SCHEMA = z.object({
   jobId: z.string().min(1, "Job ID is required"),
   verificationPin: z.string().optional().nullable(),
   pin: z.string().optional().nullable(),
+  expectedStatus: z.string().optional(),
 });
 
 export const COMPLETE_JOB_SCHEMA = z.object({
   jobId: z.string().min(1, "Job ID is required"),
   completionNotes: z.string().max(2000).optional(),
+  expectedStatus: z.string().optional(),
 });
 
 export const CANCEL_JOB_SCHEMA = z.object({
   jobId: z.string().min(1, "Job ID is required"),
   reason: z.string().max(1000).optional(),
   cancellationReason: z.string().max(1000).optional(),
+  expectedStatus: z.string().optional(),
 });
 
 export const DISPUTE_JOB_SCHEMA = z.object({
@@ -85,6 +88,7 @@ export const DISPUTE_JOB_SCHEMA = z.object({
   reason: z.string().max(2000).optional(),
   disputeReason: z.string().max(2000).optional(),
   technicalFaultReport: z.string().max(2000).optional(),
+  expectedStatus: z.string().optional(),
 });
 
 export interface JobLifecycleCommandRequest {
@@ -208,6 +212,19 @@ export async function executeJobLifecycleCommand(
 
     const jobData = jobSnap.data() || {};
     const currentStatus: JobStatus = (jobData.status as JobStatus) || "open";
+
+    // Concurrency Expected-Status Check
+    if (rawPayload.expectedStatus && currentStatus !== rawPayload.expectedStatus) {
+      throw new ConflictError(
+        `Job status '${currentStatus}' does not match expected status '${rawPayload.expectedStatus}'.`
+      );
+    }
+
+    // Concurrent StartJob different-key defense
+    if (commandType === "StartJob" && currentStatus === "in_progress") {
+      throw new ConflictError("Job has already been started by another request");
+    }
+
     const publicCardRef = db.collection("public_job_cards").doc(jobId);
     const publicCardSnap = await transaction.get(publicCardRef);
 
@@ -380,15 +397,16 @@ export async function startJobViaCommand(options: {
   identity: CanonicalIdentity;
   jobId: string;
   verificationPin?: string;
+  expectedStatus?: string;
   idempotencyKey?: string;
 }): Promise<JobLifecycleCommandResult> {
-  const { db, identity, jobId, verificationPin, idempotencyKey } = options;
+  const { db, identity, jobId, verificationPin, expectedStatus, idempotencyKey } = options;
   return executeJobLifecycleCommand({
     db,
     identity,
     command: {
       type: "StartJob",
-      payload: { jobId, verificationPin },
+      payload: { jobId, verificationPin, expectedStatus },
     },
     idempotencyKey: idempotencyKey || `start_${jobId}_${identity.uid}`,
   });
@@ -399,15 +417,16 @@ export async function completeJobViaCommand(options: {
   identity: CanonicalIdentity;
   jobId: string;
   completionNotes?: string;
+  expectedStatus?: string;
   idempotencyKey?: string;
 }): Promise<JobLifecycleCommandResult> {
-  const { db, identity, jobId, completionNotes, idempotencyKey } = options;
+  const { db, identity, jobId, completionNotes, expectedStatus, idempotencyKey } = options;
   return executeJobLifecycleCommand({
     db,
     identity,
     command: {
       type: "CompleteJob",
-      payload: { jobId, completionNotes },
+      payload: { jobId, completionNotes, expectedStatus },
     },
     idempotencyKey: idempotencyKey || `complete_${jobId}_${identity.uid}`,
   });
@@ -418,15 +437,16 @@ export async function cancelJobViaCommand(options: {
   identity: CanonicalIdentity;
   jobId: string;
   reason?: string;
+  expectedStatus?: string;
   idempotencyKey?: string;
 }): Promise<JobLifecycleCommandResult> {
-  const { db, identity, jobId, reason, idempotencyKey } = options;
+  const { db, identity, jobId, reason, expectedStatus, idempotencyKey } = options;
   return executeJobLifecycleCommand({
     db,
     identity,
     command: {
       type: "CancelJob",
-      payload: { jobId, reason },
+      payload: { jobId, reason, expectedStatus },
     },
     idempotencyKey: idempotencyKey || `cancel_${jobId}_${identity.uid}`,
   });
@@ -437,15 +457,16 @@ export async function disputeJobViaCommand(options: {
   identity: CanonicalIdentity;
   jobId: string;
   reason: string;
+  expectedStatus?: string;
   idempotencyKey?: string;
 }): Promise<JobLifecycleCommandResult> {
-  const { db, identity, jobId, reason, idempotencyKey } = options;
+  const { db, identity, jobId, reason, expectedStatus, idempotencyKey } = options;
   return executeJobLifecycleCommand({
     db,
     identity,
     command: {
       type: "RaiseJobDispute",
-      payload: { jobId, reason },
+      payload: { jobId, reason, expectedStatus },
     },
     idempotencyKey: idempotencyKey || `dispute_${jobId}_${identity.uid}`,
   });

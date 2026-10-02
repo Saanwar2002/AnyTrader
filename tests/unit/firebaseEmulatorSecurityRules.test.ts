@@ -2076,18 +2076,18 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       const startKey = `race_start_key_${Date.now()}`;
       const cancelKey = `race_cancel_key_${Date.now()}`;
 
-      // Simultaneous StartJob vs CancelJob
+      // Simultaneous StartJob vs CancelJob with same expected initial state
       const results = await Promise.allSettled([
         executeJobLifecycleCommand({
           db,
           identity: traderIdentity,
-          command: { type: "StartJob", payload: { jobId } },
+          command: { type: "StartJob", payload: { jobId, expectedStatus: "accepted" } },
           idempotencyKey: startKey,
         }),
         executeJobLifecycleCommand({
           db,
           identity: homeownerIdentity,
-          command: { type: "CancelJob", payload: { jobId, reason: "Cancelled" } },
+          command: { type: "CancelJob", payload: { jobId, reason: "Cancelled", expectedStatus: "accepted" } },
           idempotencyKey: cancelKey,
         }),
       ]);
@@ -2097,6 +2097,7 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
 
       expect(fulfilled.length).toBe(1);
       expect(rejected.length).toBe(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
 
       const jobSnap = await db.collection("jobs").doc(jobId).get();
       const finalStatus = jobSnap.data()?.status;
