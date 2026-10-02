@@ -17,7 +17,7 @@ import { startInstantMatchEngine } from "./instantMatchWorker.ts";
 import * as geminiServer from "./src/services/geminiServer.ts";
 import { sendHttpError, BadRequestError, UnauthorizedError, ForbiddenError, NotFoundError, ConflictError } from "./src/server/httpErrors.ts";
 import { runProductionChecks } from "./src/server/productionChecks.ts";
-import { validateJobTransition, validateMilestoneTransition, validateRideTransition } from "./src/server/stateMachine.ts";
+import { validateJobTransition, validateMilestoneTransition, validateRideTransition, validateQuoteTransition, JobStatus } from "./src/server/stateMachine.ts";
 import { PaymentLedgerEngine } from "./src/server/paymentLedger.ts";
 import { assertResourceOwner, assertCanManageMilestone, sanitizeClientPayload, validateNotificationPayload, authorizeNotificationRequest, isUserAdminClaim } from "./src/server/authorization.ts";
 import { AbuseDefenseEngine } from "./src/server/abuseDefense.ts";
@@ -4291,17 +4291,23 @@ async function startServer() {
 
       const jobData = jobDoc.data()!;
       // Enforce BOLA/IDOR protection: only the job owner or admin can accept quotes
-      assertResourceOwner(authUser, jobData.homeownerId || jobData.userId);
+      assertResourceOwner(authUser, jobData.homeownerId || jobData.userId || jobData.ownerId);
 
-      // Enforce mathematical state transition
-      validateJobTransition(jobData.status || "posted", "accepted");
+      // Enforce mathematical state transition for job
+      const currentJobStatus = (jobData.status === "posted" ? "open" : (jobData.status || "open")) as JobStatus;
+      validateJobTransition(currentJobStatus, "accepted");
 
       const quoteRef = jobRef.collection("quotes").doc(quoteId);
       const quoteDoc = await quoteRef.get();
       if (!quoteDoc.exists) throw new BadRequestError(`Quote ${quoteId} not found on job ${jobId}`);
 
       const quoteData = quoteDoc.data()!;
+      // Enforce state machine transition for quote
+      validateQuoteTransition(quoteData.status || "pending", "accepted");
+
       const traderId = quoteData.tradespersonId || quoteData.traderId;
+      const pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const scheduledDate = quoteData.startDate || new Date().toISOString().split("T")[0];
 
       const batch = db.batch();
       batch.update(jobRef, {
@@ -4309,6 +4315,9 @@ async function startServer() {
         acceptedQuoteId: quoteId,
         acceptedTradespersonId: traderId,
         acceptedTraderId: traderId,
+        scheduledDate,
+        isConfirmedByTradesperson: false,
+        verificationPin: pin,
         acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -4327,7 +4336,16 @@ async function startServer() {
         amount: quoteData.amount || quoteData.totalAmount || 0,
       }, undefined, db);
 
-      res.json({ success: true, jobId, quoteId, status: "accepted" });
+      res.json({
+        success: true,
+        jobId,
+        quoteId,
+        status: "accepted",
+        acceptedTradespersonId: traderId,
+        scheduledDate,
+        verificationPin: pin,
+        isConfirmedByTradesperson: false,
+      });
     } catch (error: any) {
       console.error("Quote Acceptance Error:", error);
       sendHttpError(res, error, req);

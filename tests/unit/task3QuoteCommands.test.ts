@@ -721,4 +721,80 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
       ).rejects.toThrow(ConflictError);
     });
   });
+
+  describe("7. Production Caller Regression Coverage (JobDetails.tsx)", () => {
+    it("verifies JobDetails.tsx routes quote acceptance and rejection through authoritative server commands", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const jobDetailsPath = path.resolve(__dirname, "../../src/components/JobDetails.tsx");
+      const jobDetailsCode = fs.readFileSync(jobDetailsPath, "utf-8");
+
+      // 1. Authoritative acceptQuoteViaServer must be imported and invoked
+      expect(jobDetailsCode).toContain("acceptQuoteViaServer");
+      expect(jobDetailsCode).toMatch(/await\s+acceptQuoteViaServer\s*\(\s*\{/);
+
+      // 2. Authoritative rejectQuoteViaCommand must be imported and invoked
+      expect(jobDetailsCode).toContain("rejectQuoteViaCommand");
+      expect(jobDetailsCode).toMatch(/await\s+rejectQuoteViaCommand\s*\(\s*\{/);
+
+      // 3. Direct quote mutation patterns must be completely absent
+      // Direct transaction quote update:
+      expect(jobDetailsCode).not.toContain("t.update(quoteRef");
+      expect(jobDetailsCode).not.toMatch(/t\.update\s*\(\s*quoteRef/);
+
+      // Direct updateDoc on quotes subcollection:
+      expect(jobDetailsCode).not.toMatch(/updateDoc\s*\(\s*doc\s*\(\s*db\s*,\s*["']jobs["']\s*,\s*\w+\s*,\s*["']quotes["']/);
+      expect(jobDetailsCode).not.toMatch(/setDoc\s*\(\s*doc\s*\(\s*db\s*,\s*["']jobs["']\s*,\s*\w+\s*,\s*["']quotes["']/);
+      expect(jobDetailsCode).not.toMatch(/deleteDoc\s*\(\s*doc\s*\(\s*db\s*,\s*["']jobs["']\s*,\s*\w+\s*,\s*["']quotes["']/);
+    });
+
+    it("verifies acceptQuoteViaServer adapter executes authoritative POST /api/jobs/:jobId/accept-quote", async () => {
+      const { acceptQuoteViaServer } = await import("../../src/services/quoteCommandService.ts");
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          jobId: "job_roof_100",
+          quoteId: "quote_test_777",
+          status: "accepted",
+          acceptedTradespersonId: "trader_dave_123",
+          scheduledDate: "2026-10-15",
+          verificationPin: "4829",
+          isConfirmedByTradesperson: false,
+        }),
+      });
+
+      const originalFetch = global.fetch;
+      global.fetch = mockFetch as any;
+
+      try {
+        const mockUser: any = {
+          uid: "homeowner_alice_456",
+          getIdToken: vi.fn().mockResolvedValue("mock_valid_token_123"),
+        };
+
+        const result = await acceptQuoteViaServer({
+          user: mockUser,
+          jobId: "job_roof_100",
+          quoteId: "quote_test_777",
+        });
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const [fetchUrl, fetchOptions] = mockFetch.mock.calls[0];
+        expect(fetchUrl).toContain("/api/jobs/job_roof_100/accept-quote");
+        expect(fetchOptions.method).toBe("POST");
+        expect(fetchOptions.headers["Authorization"]).toBe("Bearer mock_valid_token_123");
+        expect(JSON.parse(fetchOptions.body)).toEqual({ quoteId: "quote_test_777" });
+
+        expect(result.success).toBe(true);
+        expect(result.status).toBe("accepted");
+        expect(result.verificationPin).toBe("4829");
+        expect(result.scheduledDate).toBe("2026-10-15");
+        expect(result.isConfirmedByTradesperson).toBe(false);
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
 });

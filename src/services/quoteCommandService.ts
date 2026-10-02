@@ -261,3 +261,65 @@ export async function respondToRequoteViaCommand(options: RespondToRequoteOption
     idempotencyKey
   );
 }
+
+export interface AcceptQuoteOptions {
+  user: User;
+  jobId: string;
+  quoteId: string;
+}
+
+export interface AcceptQuoteResult {
+  success: boolean;
+  jobId: string;
+  quoteId: string;
+  status: string;
+  acceptedTradespersonId?: string;
+  scheduledDate?: string;
+  verificationPin?: string;
+  isConfirmedByTradesperson?: boolean;
+}
+
+/**
+ * Authoritative quote acceptance via the existing backend endpoint:
+ * POST /api/jobs/:jobId/accept-quote
+ */
+export async function acceptQuoteViaServer(options: AcceptQuoteOptions): Promise<AcceptQuoteResult> {
+  const { user, jobId, quoteId } = options;
+
+  if (!user || !user.uid) {
+    throw new Error("Authentication required: you must be signed in to accept a quote.");
+  }
+  if (!jobId || !quoteId) {
+    throw new Error("Both jobId and quoteId are required to accept a quote.");
+  }
+
+  const token = await user.getIdToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+
+  const response = await fetch(getApiUrl(`/api/jobs/${encodeURIComponent(jobId)}/accept-quote`), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ quoteId }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMsg = data?.error || data?.message || `Failed to accept quote with status ${response.status}`;
+    throw new Error(errorMsg);
+  }
+
+  return {
+    success: true,
+    jobId: data.jobId || jobId,
+    quoteId: data.quoteId || quoteId,
+    status: data.status || "accepted",
+    acceptedTradespersonId: data.acceptedTradespersonId,
+    scheduledDate: data.scheduledDate,
+    verificationPin: data.verificationPin,
+    isConfirmedByTradesperson: data.isConfirmedByTradesperson,
+  };
+}

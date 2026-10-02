@@ -29,7 +29,8 @@ import {
   withdrawQuoteViaCommand, 
   rejectQuoteViaCommand, 
   requestRequoteViaCommand, 
-  respondToRequoteViaCommand 
+  respondToRequoteViaCommand,
+  acceptQuoteViaServer
 } from "@/src/services/quoteCommandService";
 import { SEO } from "./SEO";
 import { INITIAL_MOCK_FLASH_DEALS } from "@/src/services/seedService";
@@ -805,24 +806,14 @@ const libraries: any[] = ['places', 'geometry'];
     setLoading(true);
     setError(null);
     try {
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
-
-      await runTransaction(db, async (t) => {
-        const quoteRef = doc(db, "jobs", id, "quotes", quote.id);
-        const quoteSnap = await t.get(quoteRef);
-        if (quoteSnap.data()?.status !== "pending") throw new Error("Quote already processed or no longer pending.");
-        
-        t.update(quoteRef, { status: "accepted" });
-        t.update(doc(db, "jobs", id), {
-          status: "accepted",
-          acceptedTradespersonId: quote.tradespersonId,
-          scheduledDate: quote.startDate || new Date().toISOString().split('T')[0],
-          isConfirmedByTradesperson: false,
-          verificationPin: pin
-        });
+      // 1. Authoritative quote acceptance via backend command endpoint
+      const acceptResult = await acceptQuoteViaServer({
+        user: user as any,
+        jobId: id,
+        quoteId: quote.id,
       });
 
-      // Notify tradesperson
+      // 2. Notify tradesperson
       await sendNotification(
         quote.tradespersonId,
         "Quote Accepted!",
@@ -831,7 +822,7 @@ const libraries: any[] = ['places', 'geometry'];
         `/job/${id}`
       );
 
-      // 3. Notify tradesperson to confirm
+      // 3. Notify tradesperson to confirm start date
       await sendNotification(
         quote.tradespersonId,
         "Quote Accepted - Confirm Start Date",
@@ -840,33 +831,50 @@ const libraries: any[] = ['places', 'geometry'];
         `/job/${id}`
       );
 
-      // 4. Reject other quotes and notify them in the background (fire-and-forget)
+      // 4. Reject other quotes via authoritative canonical command (fire-and-forget)
       const otherQuotes = quotes.filter(q => q.id !== quote.id && q.status === "pending");
       Promise.all(otherQuotes.map(async (q) => {
         try {
-          // Generate AI rejection feedback
           const feedback = await getRejectionFeedback(job, q, quote);
           
-          await updateDoc(doc(db, "jobs", id, "quotes", q.id), {
-            status: "rejected",
-            rejectionFeedback: feedback,
-            rejectedAt: serverTimestamp()
+          await rejectQuoteViaCommand({
+            user: user as any,
+            jobId: id,
+            quoteId: q.id,
+            reason: feedback?.reason || "Job awarded to another trader",
           });
           
           await sendNotification(
             q.tradespersonId,
             "Job Awarded to Another Trader",
-            `The homeowner for "${job.title}" has accepted another quote. AI Insight: ${feedback.reason}`,
+            `The homeowner for "${job.title}" has accepted another quote. AI Insight: ${feedback?.reason || "Homeowner selected another proposal."}`,
             "status",
             `/job/${id}`
           );
         } catch (err) {
-          console.error(`Error generating rejection for quote ${q.id}:`, err);
+          console.error(`Error rejecting quote ${q.id}:`, err);
         }
       })).catch(console.error);
       
-      // Refresh local job state
-      setJob((prev: any) => ({ ...prev, status: "accepted" }));
+      // Refresh local job and quotes state with authoritative server response
+      setJob((prev: any) => ({
+        ...prev,
+        status: "accepted",
+        acceptedTradespersonId: acceptResult.acceptedTradespersonId || quote.tradespersonId,
+        scheduledDate: acceptResult.scheduledDate || quote.startDate || new Date().toISOString().split('T')[0],
+        isConfirmedByTradesperson: acceptResult.isConfirmedByTradesperson ?? false,
+        verificationPin: acceptResult.verificationPin,
+      }));
+
+      setQuotes((prev) =>
+        prev.map((q) =>
+          q.id === quote.id
+            ? { ...q, status: "accepted" }
+            : q.status === "pending"
+            ? { ...q, status: "rejected" }
+            : q
+        )
+      );
 
       // 5. Direct Merchant AI BOM 1-Click Ordering Trigger
       try {
@@ -935,13 +943,9 @@ const libraries: any[] = ['places', 'geometry'];
       } catch (err) {
         console.warn("Public profile lookup notice:", err);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error accepting quote:", err);
-      try {
-        handleFirestoreError(err, OperationType.WRITE, `jobs/${id}/quotes/${quote.id}`);
-      } catch (e: any) {
-        setError(e.message);
-      }
+      setError(err?.message || "Failed to accept quote. Please try again.");
     } finally {
       setLoading(false);
     }
