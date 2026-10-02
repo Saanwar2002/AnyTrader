@@ -1632,5 +1632,322 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       const jobSnap = await db.collection("jobs").doc(jobId).get();
       expect(jobSnap.data()?.quoteCount).toBe(5);
     }, 30000);
+
+    it("74. Task 4 — Authoritative AcceptQuote command real Firestore emulator concurrency under competing quotes", async () => {
+      const emulatorAppName = "task4-real-firestore-concurrency";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
+      const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      const jobId = `job_task4_concurrency_${Date.now()}`;
+      const homeownerId = "real_homeowner_task4_alice";
+      const quoteAId = `quote_a_${Date.now()}`;
+      const quoteBId = `quote_b_${Date.now()}`;
+
+      const homeownerIdentity: CanonicalIdentity = {
+        uid: homeownerId,
+        accountType: "consumer",
+        capabilities: ["homeowner"],
+        verification: { status: "verified" },
+        subscription: { tierId: "free", status: "active" },
+      };
+
+      // 1. Seed authoritative job
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        userId: homeownerId,
+        title: "Emergency Roof Leak",
+        description: "Urgent roof repair needed.",
+        category: "Roofing",
+        status: "open",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 2. Seed Quote A (Trader Dave) and Quote B (Trader Bob)
+      await db.collection("jobs").doc(jobId).collection("quotes").doc(quoteAId).set({
+        id: quoteAId,
+        jobId,
+        tradespersonId: "trader_dave_task4",
+        traderId: "trader_dave_task4",
+        amount: 800,
+        status: "pending",
+        startDate: "2026-10-10",
+        createdAt: new Date().toISOString(),
+      });
+
+      await db.collection("jobs").doc(jobId).collection("quotes").doc(quoteBId).set({
+        id: quoteBId,
+        jobId,
+        tradespersonId: "trader_bob_task4",
+        traderId: "trader_bob_task4",
+        amount: 850,
+        status: "pending",
+        startDate: "2026-10-11",
+        createdAt: new Date().toISOString(),
+      });
+
+      const keyA = `race_accept_key_a_${Date.now()}`;
+      const keyB = `race_accept_key_b_${Date.now()}`;
+
+      // 3. Two simultaneous AcceptQuote operations on the real Firestore emulator
+      const results = await Promise.allSettled([
+        executeQuoteCommand({
+          db,
+          identity: homeownerIdentity,
+          command: {
+            type: "AcceptQuote",
+            payload: {
+              jobId,
+              quoteId: quoteAId,
+            },
+          },
+          idempotencyKey: keyA,
+        }),
+        executeQuoteCommand({
+          db,
+          identity: homeownerIdentity,
+          command: {
+            type: "AcceptQuote",
+            payload: {
+              jobId,
+              quoteId: quoteBId,
+            },
+          },
+          idempotencyKey: keyB,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Exactly one succeeds, exactly one is rejected with ConflictError
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+
+      const acceptedQuoteId = fulfilled[0].value.quoteId;
+      const otherQuoteId = acceptedQuoteId === quoteAId ? quoteBId : quoteAId;
+
+      // Verify Job state in Firestore
+      const jobSnap = await db.collection("jobs").doc(jobId).get();
+      const jobData = jobSnap.data()!;
+      expect(jobData.status).toBe("accepted");
+      expect(jobData.acceptedQuoteId).toBe(acceptedQuoteId);
+      expect(jobData.verificationPin).toBeDefined();
+
+      // Verify accepted quote state
+      const acceptedQuoteSnap = await db.collection("jobs").doc(jobId).collection("quotes").doc(acceptedQuoteId).get();
+      expect(acceptedQuoteSnap.data()?.status).toBe("accepted");
+
+      // Verify competing quote was atomically rejected
+      const competingQuoteSnap = await db.collection("jobs").doc(jobId).collection("quotes").doc(otherQuoteId).get();
+      expect(competingQuoteSnap.data()?.status).toBe("rejected");
+    }, 30000);
+
+    it("75. Task 4 — Authoritative AcceptQuote vs WithdrawQuote real Firestore emulator concurrency", async () => {
+      const emulatorAppName = "task4-real-firestore-concurrency-withdraw";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
+      const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      const jobId = `job_task4_accept_vs_withdraw_${Date.now()}`;
+      const homeownerId = "homeowner_task4_withdraw_test";
+      const traderId = "trader_task4_withdraw_test";
+      const quoteId = `quote_withdraw_race_${Date.now()}`;
+
+      const homeownerIdentity: CanonicalIdentity = {
+        uid: homeownerId,
+        accountType: "consumer",
+        capabilities: ["homeowner"],
+        verification: { status: "verified" },
+        subscription: { tierId: "free", status: "active" },
+      };
+
+      const traderIdentity: CanonicalIdentity = {
+        uid: traderId,
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      // Seed Job and Quote
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        userId: homeownerId,
+        title: "Kitchen Tiling",
+        category: "Tiling",
+        status: "open",
+        createdAt: new Date().toISOString(),
+      });
+
+      await db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId).set({
+        id: quoteId,
+        jobId,
+        tradespersonId: traderId,
+        traderId,
+        amount: 600,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+
+      const acceptKey = `race_accept_key_${Date.now()}`;
+      const withdrawKey = `race_withdraw_key_${Date.now()}`;
+
+      // Simultaneous AcceptQuote vs WithdrawQuote
+      const results = await Promise.allSettled([
+        executeQuoteCommand({
+          db,
+          identity: homeownerIdentity,
+          command: {
+            type: "AcceptQuote",
+            payload: {
+              jobId,
+              quoteId,
+            },
+          },
+          idempotencyKey: acceptKey,
+        }),
+        executeQuoteCommand({
+          db,
+          identity: traderIdentity,
+          command: {
+            type: "WithdrawQuote",
+            payload: {
+              jobId,
+              quoteId,
+              reason: "Schedule conflict",
+            },
+          },
+          idempotencyKey: withdrawKey,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+
+      // Verify quote is in a valid terminal state (either accepted or withdrawn, never corrupted)
+      const quoteSnap = await db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId).get();
+      const quoteStatus = quoteSnap.data()?.status;
+      expect(["accepted", "withdrawn"]).toContain(quoteStatus);
+    }, 30000);
+
+    it("76. Task 4 — Authoritative AcceptQuote real Firestore emulator persistent idempotency replay", async () => {
+      const emulatorAppName = "task4-real-firestore-idemp";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp(
+          {
+            projectId: PROJECT_ID,
+          },
+          emulatorAppName
+        );
+      const db = adminApp.firestore();
+      try {
+        db.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+
+      const jobId = `job_task4_idemp_${Date.now()}`;
+      const homeownerId = "homeowner_task4_idemp_alice";
+      const traderId = "trader_task4_idemp_dave";
+      const quoteId = `quote_idemp_${Date.now()}`;
+
+      const homeownerIdentity: CanonicalIdentity = {
+        uid: homeownerId,
+        accountType: "consumer",
+        capabilities: ["homeowner"],
+        verification: { status: "verified" },
+        subscription: { tierId: "free", status: "active" },
+      };
+
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        userId: homeownerId,
+        title: "Idempotency Acceptance Test",
+        category: "Electrical",
+        status: "open",
+        createdAt: new Date().toISOString(),
+      });
+
+      await db.collection("jobs").doc(jobId).collection("quotes").doc(quoteId).set({
+        id: quoteId,
+        jobId,
+        tradespersonId: traderId,
+        traderId,
+        amount: 350,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+      });
+
+      const fixedIdempKey = `fixed_accept_idemp_key_${Date.now()}`;
+
+      // First call
+      const res1 = await executeQuoteCommand({
+        db,
+        identity: homeownerIdentity,
+        command: {
+          type: "AcceptQuote",
+          payload: {
+            jobId,
+            quoteId,
+          },
+        },
+        idempotencyKey: fixedIdempKey,
+      });
+
+      expect(res1.wasReplayed).toBe(false);
+      expect(res1.status).toBe("accepted");
+      expect(res1.verificationPin).toBeDefined();
+
+      // Second call (replay)
+      const res2 = await executeQuoteCommand({
+        db,
+        identity: homeownerIdentity,
+        command: {
+          type: "AcceptQuote",
+          payload: {
+            jobId,
+            quoteId,
+          },
+        },
+        idempotencyKey: fixedIdempKey,
+      });
+
+      expect(res2.wasReplayed).toBe(true);
+      expect(res2.quoteId).toBe(quoteId);
+      expect(res2.verificationPin).toBe(res1.verificationPin);
+      expect(res2.status).toBe("accepted");
+    }, 30000);
   });
 });

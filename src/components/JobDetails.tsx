@@ -831,19 +831,11 @@ const libraries: any[] = ['places', 'geometry'];
         `/job/${id}`
       );
 
-      // 4. Reject other quotes via authoritative canonical command (fire-and-forget)
+      // 4. Notify other tradespeople (competing quotes were atomically rejected server-side)
       const otherQuotes = quotes.filter(q => q.id !== quote.id && q.status === "pending");
       Promise.all(otherQuotes.map(async (q) => {
         try {
           const feedback = await getRejectionFeedback(job, q, quote);
-          
-          await rejectQuoteViaCommand({
-            user: user as any,
-            jobId: id,
-            quoteId: q.id,
-            reason: feedback?.reason || "Job awarded to another trader",
-          });
-          
           await sendNotification(
             q.tradespersonId,
             "Job Awarded to Another Trader",
@@ -852,7 +844,7 @@ const libraries: any[] = ['places', 'geometry'];
             `/job/${id}`
           );
         } catch (err) {
-          console.error(`Error rejecting quote ${q.id}:`, err);
+          console.error(`Error sending rejection notification for quote ${q.id}:`, err);
         }
       })).catch(console.error);
       

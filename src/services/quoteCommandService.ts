@@ -266,6 +266,7 @@ export interface AcceptQuoteOptions {
   user: User;
   jobId: string;
   quoteId: string;
+  idempotencyKey?: string;
 }
 
 export interface AcceptQuoteResult {
@@ -277,14 +278,15 @@ export interface AcceptQuoteResult {
   scheduledDate?: string;
   verificationPin?: string;
   isConfirmedByTradesperson?: boolean;
+  wasReplayed?: boolean;
 }
 
 /**
- * Authoritative quote acceptance via the existing backend endpoint:
- * POST /api/jobs/:jobId/accept-quote
+ * Authoritative quote acceptance via the canonical backend endpoint:
+ * POST /api/jobs/:jobId/accept-quote (Task 4)
  */
 export async function acceptQuoteViaServer(options: AcceptQuoteOptions): Promise<AcceptQuoteResult> {
-  const { user, jobId, quoteId } = options;
+  const { user, jobId, quoteId, idempotencyKey } = options;
 
   if (!user || !user.uid) {
     throw new Error("Authentication required: you must be signed in to accept a quote.");
@@ -294,9 +296,11 @@ export async function acceptQuoteViaServer(options: AcceptQuoteOptions): Promise
   }
 
   const token = await user.getIdToken();
+  const effectiveIdempotencyKey = idempotencyKey || `accept_${jobId}_${quoteId}_${Date.now()}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
+    "x-idempotency-key": effectiveIdempotencyKey,
   };
 
   const response = await fetch(getApiUrl(`/api/jobs/${encodeURIComponent(jobId)}/accept-quote`), {
@@ -321,5 +325,6 @@ export async function acceptQuoteViaServer(options: AcceptQuoteOptions): Promise
     scheduledDate: data.scheduledDate,
     verificationPin: data.verificationPin,
     isConfirmedByTradesperson: data.isConfirmedByTradesperson,
+    wasReplayed: data.wasReplayed,
   };
 }

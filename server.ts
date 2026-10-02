@@ -26,7 +26,7 @@ import { domainEvents } from "./src/server/domainEvents.ts";
 import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSaaSPlanServer } from "./src/server/pricingCatalog.ts";
 import { resolveTrustedCanonicalIdentity } from "./src/server/identity.ts";
 import { executeCreateJobCommand, resolveCreateJobQuota } from "./src/server/createJobCommand.ts";
-import { executeQuoteCommand } from "./src/server/quoteCommands.ts";
+import { executeQuoteCommand, executeAcceptQuoteCommand } from "./src/server/quoteCommands.ts";
 import { 
   startPublicJobCardsSync, 
   backfillPublicJobCards, 
@@ -4276,75 +4276,46 @@ async function startServer() {
     }
   });
 
-  // Server-Authoritative Quote Acceptance Route (V6 Hardened)
+  // Server-Authoritative Quote Acceptance Route (Task 4 Single Canonical Authority)
   app.post("/api/jobs/:jobId/accept-quote", requireAuth, async (req, res) => {
     try {
       const { jobId } = req.params;
-      const { quoteId } = req.body;
-      const authUser = (req as any).user;
       if (!db) throw new BadRequestError("Database not initialized");
-      if (!quoteId) throw new BadRequestError("quoteId is required in request body");
 
-      const jobRef = db.collection("jobs").doc(jobId);
-      const jobDoc = await jobRef.get();
-      if (!jobDoc.exists) throw new BadRequestError(`Job ${jobId} not found`);
-
-      const jobData = jobDoc.data()!;
-      // Enforce BOLA/IDOR protection: only the job owner or admin can accept quotes
-      assertResourceOwner(authUser, jobData.homeownerId || jobData.userId || jobData.ownerId);
-
-      // Enforce mathematical state transition for job
-      const currentJobStatus = (jobData.status === "posted" ? "open" : (jobData.status || "open")) as JobStatus;
-      validateJobTransition(currentJobStatus, "accepted");
-
-      const quoteRef = jobRef.collection("quotes").doc(quoteId);
-      const quoteDoc = await quoteRef.get();
-      if (!quoteDoc.exists) throw new BadRequestError(`Quote ${quoteId} not found on job ${jobId}`);
-
-      const quoteData = quoteDoc.data()!;
-      // Enforce state machine transition for quote
-      validateQuoteTransition(quoteData.status || "pending", "accepted");
-
-      const traderId = quoteData.tradespersonId || quoteData.traderId;
-      const pin = Math.floor(1000 + Math.random() * 9000).toString();
-      const scheduledDate = quoteData.startDate || new Date().toISOString().split("T")[0];
-
-      const batch = db.batch();
-      batch.update(jobRef, {
-        status: "accepted",
-        acceptedQuoteId: quoteId,
-        acceptedTradespersonId: traderId,
-        acceptedTraderId: traderId,
-        scheduledDate,
-        isConfirmedByTradesperson: false,
-        verificationPin: pin,
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      const identity = await resolveTrustedCanonicalIdentity(req as any, async (uid) => {
+        const profileSnap = await db!.collection("users").doc(uid).get();
+        return profileSnap.exists ? (profileSnap.data() || null) : null;
       });
 
-      batch.update(quoteRef, {
-        status: "accepted",
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      const rawPayload = { ...(req.body || {}) };
+      const idempotencyKey =
+        (req.headers["x-idempotency-key"] as string) ||
+        (req.headers["idempotency-key"] as string) ||
+        rawPayload.idempotencyKey ||
+        "";
+      delete rawPayload.idempotencyKey;
 
-      await batch.commit();
+      const quoteId = rawPayload.quoteId;
 
-      await domainEvents.dispatch("QUOTE_ACCEPTED", quoteId, authUser.uid, {
-        jobId,
-        traderId,
-        amount: quoteData.amount || quoteData.totalAmount || 0,
-      }, undefined, db);
-
-      res.json({
-        success: true,
+      const result = await executeAcceptQuoteCommand({
+        db,
+        identity,
         jobId,
         quoteId,
-        status: "accepted",
-        acceptedTradespersonId: traderId,
-        scheduledDate,
-        verificationPin: pin,
-        isConfirmedByTradesperson: false,
+        rawPayload,
+        idempotencyKey,
+      });
+
+      res.status(result.wasReplayed ? 200 : 200).json({
+        success: true,
+        jobId: result.jobId,
+        quoteId: result.quoteId,
+        status: result.status,
+        acceptedTradespersonId: result.acceptedTradespersonId,
+        scheduledDate: result.scheduledDate,
+        verificationPin: result.verificationPin,
+        isConfirmedByTradesperson: result.isConfirmedByTradesperson,
+        wasReplayed: result.wasReplayed,
       });
     } catch (error: any) {
       console.error("Quote Acceptance Error:", error);

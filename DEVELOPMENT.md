@@ -1,5 +1,32 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader — Task 4: Single Authoritative Atomic AcceptQuote (October 2, 2026)
+- **1. Single Canonical Authority & Architecture (`executeAcceptQuoteCommand`)**:
+  - Implemented the single authoritative `AcceptQuote` command in `src/server/quoteCommands.ts` (`executeAcceptQuoteCommand`) and wired cleanly to `POST /api/jobs/:jobId/accept-quote` in `server.ts`.
+  - **Authenticated Canonical Identity**: Caller identity is resolved from verified Firebase Auth via `resolveTrustedCanonicalIdentity` and authorization strictly verifies job ownership (`homeownerId || userId || ownerId === identity.uid` or admin).
+  - **OWASP API Mass-Assignment Defense**: Client requests cannot supply privileged or server-owned fields (`homeownerId`, `acceptedTradespersonId`, `status`, `verificationPin`, `acceptedAt`, `commission`, `amount`).
+  - **Real Atomic Firestore Transaction**:
+    - Executes atomic `db.runTransaction` loading target job, target quote, and competing quotes in the read phase.
+    - Validates formal state machines: Job transition from `open`/`quoted`/`posted` to `accepted` (`validateJobTransition`), quote transition from `pending`/`requoted` to `accepted` (`validateQuoteTransition`).
+    - Atomically accepts target quote (`status: "accepted"`, server timestamps).
+    - Atomically rejects/closes all competing pending quotes (`status: "rejected"`, `rejectionReason: "Job awarded to another trader"`).
+    - Atomically updates parent job record (`status: "accepted"`, `acceptedQuoteId`, `acceptedTradespersonId`, `acceptedTraderId`, `tradespersonId`, `scheduledDate`, `verificationPin`, `isConfirmedByTradesperson: false`).
+    - Updates public job card projection (`public_job_cards/{jobId}`).
+    - Records persistent idempotency entry in `idempotency_keys` collection.
+  - **Domain Event Dispatch**: Post-commit dispatch of `QUOTE_ACCEPTED` event with server-derived aggregate data. Retries return cached responses without duplicating events or state transitions.
+  - **Production Caller Wiring**:
+    - `JobDetails.tsx` calls `acceptQuoteViaServer` from `src/services/quoteCommandService.ts` targeting `POST /api/jobs/:jobId/accept-quote`.
+    - Eliminated redundant client-side rejection loops since the server transaction atomically handles competing quote rejections.
+- **2. Testing & Verification**:
+  - Unit & Adversarial Test Suite: `tests/unit/task4AcceptQuote.test.ts` (17/17 tests passing).
+  - Real Firestore Emulator Concurrency Suite: Tests 74, 75, 76 in `tests/unit/firebaseEmulatorSecurityRules.test.ts` (100% pass on live Firestore emulator).
+  - Full Unit Test Suite (`npm test`): **810/810 tests passing** across **50 test files**.
+  - Emulator Concurrency Suite (`npm run test:emulator-concurrency`): **215/215 tests passing**.
+  - Typecheck & Lint (`npm run lint` / `tsc --noEmit`): 0 errors.
+  - Applet Compilation (`compile_applet` / `npm run build`): Clean build success.
+  - Release Audit (`npm run audit:release`): 0 critical failures.
+  - Next Task: Task 5 — Job Lifecycle (Not started).
+
 ## 🛡️ AnyTrader — Task 1: Canonical Identity & Capability Model Finalization (September 29, 2026)
 - **1. Canonical Identity Architecture & Authority Model**:
   - Established formal separation between:

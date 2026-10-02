@@ -20,7 +20,7 @@ import type admin from "firebase-admin";
 import { BadRequestError, ForbiddenError, NotFoundError, ConflictError } from "./httpErrors.ts";
 import { CanonicalIdentity, hasCapability } from "./identity.ts";
 import { SERVER_OWNED_PROTECTED_KEYS } from "./authorization.ts";
-import { validateQuoteTransition, QuoteStatus } from "./stateMachine.ts";
+import { validateQuoteTransition, validateJobTransition, QuoteStatus, JobStatus } from "./stateMachine.ts";
 import { domainEvents } from "./domainEvents.ts";
 
 const INHERITED_SERVER_OWNED_KEYS = new Set(SERVER_OWNED_PROTECTED_KEYS);
@@ -185,13 +185,24 @@ export type RejectQuoteInput = z.infer<typeof REJECT_QUOTE_SCHEMA>;
 export type RequestRequoteInput = z.infer<typeof REQUEST_REQUOTE_SCHEMA>;
 export type RespondToRequoteInput = z.infer<typeof RESPOND_TO_REQUOTE_SCHEMA>;
 
+/**
+ * 7. AcceptQuote Schema (Task 4)
+ */
+export const ACCEPT_QUOTE_SCHEMA = z.object({
+  jobId: z.string().min(1, "Job ID is required"),
+  quoteId: z.string().min(1, "Quote ID is required"),
+}).strict();
+
+export type AcceptQuoteInput = z.infer<typeof ACCEPT_QUOTE_SCHEMA>;
+
 export type QuoteCommandType =
   | "CreateQuote"
   | "UpdateQuote"
   | "WithdrawQuote"
   | "RejectQuote"
   | "RequestRequote"
-  | "RespondToRequote";
+  | "RespondToRequote"
+  | "AcceptQuote";
 
 export type QuoteCommandPayload =
   | { type: "CreateQuote"; payload: CreateQuoteInput }
@@ -199,7 +210,8 @@ export type QuoteCommandPayload =
   | { type: "WithdrawQuote"; payload: WithdrawQuoteInput }
   | { type: "RejectQuote"; payload: RejectQuoteInput }
   | { type: "RequestRequote"; payload: RequestRequoteInput }
-  | { type: "RespondToRequote"; payload: RespondToRequoteInput };
+  | { type: "RespondToRequote"; payload: RespondToRequoteInput }
+  | { type: "AcceptQuote"; payload: AcceptQuoteInput };
 
 /**
  * Validates raw payload against command schemas and enforces OWASP mass-assignment rejection.
@@ -238,6 +250,9 @@ export function validateQuoteCommandPayload(commandType: QuoteCommandType, rawPa
     case "RespondToRequote":
       result = RESPOND_TO_REQUOTE_SCHEMA.safeParse(raw);
       break;
+    case "AcceptQuote":
+      result = ACCEPT_QUOTE_SCHEMA.safeParse(raw);
+      break;
     default:
       throw new BadRequestError(`Unsupported quote command type: ${commandType}`);
   }
@@ -265,6 +280,10 @@ export interface ExecuteQuoteCommandResult {
   jobId: string;
   status: QuoteStatus;
   quote?: Record<string, any>;
+  acceptedTradespersonId?: string;
+  scheduledDate?: string;
+  verificationPin?: string;
+  isConfirmedByTradesperson?: boolean;
   wasReplayed: boolean;
 }
 
@@ -822,6 +841,129 @@ export async function executeQuoteCommand(
         );
         break;
       }
+
+      case "AcceptQuote": {
+        const quoteId = (validatedInput as any).quoteId;
+        const quotingTrader = existingQuoteData?.tradespersonId || existingQuoteData?.traderId || existingQuoteData?.proId;
+        const isAdmin = identity.accountType === "admin" || (identity as any).isAdmin === true || (identity as any).role === "admin";
+
+        // 1. Authorization: Only job owner or admin can accept quotes
+        if (identity.uid !== homeownerId && !isAdmin) {
+          throw new ForbiddenError("You are not authorized to accept quotes for this job.");
+        }
+
+        // 2. Anti-Self Quoting / Trader Authorization
+        if (quotingTrader === identity.uid && !isAdmin) {
+          throw new ForbiddenError("Tradespeople cannot accept their own quotes.");
+        }
+
+        // 3. Job State Validation
+        const currentJobStatus = (jobData.status === "posted" ? "open" : (jobData.status || "open")) as JobStatus;
+        validateJobTransition(currentJobStatus, "accepted");
+        if (currentJobStatus === "accepted" || jobData.acceptedQuoteId) {
+          throw new ConflictError(`Job '${jobId}' has already been accepted.`);
+        }
+        if (["cancelled", "completed", "disputed", "in_progress"].includes(currentJobStatus)) {
+          throw new ConflictError(`Job '${jobId}' is in '${currentJobStatus}' status and cannot accept quotes.`);
+        }
+
+        // 4. Target Quote State Validation
+        const currentQuoteStatus = (existingQuoteData?.status || "pending") as QuoteStatus;
+        validateQuoteTransition(currentQuoteStatus, "accepted");
+        if (currentQuoteStatus === "accepted") {
+          throw new ConflictError(`Quote '${quoteId}' has already been accepted.`);
+        }
+        if (currentQuoteStatus === "withdrawn") {
+          throw new ConflictError(`Cannot accept withdrawn quote '${quoteId}'.`);
+        }
+        if (currentQuoteStatus === "rejected") {
+          throw new ConflictError(`Cannot accept rejected quote '${quoteId}'.`);
+        }
+
+        // 5. Trader Identity & Financial Validation
+        if (!quotingTrader || typeof quotingTrader !== "string") {
+          throw new BadRequestError(`Target quote '${quoteId}' does not have a valid tradesperson identity.`);
+        }
+        const numAmount = Number(existingQuoteData?.amount || existingQuoteData?.totalAmount || 0);
+        if (numAmount <= 0) {
+          throw new BadRequestError(`Target quote '${quoteId}' has an invalid amount (${numAmount}).`);
+        }
+
+        // 6. Server-Generated Acceptance Values
+        const pin = Math.floor(1000 + Math.random() * 9000).toString();
+        const scheduledDate = existingQuoteData?.startDate || nowIso.split("T")[0];
+        const isConfirmedByTradesperson = false;
+
+        // 7. Atomic Read of Competing Quotes and Public Card
+        const allQuotesSnap = await transaction.get(jobRef.collection("quotes"));
+        const publicCardRef = db.collection("public_job_cards").doc(jobId);
+        const publicCardSnap = await transaction.get(publicCardRef);
+
+        resultingQuoteId = quoteId;
+        resultingStatus = "accepted";
+        resultingQuoteDoc = {
+          ...existingQuoteData,
+          status: resultingStatus,
+          acceptedAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        // 8. Atomic Write: Accept Target Quote
+        transaction.update(targetQuoteRef, {
+          status: resultingStatus,
+          acceptedAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        // 9. Atomic Write: Reject Competing Pending Quotes
+        for (const otherDoc of allQuotesSnap.docs) {
+          if (otherDoc.id !== quoteId) {
+            const otherData = otherDoc.data() || {};
+            if (["pending", "requoted", "requote_requested", "submitted"].includes(otherData.status || "pending")) {
+              transaction.update(otherDoc.ref, {
+                status: "rejected",
+                rejectionReason: "Job awarded to another trader",
+                rejectedAt: nowIso,
+                updatedAt: nowIso,
+              });
+              const otherTrader = otherData.tradespersonId || otherData.traderId;
+              if (otherTrader) {
+                const otherLockRef = db.collection("trader_quote_locks").doc(`${jobId}_${otherTrader}`);
+                transaction.set(otherLockRef, { jobId, quoteId: otherDoc.id, traderId: otherTrader, status: "rejected", updatedAt: nowIso }, { merge: true });
+              }
+            }
+          }
+        }
+
+        // 10. Atomic Write: Update Job Record
+        transaction.update(jobRef, {
+          status: "accepted",
+          acceptedQuoteId: quoteId,
+          acceptedTradespersonId: quotingTrader,
+          acceptedTraderId: quotingTrader,
+          tradespersonId: quotingTrader,
+          scheduledDate,
+          isConfirmedByTradesperson,
+          verificationPin: pin,
+          acceptedAt: nowIso,
+          updatedAt: nowIso,
+        });
+
+        // 11. Atomic Write: Update Public Job Card (if exists)
+        if (publicCardSnap.exists) {
+          transaction.update(publicCardRef, { status: "accepted", updatedAt: nowIso });
+        }
+
+        // 12. Atomic Write: Update Accepted Trader Lock
+        const acceptedLockRef = db.collection("trader_quote_locks").doc(`${jobId}_${quotingTrader}`);
+        transaction.set(acceptedLockRef, { jobId, quoteId, traderId: quotingTrader, status: "accepted", updatedAt: nowIso }, { merge: true });
+
+        // Augment local resultingQuoteDoc for commandResponse
+        resultingQuoteDoc.scheduledDate = scheduledDate;
+        resultingQuoteDoc.verificationPin = pin;
+        resultingQuoteDoc.isConfirmedByTradesperson = isConfirmedByTradesperson;
+        break;
+      }
     }
 
     const commandResponse = {
@@ -830,6 +972,10 @@ export async function executeQuoteCommand(
       quoteId: resultingQuoteId,
       jobId,
       status: resultingStatus,
+      acceptedTradespersonId: resultingQuoteDoc?.tradespersonId || resultingQuoteDoc?.traderId || (resultingQuoteDoc as any)?.acceptedTradespersonId || jobData?.acceptedTradespersonId,
+      scheduledDate: resultingQuoteDoc?.scheduledDate || jobData?.scheduledDate || resultingQuoteDoc?.startDate,
+      verificationPin: resultingQuoteDoc?.verificationPin || jobData?.verificationPin,
+      isConfirmedByTradesperson: resultingQuoteDoc?.isConfirmedByTradesperson ?? jobData?.isConfirmedByTradesperson ?? false,
       quote: resultingQuoteDoc,
       wasReplayed: false,
     };
@@ -859,6 +1005,7 @@ export async function executeQuoteCommand(
       RejectQuote: "QUOTE_REJECTED",
       RequestRequote: "REQUOTE_REQUESTED",
       RespondToRequote: "REQUOTE_RESPONDED",
+      AcceptQuote: "QUOTE_ACCEPTED",
     };
 
     await domainEvents.dispatch(
@@ -871,6 +1018,10 @@ export async function executeQuoteCommand(
         status: transactionResult.status,
         amount: transactionResult.quote?.amount,
         revisionCount: transactionResult.quote?.revisionCount,
+        traderId: transactionResult.acceptedTradespersonId,
+        acceptedTradespersonId: transactionResult.acceptedTradespersonId,
+        scheduledDate: transactionResult.scheduledDate,
+        verificationPin: transactionResult.verificationPin,
       },
       undefined,
       db
@@ -878,4 +1029,38 @@ export async function executeQuoteCommand(
   }
 
   return transactionResult;
+}
+
+export interface ExecuteAcceptQuoteOptions {
+  db: any;
+  identity: CanonicalIdentity;
+  jobId: string;
+  quoteId: string;
+  rawPayload?: Record<string, any>;
+  idempotencyKey?: string;
+}
+
+/**
+ * Single Authoritative Atomic AcceptQuote Command Executor (Task 4)
+ * Executes atomic Firestore transaction guaranteeing single accepted quote,
+ * competing quotes rejection, server-owned fields, and persistent idempotency.
+ */
+export async function executeAcceptQuoteCommand(
+  options: ExecuteAcceptQuoteOptions
+): Promise<ExecuteQuoteCommandResult> {
+  const { db, identity, jobId, quoteId, rawPayload = {}, idempotencyKey } = options;
+
+  return executeQuoteCommand({
+    db,
+    identity,
+    command: {
+      type: "AcceptQuote",
+      payload: {
+        jobId,
+        quoteId,
+        ...rawPayload,
+      },
+    },
+    idempotencyKey: idempotencyKey || `accept_${jobId}_${quoteId}_${identity.uid}`,
+  });
 }

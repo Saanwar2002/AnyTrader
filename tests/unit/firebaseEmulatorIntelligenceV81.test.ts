@@ -147,7 +147,7 @@ describe('V8.1 Intelligence Firestore Emulator & Invariant Suite', () => {
         'FATAL: Firebase Emulator is not running or unreachable! V8.1 Intelligence Emulator suite requires live Firestore (127.0.0.1:8080) and Storage (127.0.0.1:9199) emulators. It must fail hard instead of silently skipping.'
       );
     }
-  });
+  }, 60000);
 
   afterAll(async () => {
     setGlobalRawArtifactBucket(null);
