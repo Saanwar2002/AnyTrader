@@ -1323,17 +1323,22 @@ const libraries: any[] = ['places', 'geometry'];
     setIsProcessing(true);
     try {
       const token = await user.getIdToken();
+      // Generate one stable idempotency key per logical release attempt for this milestone
+      const idempotencyKey = `rel_ms_${id}_${milestone.id}_${user.uid.substring(0, 5)}`;
+
       const response = await fetch("/api/release-milestone", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": `Bearer ${token}`,
+          "Idempotency-Key": idempotencyKey
         },
         body: JSON.stringify({
           jobId: id,
           quoteId: quote.id,
           milestoneId: milestone.id,
-          userId: user.uid
+          userId: user.uid,
+          idempotencyKey
         }),
       });
 

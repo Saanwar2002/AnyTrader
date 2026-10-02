@@ -5,9 +5,10 @@
  * 2. "ONE FINANCIAL ACTION -> ONE FINANCIAL EFFECT."
  * 3. Atomic idempotency locks preventing duplicate releases, double payouts, and race conditions.
  */
-import { BadRequestError, ConflictError, InternalServerError } from "./httpErrors.ts";
+import { BadRequestError, ConflictError, InternalServerError, ForbiddenError } from "./httpErrors.ts";
 import { validatePaymentTransition, validateMilestoneTransition } from "./stateMachine.ts";
 import { domainEvents } from "./domainEvents.ts";
+import { BusinessLogicDefense } from "./businessLogicDefense.ts";
 import crypto from "crypto";
 
 export interface LedgerEntry {
@@ -193,91 +194,171 @@ export class PaymentLedgerEngine {
 
   /**
    * Record Escrow Release to Tradesperson:
-   * Mathematically guarantees:
-   * - Milestone cannot be released if already released (terminal)
-   * - Milestone cannot be released if refunded
-   * - Trader receives netPayout; platform receives platformFee
+   * Single canonical authority for milestone fund release.
+   * Transactionally protects Job, Quote, and Milestone state.
    */
   public static async releaseEscrowFunds(
     db: any,
     params: {
       jobId: string;
+      quoteId: string;
       milestoneId: string;
-      callerId: string;
+      authUid: string;
       idempotencyKey: string;
+      isQrHandshake?: boolean;
+      isAdmin?: boolean;
     }
-  ): Promise<LedgerEntry> {
-    const { jobId, milestoneId, callerId, idempotencyKey } = params;
+  ): Promise<any> {
+    const { jobId, quoteId, milestoneId, authUid, idempotencyKey, isQrHandshake, isAdmin } = params;
 
-    const { result } = await this.executeIdempotentOperation(db, idempotencyKey, "RELEASE_MILESTONE_ESCROW", async () => {
+    const { result } = await this.executeIdempotentOperation(db, idempotencyKey, "RELEASE_MILESTONE", async () => {
       if (!db) {
         throw new InternalServerError("Database is required for financial escrow release.");
       }
 
-      const milestoneRef = db.collection("jobs").doc(jobId).collection("milestones").doc(milestoneId);
-      const milestoneDoc = await milestoneRef.get();
+      // Execute everything inside a single Firestore transaction for atomic safety
+      const transactionResult = await db.runTransaction(async (transaction: any) => {
+        const jobRef = db.collection("jobs").doc(jobId);
+        const jobDoc = await transaction.get(jobRef);
+        if (!jobDoc.exists) throw new BadRequestError("Job not found");
 
-      if (!milestoneDoc.exists) {
-        throw new BadRequestError(`Milestone ${milestoneId} does not exist on job ${jobId}.`);
-      }
+        const jobData = jobDoc.data();
+        const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
+        const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
 
-      const mData = milestoneDoc.data()!;
-      const currentStatus = mData.status;
+        if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
+          throw new ForbiddenError("Unauthorized: only the job owner or authorized admin can release milestone funds");
+        }
 
-      // Validate state machine rule:
-      validateMilestoneTransition(currentStatus, "released");
+        const quoteRef = jobRef.collection("quotes").doc(quoteId);
+        const quoteDoc = await transaction.get(quoteRef);
+        if (!quoteDoc.exists) throw new BadRequestError("Quote not found");
 
-      const verifiedAmount = mData.verifiedAmount || mData.amount || 0;
-      const platformFee = mData.platformFee || Math.round(verifiedAmount * 0.12);
-      const netPayout = verifiedAmount - platformFee;
+        const quoteData = quoteDoc.data();
+        const currentMilestones = quoteData?.milestones || [];
+        
+        const targetMilestone = currentMilestones.find((m: any, idx: number) => m.id === milestoneId || (isQrHandshake && idx === 0));
+        if (!targetMilestone) throw new BadRequestError("Milestone not found");
 
-      const entryId = `ledg_rel_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
-      const releaseEntry: LedgerEntry = {
-        entryId,
-        transactionId: mData.escrowEntryId || `tx_${milestoneId}`,
-        idempotencyKey,
-        payerId: mData.customerId || callerId,
-        payeeId: mData.tradespersonId || mData.traderId,
-        amount: verifiedAmount,
-        platformFee,
-        netPayout,
-        currency: (mData.currency || "gbp").toLowerCase(),
-        type: "ESCROW_RELEASE",
-        status: "completed",
-        createdAt: new Date().toISOString(),
-      };
+        // Transactional Claim Validation
+        // If it's already released with the SAME idempotency key, we allow it (for retry safety)
+        if ((targetMilestone.status === "released" || targetMilestone.status === "funds_released" || targetMilestone.releasedAt) && targetMilestone.releaseOperationId !== idempotencyKey) {
+          throw new ConflictError("Milestone has already been released by another request");
+        }
 
-      // Atomic batch update
-      const batch = db.batch();
-      batch.update(milestoneRef, {
-        status: "released",
-        releasedAt: new Date().toISOString(),
-        releasedBy: callerId,
-        releaseEntryId: entryId,
+        if (targetMilestone.releaseOperationId && targetMilestone.releaseOperationId !== idempotencyKey) {
+          throw new ConflictError("Milestone release is already being processed by another request");
+        }
+
+        // Business Logic sequence check
+        BusinessLogicDefense.validateEscrowReleaseEligibility(targetMilestone, jobData as any);
+
+        let releasedAmount = 0;
+        let targetMilestoneTitle = "Work Stage";
+
+        const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
+          if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
+            // Validation of state jump
+            validateMilestoneTransition(m.status || 'funded', 'released');
+            releasedAmount = Number(m.amount || m.verifiedAmount || 0);
+            targetMilestoneTitle = m.title || "Work Stage";
+            return { 
+              ...m, 
+              status: 'funds_released', 
+              releasedAt: new Date().toISOString(), 
+              releaseOperationId: idempotencyKey 
+            };
+          }
+          return m;
+        });
+
+        const quoteUpdatePayload: any = {
+          milestones: updatedMilestones,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (isQrHandshake) {
+          const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); 
+          quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
+          quoteUpdatePayload.paymentStatus = "handshake_complete";
+          
+          transaction.update(jobRef, {
+            paymentStatus: "handshake_complete",
+            isPaid: true,
+            updatedAt: new Date().toISOString()
+          });
+        }
+
+        transaction.update(quoteRef, quoteUpdatePayload);
+
+        const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
+        const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
+        const ledgerEntryId = `ledg_rel_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
+
+        const releaseEntry: LedgerEntry = {
+          entryId: ledgerEntryId,
+          transactionId: targetMilestone.stripePaymentIntentId || targetMilestone.escrowEntryId || `rel_${jobId}_${quoteId}`,
+          idempotencyKey,
+          payerId: jobData?.homeownerId || authUid,
+          payeeId: quoteData?.tradespersonId || "trader",
+          amount: Math.round(releasedAmount * 100),
+          platformFee: platformFeePence,
+          netPayout: netPayoutPence,
+          currency: "gbp",
+          type: "ESCROW_RELEASE",
+          status: "completed",
+          createdAt: new Date().toISOString()
+        };
+
+        // Write ledger entry INSIDE the transaction for atomicity
+        transaction.set(db.collection("payment_ledger").doc(ledgerEntryId), releaseEntry);
+
+        return {
+          jobData,
+          quoteData,
+          releasedAmount,
+          targetMilestoneTitle,
+          platformFeePence,
+          netPayoutPence,
+          ledgerEntryId,
+          targetMilestone,
+          releaseEntry
+        };
       });
 
-      batch.set(db.collection("payment_ledger").doc(entryId), releaseEntry);
+      const {
+        jobData,
+        quoteData,
+        releasedAmount,
+        targetMilestoneTitle,
+        platformFeePence,
+        netPayoutPence,
+        ledgerEntryId,
+        targetMilestone,
+      } = transactionResult;
 
-      // Credit trader pending payout ledger
-      const traderId = mData.tradespersonId || mData.traderId;
-      if (traderId) {
-        const traderBalanceRef = db.collection("trader_balances").doc(traderId);
-        batch.set(traderBalanceRef, {
-          availableBalance: db.FieldValue ? db.FieldValue.increment(netPayout) : netPayout,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      }
-
-      await batch.commit();
-
-      await domainEvents.dispatch("MILESTONE_RELEASED", milestoneId, callerId, {
+      // Dispatch domain event (outside transaction but inside idempotency executor)
+      await domainEvents.dispatch("MILESTONE_RELEASED", milestoneId || "m0", authUid, {
         jobId,
-        traderId,
-        netPayout,
-        platformFee,
+        quoteId,
+        releasedAmount,
+        isQrHandshake: Boolean(isQrHandshake)
       }, idempotencyKey, db);
 
-      return releaseEntry;
+      return {
+        success: true,
+        jobId,
+        quoteId,
+        milestoneId,
+        releasedAmount,
+        netPayoutPence,
+        platformFeePence,
+        targetMilestoneTitle,
+        traderId: quoteData?.tradespersonId,
+        stripePaymentIntentId: targetMilestone.stripePaymentIntentId,
+        isDestinationCharge: targetMilestone.isDestinationCharge,
+        jobNo: jobData?.jobNo
+      };
     });
 
     return result;

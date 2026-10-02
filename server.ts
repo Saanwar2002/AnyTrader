@@ -2306,7 +2306,7 @@ async function startServer() {
                 const milestones = quoteData?.milestones || [];
                 const updatedMilestones = milestones.map((m: any) => {
                   if (m.id === milestoneId) {
-                    return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: "mock_pi_" + Math.random().toString(36).substring(7) };
+                    return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: intentId };
                   }
                   return m;
                 });
@@ -2316,7 +2316,7 @@ async function startServer() {
                 await PaymentLedgerEngine.recordEscrowFunding(db, {
                   jobId,
                   milestoneId,
-                  paymentIntentId: `mock_pi_${Date.now()}`,
+                  paymentIntentId: intentId,
                   idempotencyKey: `mock_fund_${jobId}_${milestoneId}`,
                   customerId: userId,
                   traderId: meta.traderId || quoteData?.tradespersonId || "trader",
@@ -3988,205 +3988,79 @@ async function startServer() {
         throw new BadRequestError("A stable, non-empty Idempotency-Key is required for payment operations (minimum 8 characters)");
       }
 
-      const { result, wasReplayed } = await PaymentLedgerEngine.executeIdempotentOperation(
-        firestoreDb,
+      // Delegate to canonical authority
+      const result = await PaymentLedgerEngine.releaseEscrowFunds(firestoreDb, {
+        jobId,
+        quoteId,
+        milestoneId,
+        authUid,
         idempotencyKey,
-        "RELEASE_MILESTONE",
-        async () => {
-          // Atomically check and claim the milestone in a transaction
-          const transactionResult = await firestoreDb.runTransaction(async (transaction: admin.firestore.Transaction) => {
-            const jobRef = firestoreDb.collection("jobs").doc(jobId);
-            const jobDoc = await transaction.get(jobRef);
-            if (!jobDoc.exists) throw new BadRequestError("Job not found");
+        isQrHandshake: Boolean(isQrHandshake),
+        isAdmin: await checkIsAdmin(authUser)
+      });
 
-            const jobData = jobDoc.data();
-            const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
-            const isAdmin = await checkIsAdmin(authUser);
-            const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
+      // Handle Stripe side-effects strictly AFTER database state is committed transactionally
+      let stripeTransferId: string | undefined;
 
-            if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
-              throw new ForbiddenError("Unauthorized: only the job owner or authorized admin can release milestone funds");
-            }
+      if (result.traderId && result.stripePaymentIntentId && !result.isDestinationCharge) {
+        try {
+          const traderDoc = await firestoreDb.collection("users").doc(result.traderId).get();
+          const traderStripeAccountId = traderDoc.data()?.stripeAccountId;
+          
+          let stripe;
+          try { stripe = getStripe(); } catch (e) {}
 
-            const quoteRef = jobRef.collection("quotes").doc(quoteId);
-            const quoteDoc = await transaction.get(quoteRef);
-            if (!quoteDoc.exists) throw new BadRequestError("Quote not found");
+          if (stripe && traderStripeAccountId && !traderStripeAccountId.startsWith("acct_mock_")) {
+            // Deterministic Stripe-side Idempotency Key
+            const stripeIdempotencyKey = `release:${jobId}:${quoteId}:${milestoneId || '0'}:${idempotencyKey}`;
 
-            const quoteData = quoteDoc.data();
-            const currentMilestones = quoteData?.milestones || [];
-            
-            const targetMilestone = currentMilestones.find((m: any, idx: number) => m.id === milestoneId || (isQrHandshake && idx === 0));
-            if (!targetMilestone) throw new BadRequestError("Milestone not found");
-
-            // Transactional claim check
-            if ((targetMilestone.status === "released" || targetMilestone.status === "funds_released" || targetMilestone.releasedAt) && targetMilestone.releaseOperationId !== idempotencyKey) {
-              throw new ConflictError("Milestone has already been released");
-            }
-
-            if (targetMilestone.releaseOperationId && targetMilestone.releaseOperationId !== idempotencyKey) {
-              throw new ConflictError("Milestone release is already being processed by another request");
-            }
-
-            // Wire BusinessLogicDefense to prevent macro-sequence and terminal state exploits
-            BusinessLogicDefense.validateEscrowReleaseEligibility(targetMilestone, jobData as any);
-
-            let releasedAmount = 0;
-            let targetMilestoneTitle = "Work Stage";
-
-            const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
-              if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
-                // Mathematical state machine validation
-                validateMilestoneTransition(m.status || 'funded', 'released');
-                releasedAmount = Number(m.amount || m.verifiedAmount || 0);
-                targetMilestoneTitle = m.title || "Work Stage";
-                return { 
-                  ...m, 
-                  status: 'funds_released', 
-                  releasedAt: new Date().toISOString(), 
-                  releaseDate: new Date().toISOString(),
-                  releaseOperationId: idempotencyKey // Atomically claim
-                };
+            const transfer = await stripe.transfers.create({
+              amount: result.netPayoutPence,
+              currency: "gbp",
+              destination: traderStripeAccountId,
+              description: `Milestone release for Job #${result.jobNo || jobId} (${result.targetMilestoneTitle})`,
+              metadata: {
+                jobId,
+                quoteId,
+                milestoneId: milestoneId || "m0",
+                traderId: result.traderId
               }
-              return m;
+            }, {
+              idempotencyKey: stripeIdempotencyKey,
             });
+            stripeTransferId = transfer.id;
 
-            const quoteUpdatePayload: any = {
-              milestones: updatedMilestones,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            };
-
-            if (isQrHandshake) {
-              const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
-              quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
-              quoteUpdatePayload.paymentStatus = "handshake_complete";
-              
-              transaction.update(jobRef, {
-                paymentStatus: "handshake_complete",
-                isPaid: true,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-              });
-            }
-
-            transaction.update(quoteRef, quoteUpdatePayload);
-
-            const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
-            const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
-            const ledgerEntryId = `ledg_rel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-
-            return {
-              jobData,
-              quoteData,
-              releasedAmount,
-              targetMilestoneTitle,
-              platformFeePence,
-              netPayoutPence,
-              ledgerEntryId,
-              targetMilestone,
-            };
-          });
-
-          const {
-            jobData,
-            quoteData,
-            releasedAmount,
-            targetMilestoneTitle,
-            platformFeePence,
-            netPayoutPence,
-            ledgerEntryId,
-            targetMilestone,
-          } = transactionResult;
-
-          const quoteRef = firestoreDb.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
-
-          let traderStripeAccountId: string | undefined;
-          let transferStatus = "completed";
-          let stripeTransferId: string | undefined;
-
-          if (quoteData?.tradespersonId) {
-            try {
-              const traderDoc = await firestoreDb.collection("users").doc(quoteData.tradespersonId).get();
-              traderStripeAccountId = traderDoc.data()?.stripeAccountId;
-              
-              let stripe;
-              try { stripe = getStripe(); } catch (e) {}
-
-              // If Stripe is configured and trader has a live connected account
-              if (stripe && traderStripeAccountId && !traderStripeAccountId.startsWith("acct_mock_")) {
-                // If the milestone stored a separate payment intent needing manual transfer:
-                if (targetMilestone.stripePaymentIntentId && !targetMilestone.isDestinationCharge) {
-                  // Deterministic Stripe-side Idempotency Key
-                  const stripeIdempotencyKey = `release:${jobId}:${quoteId}:${milestoneId || '0'}:${idempotencyKey}`;
-
-                  const transfer = await stripe.transfers.create({
-                    amount: netPayoutPence,
-                    currency: "gbp",
-                    destination: traderStripeAccountId,
-                    description: `Milestone release for Job #${jobData?.jobNo || jobId} (${targetMilestoneTitle})`,
-                    metadata: {
-                      jobId,
-                      quoteId,
-                      milestoneId: milestoneId || "m0",
-                      traderId: quoteData.tradespersonId
-                    }
-                  }, {
-                    idempotencyKey: stripeIdempotencyKey,
-                  });
-                  stripeTransferId = transfer.id;
-                }
+            // Update ledger with transfer ID (outside transaction but tracked by idempotency)
+            await firestoreDb.collection("payment_ledger").where("idempotencyKey", "==", idempotencyKey).get().then(snap => {
+              if (!snap.empty) {
+                return snap.docs[0].ref.update({ stripeTransferId, transferStatus: "completed" });
               }
-            } catch (stripeErr: any) {
-              console.error("Stripe transfer execution failed during milestone release:", stripeErr.message);
-              transferStatus = "failed";
-              // Explicitly throw transfer failure to prevent inconsistent state commit
-              throw stripeErr;
-            }
-          }
-
-          await firestoreDb.collection("payment_ledger").doc(ledgerEntryId).set({
-            entryId: ledgerEntryId,
-            transactionId: `rel_${jobId}_${quoteId}`,
-            idempotencyKey,
-            payerId: jobData?.homeownerId || authUid,
-            payeeId: quoteData?.tradespersonId || "trader",
-            destinationAccountId: traderStripeAccountId || null,
-            stripeTransferId: stripeTransferId || null,
-            transferStatus,
-            amount: Math.round(releasedAmount * 100),
-            platformFee: platformFeePence,
-            netPayout: netPayoutPence,
-            currency: "gbp",
-            type: "ESCROW_RELEASE",
-            status: "completed",
-            createdAt: new Date().toISOString()
-          });
-
-          // Notify Trader
-          if (quoteData?.tradespersonId) {
-            await firestoreDb.collection("notifications").add({
-              userId: quoteData.tradespersonId,
-              title: isQrHandshake ? "Work Verified & Funds Released! 🤝" : "Funds Released! 💸",
-              message: isQrHandshake
-                ? `QR Handshake complete for "${jobData?.title || 'Job'}". Funds released to your account.`
-                : `The homeowner has released funds for milestone: "${targetMilestoneTitle}".`,
-              type: "status",
-              link: `/job/${jobId}`,
-              read: false,
-              createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
           }
-
-          await domainEvents.dispatch("MILESTONE_RELEASED", milestoneId || "m0", authUid, {
-            jobId,
-            quoteId,
-            releasedAmount,
-            isQrHandshake: Boolean(isQrHandshake)
-          }, idempotencyKey, firestoreDb);
-
-          return { success: true, jobId, quoteId, milestoneId, releasedAmount };
+        } catch (stripeErr: any) {
+          console.error("Stripe transfer execution failed during milestone release:", stripeErr.message);
+          // We do NOT throw here because the DB state is already committed.
+          // The next retry with same idempotencyKey will enter releaseEscrowFunds, 
+          // hit the idempotency cache or allow retry, and we can try Stripe again.
         }
-      );
+      }
 
-      res.json({ ...result, replayed: wasReplayed });
+      // Notify Trader (outside transaction)
+      if (result.traderId) {
+        await firestoreDb.collection("notifications").add({
+          userId: result.traderId,
+          title: isQrHandshake ? "Work Verified & Funds Released! 🤝" : "Funds Released! 💸",
+          message: isQrHandshake
+            ? `QR Handshake complete for "${result.jobNo || 'Job'}". Funds released to your account.`
+            : `The homeowner has released funds for milestone: "${result.targetMilestoneTitle}".`,
+          type: "status",
+          link: `/job/${jobId}`,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+      }
+
+      res.json(result);
     } catch (error: any) {
       console.error("Milestone Release Error:", error);
       sendHttpError(res, error, req);
