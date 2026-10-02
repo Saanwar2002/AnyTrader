@@ -243,6 +243,7 @@ export default function JobDetails() {
   const [pinError, setPinError] = useState("");
   const [imElapsedSeconds, setImElapsedSeconds] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const acceptIdempotencyKeysRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -806,12 +807,23 @@ const libraries: any[] = ['places', 'geometry'];
     setLoading(true);
     setError(null);
     try {
+      if (!acceptIdempotencyKeysRef.current[quote.id]) {
+        acceptIdempotencyKeysRef.current[quote.id] =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `accept_${id}_${quote.id}`;
+      }
+      const acceptIdempotencyKey = acceptIdempotencyKeysRef.current[quote.id];
+
       // 1. Authoritative quote acceptance via backend command endpoint
       const acceptResult = await acceptQuoteViaServer({
         user: user as any,
         jobId: id,
         quoteId: quote.id,
+        idempotencyKey: acceptIdempotencyKey,
       });
+
+      delete acceptIdempotencyKeysRef.current[quote.id];
 
       // 2. Notify tradesperson
       await sendNotification(

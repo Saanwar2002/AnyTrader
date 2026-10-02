@@ -519,5 +519,34 @@ describe("Task 4: Single Authoritative Atomic AcceptQuote Suite", () => {
       const directQuoteUpdatePattern = /updateDoc\s*\(\s*doc\s*\(\s*db\s*,\s*["']jobs["']\s*,\s*[^,]+\s*,\s*["']quotes["']/;
       expect(content).not.toMatch(directQuoteUpdatePattern);
     });
+
+    it("18. verifies JobDetails.tsx generates and passes a stable idempotencyKey to acceptQuoteViaServer", () => {
+      const jobDetailsPath = path.resolve(process.cwd(), "src/components/JobDetails.tsx");
+      const content = fs.readFileSync(jobDetailsPath, "utf-8");
+
+      // Verify that acceptIdempotencyKey is defined and passed to acceptQuoteViaServer
+      expect(content).toMatch(/const\s+acceptIdempotencyKey\s*=/);
+      expect(content).toMatch(/idempotencyKey:\s*acceptIdempotencyKey/);
+    });
+
+    it("19. verifies acceptQuoteViaServer forwards the stable idempotency key in headers and payload", async () => {
+      const quoteCommandServicePath = path.resolve(process.cwd(), "src/services/quoteCommandService.ts");
+      const content = fs.readFileSync(quoteCommandServicePath, "utf-8");
+
+      // Verify that acceptQuoteViaServer accepts and handles idempotencyKey
+      expect(content).toContain("acceptQuoteViaServer");
+      expect(content).toContain('"x-idempotency-key": effectiveIdempotencyKey');
+      expect(content).toContain('"X-Idempotency-Key": effectiveIdempotencyKey');
+      expect(content).toContain('"Idempotency-Key": effectiveIdempotencyKey');
+      expect(content).toMatch(/body:\s*JSON\.stringify\(\s*\{\s*quoteId,\s*idempotencyKey:\s*effectiveIdempotencyKey\s*\}\s*\)/);
+    });
+
+    it("20. verifies JobDetails.tsx maintains acceptIdempotencyKeysRef for stable key retention across network retries", () => {
+      const jobDetailsPath = path.resolve(process.cwd(), "src/components/JobDetails.tsx");
+      const content = fs.readFileSync(jobDetailsPath, "utf-8");
+
+      expect(content).toContain("acceptIdempotencyKeysRef");
+      expect(content).toContain("acceptIdempotencyKeysRef.current[quote.id]");
+    });
   });
 });

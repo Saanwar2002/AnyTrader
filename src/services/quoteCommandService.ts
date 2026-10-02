@@ -296,17 +296,21 @@ export async function acceptQuoteViaServer(options: AcceptQuoteOptions): Promise
   }
 
   const token = await user.getIdToken();
-  const effectiveIdempotencyKey = idempotencyKey || `accept_${jobId}_${quoteId}_${Date.now()}`;
+  const effectiveIdempotencyKey =
+    idempotencyKey || `accept_${jobId}_${quoteId}`;
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
     "x-idempotency-key": effectiveIdempotencyKey,
+    "X-Idempotency-Key": effectiveIdempotencyKey,
+    "Idempotency-Key": effectiveIdempotencyKey,
   };
 
   const response = await fetch(getApiUrl(`/api/jobs/${encodeURIComponent(jobId)}/accept-quote`), {
     method: "POST",
     headers,
-    body: JSON.stringify({ quoteId }),
+    body: JSON.stringify({ quoteId, idempotencyKey: effectiveIdempotencyKey }),
   });
 
   const data = await response.json();

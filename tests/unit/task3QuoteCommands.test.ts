@@ -785,7 +785,7 @@ describe("Task 3: Canonical Quote Commands Test Suite", () => {
         expect(fetchUrl).toContain("/api/jobs/job_roof_100/accept-quote");
         expect(fetchOptions.method).toBe("POST");
         expect(fetchOptions.headers["Authorization"]).toBe("Bearer mock_valid_token_123");
-        expect(JSON.parse(fetchOptions.body)).toEqual({ quoteId: "quote_test_777" });
+        expect(JSON.parse(fetchOptions.body)).toMatchObject({ quoteId: "quote_test_777" });
 
         expect(result.success).toBe(true);
         expect(result.status).toBe("accepted");
