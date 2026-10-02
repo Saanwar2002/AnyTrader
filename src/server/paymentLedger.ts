@@ -59,7 +59,13 @@ export class PaymentLedgerEngine {
           return { shouldExecute: false, result: data.response as T, wasReplayed: true };
         }
         if (data.status === "in_progress") {
-          throw new ConflictError("A concurrent request with the same idempotency key is already processing.");
+          // Check if it's a stale processing claim (e.g., > 5 minutes old) to allow recovery after worker crash
+          const startedAt = data.startedAt ? new Date(data.startedAt).getTime() : Date.now();
+          const ageMs = Date.now() - startedAt;
+          if (ageMs < 5 * 60 * 1000) {
+            throw new ConflictError("A concurrent request with the same idempotency key is already processing.");
+          }
+          console.warn(`[Idempotency Recovery] Overriding stale processing lock for key: ${idempotencyKey} (age: ${Math.round(ageMs/1000)}s)`);
         }
       }
 

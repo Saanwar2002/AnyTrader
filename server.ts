@@ -1930,6 +1930,11 @@ async function startServer() {
                 return res.status(400).send("Underpayment rejected");
               }
 
+              const paymentIntentId = session.payment_intent as string;
+              if (!paymentIntentId && !session.id.startsWith("cs_mock_") && !session.id.startsWith("mock_")) {
+                throw new Error("Stripe PaymentIntent ID is required in production webhook event");
+              }
+
               const updatedMilestones = milestones.map((m: any) => {
                 if (m.id === milestoneId) {
                   try {
@@ -1938,7 +1943,7 @@ async function startServer() {
                     console.warn(`Milestone transition warning on ${m.id}:`, stateErr);
                   }
                   fundedAmount = Number(m.amount || m.verifiedAmount || (session.amount_total ? session.amount_total / 100 : 0));
-                  return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: session.payment_intent as string };
+                  return { ...m, status: 'funded', fundedAt: new Date().toISOString(), stripePaymentIntentId: paymentIntentId };
                 }
                 return m;
               });
@@ -1946,20 +1951,17 @@ async function startServer() {
               await quoteRef.update({ milestones: updatedMilestones });
 
               // Record to immutable payment ledger
-              try {
-                await PaymentLedgerEngine.recordEscrowFunding(db, {
-                  jobId,
-                  milestoneId,
-                  paymentIntentId: session.payment_intent as string || `pi_${event.id}`,
-                  idempotencyKey: `webhook_${event.id}`,
-                  customerId: session.client_reference_id || "homeowner",
-                  traderId: quoteData?.tradespersonId || "trader",
-                  verifiedAmount: session.amount_total || Math.round(fundedAmount * 100),
-                  currency: session.currency || "gbp"
-                });
-              } catch (ledgErr) {
-                console.error("Ledger escrow funding error:", ledgErr);
-              }
+              // Enforce robust consistency: do not swallow ledger operations errors!
+              await PaymentLedgerEngine.recordEscrowFunding(db, {
+                jobId,
+                milestoneId,
+                paymentIntentId: paymentIntentId || `pi_${event.id}`,
+                idempotencyKey: `webhook_${event.id}`,
+                customerId: session.client_reference_id || "homeowner",
+                traderId: quoteData?.tradespersonId || "trader",
+                verifiedAmount: session.amount_total || Math.round(fundedAmount * 100),
+                currency: session.currency || "gbp"
+              });
 
               await domainEvents.dispatch("MILESTONE_FUNDED", milestoneId, session.client_reference_id || "homeowner", {
                 jobId,
@@ -3348,51 +3350,66 @@ async function startServer() {
 
       if (!db) throw new BadRequestError("Database not connected");
 
-      const driverDoc = await db.collection("users").doc(driverId).get();
-      if (!driverDoc.exists) throw new BadRequestError("Driver not found");
+      const idempotencyKey = (req.headers["x-idempotency-key"] as string) || 
+        (req.headers["idempotency-key"] as string) || 
+        req.body.idempotencyKey || 
+        `payout_${driverId}_${amount || 'all'}_${Date.now()}`;
 
-      const stripeAccountId = driverDoc.data()?.stripeAccountId;
-      if (!stripeAccountId) throw new BadRequestError("No Stripe account connected");
+      const { result, wasReplayed } = await PaymentLedgerEngine.executeIdempotentOperation(
+        db,
+        idempotencyKey,
+        "DRIVER_STRIPE_PAYOUT",
+        async () => {
+          const driverDoc = await db.collection("users").doc(driverId).get();
+          if (!driverDoc.exists) throw new BadRequestError("Driver not found");
 
-      const stripe = getStripe();
+          const stripeAccountId = driverDoc.data()?.stripeAccountId;
+          if (!stripeAccountId) throw new BadRequestError("No Stripe account connected");
 
-      // Get available balance first
-      const balance = await stripe.balance.retrieve({
-        stripeAccount: stripeAccountId,
-      });
+          const stripe = getStripe();
 
-      const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
+          // Get available balance first
+          const balance = await stripe.balance.retrieve({
+            stripeAccount: stripeAccountId,
+          });
 
-      if (available <= 0) {
-        throw new BadRequestError("No available balance for payout");
-      }
+          const available = balance.available.find(b => b.currency === 'gbp')?.amount || 0;
 
-      // Create a payout
-      const payoutAmount = amount !== undefined && amount !== null && amount !== "" 
-        ? Math.round(Number(amount) * 100) 
-        : available; // Default to full available balance
+          if (available <= 0) {
+            throw new BadRequestError("No available balance for payout");
+          }
 
-      if (isNaN(payoutAmount) || payoutAmount <= 0) {
-        throw new BadRequestError("Invalid payout amount. Must be a positive number.");
-      }
+          // Create a payout
+          const payoutAmount = amount !== undefined && amount !== null && amount !== "" 
+            ? Math.round(Number(amount) * 100) 
+            : available; // Default to full available balance
 
-      if (payoutAmount > available) {
-        throw new BadRequestError(`Requested payout (£${(payoutAmount / 100).toFixed(2)}) exceeds available balance (£${(available / 100).toFixed(2)})`);
-      }
-      
-      const payout = await stripe.payouts.create({
-        amount: payoutAmount,
-        currency: 'gbp',
-      }, {
-        stripeAccount: stripeAccountId,
-      });
+          if (isNaN(payoutAmount) || payoutAmount <= 0) {
+            throw new BadRequestError("Invalid payout amount. Must be a positive number.");
+          }
 
-      await domainEvents.dispatch("DRIVER_PAYOUT_INITIATED", payout.id, driverId, {
-        amount: payoutAmount,
-        currency: 'gbp'
-      }, undefined, db);
+          if (payoutAmount > available) {
+            throw new BadRequestError(`Requested payout (£${(payoutAmount / 100).toFixed(2)}) exceeds available balance (£${(available / 100).toFixed(2)})`);
+          }
+          
+          const payout = await stripe.payouts.create({
+            amount: payoutAmount,
+            currency: 'gbp',
+          }, {
+            stripeAccount: stripeAccountId,
+            idempotencyKey: `stripe_payout_${idempotencyKey}`
+          });
 
-      res.json({ success: true, payout });
+          await domainEvents.dispatch("DRIVER_PAYOUT_INITIATED", payout.id, driverId, {
+            amount: payoutAmount,
+            currency: 'gbp'
+          }, idempotencyKey, db);
+
+          return { success: true, payout };
+        }
+      );
+
+      res.json({ ...result, replayed: wasReplayed });
     } catch (error: any) {
       console.error("Stripe Payout Error:", error);
       sendHttpError(res, error, req);
@@ -3963,82 +3980,123 @@ async function startServer() {
       if (!jobId || !quoteId) throw new BadRequestError("jobId and quoteId are required");
 
       const idempotencyKey = (req.headers["x-idempotency-key"] as string) || 
+        (req.headers["idempotency-key"] as string) || 
         req.body.idempotencyKey || 
-        `rel_${jobId}_${quoteId}_${milestoneId || '0'}_${isQrHandshake ? 'qr' : 'manual'}`;
+        "";
+
+      if (!idempotencyKey || typeof idempotencyKey !== "string" || idempotencyKey.trim().length < 8) {
+        throw new BadRequestError("A stable, non-empty Idempotency-Key is required for payment operations (minimum 8 characters)");
+      }
 
       const { result, wasReplayed } = await PaymentLedgerEngine.executeIdempotentOperation(
         firestoreDb,
         idempotencyKey,
         "RELEASE_MILESTONE",
         async () => {
-          const jobRef = firestoreDb.collection("jobs").doc(jobId);
-          const jobDoc = await jobRef.get();
-          if (!jobDoc.exists) throw new BadRequestError("Job not found");
+          // Atomically check and claim the milestone in a transaction
+          const transactionResult = await firestoreDb.runTransaction(async (transaction: admin.firestore.Transaction) => {
+            const jobRef = firestoreDb.collection("jobs").doc(jobId);
+            const jobDoc = await transaction.get(jobRef);
+            if (!jobDoc.exists) throw new BadRequestError("Job not found");
 
-          const jobData = jobDoc.data();
-          const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
-          const isAdmin = await checkIsAdmin(authUser);
-          const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
+            const jobData = jobDoc.data();
+            const isOwner = jobData?.homeownerId === authUid || jobData?.userId === authUid;
+            const isAdmin = await checkIsAdmin(authUser);
+            const isAcceptedTrader = jobData?.acceptedTradespersonId === authUid || jobData?.acceptedTraderId === authUid;
 
-          if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
-            throw new ForbiddenError("Unauthorized: only the job owner or authorized admin can release milestone funds");
-          }
-
-          const quoteRef = jobRef.collection("quotes").doc(quoteId);
-          const quoteDoc = await quoteRef.get();
-          if (!quoteDoc.exists) throw new BadRequestError("Quote not found");
-
-          const quoteData = quoteDoc.data();
-          const currentMilestones = quoteData?.milestones || [];
-          
-          let releasedAmount = 0;
-          let targetMilestoneTitle = "Work Stage";
-
-          const targetMilestone = currentMilestones.find((m: any, idx: number) => m.id === milestoneId || (isQrHandshake && idx === 0));
-          if (!targetMilestone) throw new BadRequestError("Milestone not found");
-          
-          // Wire BusinessLogicDefense to prevent macro-sequence and terminal state exploits
-          BusinessLogicDefense.validateEscrowReleaseEligibility(targetMilestone, jobData as any);
-
-          const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
-            if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
-              // Mathematical state machine validation
-              validateMilestoneTransition(m.status || 'funded', 'released');
-              releasedAmount = Number(m.amount || m.verifiedAmount || 0);
-              targetMilestoneTitle = m.title || "Work Stage";
-              return { 
-                ...m, 
-                status: 'funds_released', 
-                releasedAt: new Date().toISOString(), 
-                releaseDate: new Date().toISOString() 
-              };
+            if (!isOwner && !isAdmin && !(isQrHandshake && isAcceptedTrader)) {
+              throw new ForbiddenError("Unauthorized: only the job owner or authorized admin can release milestone funds");
             }
-            return m;
+
+            const quoteRef = jobRef.collection("quotes").doc(quoteId);
+            const quoteDoc = await transaction.get(quoteRef);
+            if (!quoteDoc.exists) throw new BadRequestError("Quote not found");
+
+            const quoteData = quoteDoc.data();
+            const currentMilestones = quoteData?.milestones || [];
+            
+            const targetMilestone = currentMilestones.find((m: any, idx: number) => m.id === milestoneId || (isQrHandshake && idx === 0));
+            if (!targetMilestone) throw new BadRequestError("Milestone not found");
+
+            // Transactional claim check
+            if ((targetMilestone.status === "released" || targetMilestone.status === "funds_released" || targetMilestone.releasedAt) && targetMilestone.releaseOperationId !== idempotencyKey) {
+              throw new ConflictError("Milestone has already been released");
+            }
+
+            if (targetMilestone.releaseOperationId && targetMilestone.releaseOperationId !== idempotencyKey) {
+              throw new ConflictError("Milestone release is already being processed by another request");
+            }
+
+            // Wire BusinessLogicDefense to prevent macro-sequence and terminal state exploits
+            BusinessLogicDefense.validateEscrowReleaseEligibility(targetMilestone, jobData as any);
+
+            let releasedAmount = 0;
+            let targetMilestoneTitle = "Work Stage";
+
+            const updatedMilestones = currentMilestones.map((m: any, idx: number) => {
+              if (m.id === milestoneId || (isQrHandshake && idx === 0)) {
+                // Mathematical state machine validation
+                validateMilestoneTransition(m.status || 'funded', 'released');
+                releasedAmount = Number(m.amount || m.verifiedAmount || 0);
+                targetMilestoneTitle = m.title || "Work Stage";
+                return { 
+                  ...m, 
+                  status: 'funds_released', 
+                  releasedAt: new Date().toISOString(), 
+                  releaseDate: new Date().toISOString(),
+                  releaseOperationId: idempotencyKey // Atomically claim
+                };
+              }
+              return m;
+            });
+
+            const quoteUpdatePayload: any = {
+              milestones: updatedMilestones,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (isQrHandshake) {
+              const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
+              quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
+              quoteUpdatePayload.paymentStatus = "handshake_complete";
+              
+              transaction.update(jobRef, {
+                paymentStatus: "handshake_complete",
+                isPaid: true,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+            }
+
+            transaction.update(quoteRef, quoteUpdatePayload);
+
+            const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
+            const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
+            const ledgerEntryId = `ledg_rel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
+            return {
+              jobData,
+              quoteData,
+              releasedAmount,
+              targetMilestoneTitle,
+              platformFeePence,
+              netPayoutPence,
+              ledgerEntryId,
+              targetMilestone,
+            };
           });
 
-          const quoteUpdatePayload: any = {
-            milestones: updatedMilestones,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-          };
+          const {
+            jobData,
+            quoteData,
+            releasedAmount,
+            targetMilestoneTitle,
+            platformFeePence,
+            netPayoutPence,
+            ledgerEntryId,
+            targetMilestone,
+          } = transactionResult;
 
-          if (isQrHandshake) {
-            const guaranteeExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour platform guarantee
-            quoteUpdatePayload.guaranteeExpiresAt = guaranteeExpiry.toISOString();
-            quoteUpdatePayload.paymentStatus = "handshake_complete";
-            
-            await jobRef.update({
-              paymentStatus: "handshake_complete",
-              isPaid: true,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-          }
-
-          await quoteRef.update(quoteUpdatePayload);
-
-          // Record ledger entry with Stripe Connect Direct Routing
-          const ledgerEntryId = `ledg_rel_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-          const platformFeePence = Math.round(releasedAmount * 100 * 0.12);
-          const netPayoutPence = Math.round(releasedAmount * 100) - platformFeePence;
+          const quoteRef = firestoreDb.collection("jobs").doc(jobId).collection("quotes").doc(quoteId);
 
           let traderStripeAccountId: string | undefined;
           let transferStatus = "completed";
@@ -4056,6 +4114,9 @@ async function startServer() {
               if (stripe && traderStripeAccountId && !traderStripeAccountId.startsWith("acct_mock_")) {
                 // If the milestone stored a separate payment intent needing manual transfer:
                 if (targetMilestone.stripePaymentIntentId && !targetMilestone.isDestinationCharge) {
+                  // Deterministic Stripe-side Idempotency Key
+                  const stripeIdempotencyKey = `release:${jobId}:${quoteId}:${milestoneId || '0'}:${idempotencyKey}`;
+
                   const transfer = await stripe.transfers.create({
                     amount: netPayoutPence,
                     currency: "gbp",
@@ -4067,13 +4128,17 @@ async function startServer() {
                       milestoneId: milestoneId || "m0",
                       traderId: quoteData.tradespersonId
                     }
+                  }, {
+                    idempotencyKey: stripeIdempotencyKey,
                   });
                   stripeTransferId = transfer.id;
                 }
               }
             } catch (stripeErr: any) {
-              console.warn("Stripe transfer execution warning during milestone release:", stripeErr.message);
-              transferStatus = "pending_reconciliation";
+              console.error("Stripe transfer execution failed during milestone release:", stripeErr.message);
+              transferStatus = "failed";
+              // Explicitly throw transfer failure to prevent inconsistent state commit
+              throw stripeErr;
             }
           }
 
