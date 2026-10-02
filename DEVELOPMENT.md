@@ -1,5 +1,25 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
+## 🛡️ AnyTrader — Task 5: Canonical Job Lifecycle (October 2, 2026)
+- **1. Server-Authoritative Lifecycle Architecture (`executeJobLifecycleCommand`)**:
+  - Implemented single authoritative `executeJobLifecycleCommand` inside `src/server/jobLifecycleCommands.ts` capturing start, complete, cancel, and dispute workflows under a uniform, secure transactional design.
+  - **OWASP API Mass-Assignment Defense**: Payload inputs are strictly validated against a comprehensive blacklist (`JOB_LIFECYCLE_PROTECTED_KEYS`) preventing client-supplied status, financial, or verification keys from reaching persistent storage.
+  - **Formal State Machine & Transition Guards**: Transition validation (`validateJobTransition`) enforces legal flows (`open` -> `cancelled`, `accepted` -> `in_progress`, `in_progress` -> `completed`, `in_progress` -> `disputed`). Invalid sequences (e.g. `cancelled` -> `in_progress`, `completed` -> `in_progress`) are strictly blocked.
+  - **Atomic Transactions & Verification PINs**:
+    - Executes atomic Firestore transactions validating participant roles (BOLA/IDOR protection).
+    - Enforces secure 4-digit verification PIN check on job start (`StartJob`), guaranteeing physical arrival before progressing to `in_progress`.
+    - Atomically updates public search projections (`public_job_cards/{jobId}`).
+    - Persists transactional execution metadata under `/idempotency_keys` to guard against concurrent replays.
+  - **Downstream Domain Event Dispatch**: Retries fetch cached idempotency results cleanly, while initial executions dispatch lifecycle events (`JOB_STARTED`, `JOB_COMPLETED`, `JOB_CANCELLED`, `JOB_DISPUTED`) safely.
+- **2. Production Client Adapters & Core Wiring**:
+  - Wired production components (`JobDetails.tsx` and `MyJobs.tsx`) to client adapters `startJobViaCommand`, `completeJobViaCommand`, `cancelJobViaCommand`, and `disputeJobViaCommand` in `src/services/jobCommandService.ts` targeting their respective backend `/api/jobs/:jobId/*` endpoints.
+  - Eradicated all direct Firestore `updateDoc` status update vulnerabilities, successfully passing strict automated lineage pattern scanners.
+- **3. Testing & Verification**:
+  - Unit & Structural Suitability Suite: `tests/unit/task5JobLifecycle.test.ts` (19/19 tests passing with 100% pass rate).
+  - Complete Platform-Wide Unit Test Suite: **832/832 tests passing** across **51 test files** (100% clean).
+  - TypeScript & Lint (`npm run lint` / `tsc --noEmit`): 0 errors.
+  - Clean Applet Build (`compile_applet` / `npm run build`): Successfully compiled.
+
 ## 🛡️ AnyTrader — Task 4: Single Authoritative Atomic AcceptQuote (October 2, 2026)
 - **1. Single Canonical Authority & Architecture (`executeAcceptQuoteCommand`)**:
   - Implemented the single authoritative `AcceptQuote` command in `src/server/quoteCommands.ts` (`executeAcceptQuoteCommand`) and wired cleanly to `POST /api/jobs/:jobId/accept-quote` in `server.ts`.
