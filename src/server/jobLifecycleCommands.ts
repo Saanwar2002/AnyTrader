@@ -220,9 +220,18 @@ export async function executeJobLifecycleCommand(
       );
     }
 
-    // Concurrent StartJob different-key defense
+    // Same-state transition different-key defense
     if (commandType === "StartJob" && currentStatus === "in_progress") {
       throw new ConflictError("Job has already been started by another request");
+    }
+    if (commandType === "CompleteJob" && currentStatus === "completed") {
+      throw new ConflictError("Job has already been completed");
+    }
+    if (commandType === "CancelJob" && currentStatus === "cancelled") {
+      throw new ConflictError("Job has already been cancelled");
+    }
+    if (commandType === "RaiseJobDispute" && currentStatus === "disputed") {
+      throw new ConflictError("Job has already been disputed");
     }
 
     const publicCardRef = db.collection("public_job_cards").doc(jobId);
