@@ -5,6 +5,7 @@ import { describe, it, beforeAll, afterAll, beforeEach, expect } from "vitest";
 import * as admin from "firebase-admin";
 import { executeCreateJobCommand } from "../../src/server/createJobCommand.ts";
 import { executeQuoteCommand } from "../../src/server/quoteCommands.ts";
+import { executeJobLifecycleCommand } from "../../src/server/jobLifecycleCommands.ts";
 import { ForbiddenError, ConflictError } from "../../src/server/httpErrors.ts";
 import { CanonicalIdentity } from "../../src/server/identity.ts";
 import {
@@ -1948,6 +1949,211 @@ describe("Comprehensive Firebase Security Rules Regression Suite (Firestore & St
       expect(res2.quoteId).toBe(quoteId);
       expect(res2.verificationPin).toBe(res1.verificationPin);
       expect(res2.status).toBe("accepted");
+    }, 30000);
+
+    it("77. Task 5 — Real Firestore security rules deny direct client SDK status mutations on /jobs/{jobId}", async () => {
+      const homeownerCtx = testEnv.authenticatedContext("homeowner_task5_rule_user");
+      const db = homeownerCtx.firestore();
+
+      // Seed Job via admin rules-disabled context
+      await testEnv.withSecurityRulesDisabled(async (adminCtx) => {
+        const adminDb = adminCtx.firestore();
+        await setDoc(doc(adminDb, "jobs", "job_task5_rule_100"), {
+          id: "job_task5_rule_100",
+          homeownerId: "homeowner_task5_rule_user",
+          userId: "homeowner_task5_rule_user",
+          title: "Rule Test Job",
+          status: "open",
+        });
+      });
+
+      // Direct client SDK status mutation MUST be denied
+      await assertFails(
+        updateDoc(doc(db, "jobs", "job_task5_rule_100"), {
+          status: "completed",
+        })
+      );
+    });
+
+    it("78. Task 5 — Authoritative concurrent StartJob real Firestore transaction race", async () => {
+      const emulatorAppName = "task5-real-firestore-concurrency-start";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp({ projectId: PROJECT_ID }, emulatorAppName);
+      const db = adminApp.firestore();
+
+      const jobId = `job_task5_start_race_${Date.now()}`;
+      const homeownerId = "homeowner_task5_start_race";
+      const traderId = "trader_task5_start_race";
+
+      const traderIdentity: CanonicalIdentity = {
+        uid: traderId,
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        userId: homeownerId,
+        acceptedTradespersonId: traderId,
+        tradespersonId: traderId,
+        title: "Electrical Inspection",
+        status: "accepted",
+        createdAt: new Date().toISOString(),
+      });
+
+      const keyA = `start_race_key_a_${Date.now()}`;
+      const keyB = `start_race_key_b_${Date.now()}`;
+
+      // Two simultaneous StartJob requests
+      const results = await Promise.allSettled([
+        executeJobLifecycleCommand({
+          db,
+          identity: traderIdentity,
+          command: { type: "StartJob", payload: { jobId } },
+          idempotencyKey: keyA,
+        }),
+        executeJobLifecycleCommand({
+          db,
+          identity: traderIdentity,
+          command: { type: "StartJob", payload: { jobId } },
+          idempotencyKey: keyB,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+
+      const jobSnap = await db.collection("jobs").doc(jobId).get();
+      expect(jobSnap.data()?.status).toBe("in_progress");
+    }, 30000);
+
+    it("79. Task 5 — Authoritative StartJob vs CancelJob real Firestore transaction race", async () => {
+      const emulatorAppName = "task5-real-firestore-start-vs-cancel";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp({ projectId: PROJECT_ID }, emulatorAppName);
+      const db = adminApp.firestore();
+
+      const jobId = `job_task5_start_vs_cancel_${Date.now()}`;
+      const homeownerId = "homeowner_task5_svc";
+      const traderId = "trader_task5_svc";
+
+      const homeownerIdentity: CanonicalIdentity = {
+        uid: homeownerId,
+        accountType: "consumer",
+        capabilities: ["homeowner"],
+        verification: { status: "verified" },
+        subscription: { tierId: "free", status: "active" },
+      };
+
+      const traderIdentity: CanonicalIdentity = {
+        uid: traderId,
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId,
+        userId: homeownerId,
+        acceptedTradespersonId: traderId,
+        tradespersonId: traderId,
+        title: "Plumbing Repair",
+        status: "accepted",
+        createdAt: new Date().toISOString(),
+      });
+
+      const startKey = `race_start_key_${Date.now()}`;
+      const cancelKey = `race_cancel_key_${Date.now()}`;
+
+      // Simultaneous StartJob vs CancelJob
+      const results = await Promise.allSettled([
+        executeJobLifecycleCommand({
+          db,
+          identity: traderIdentity,
+          command: { type: "StartJob", payload: { jobId } },
+          idempotencyKey: startKey,
+        }),
+        executeJobLifecycleCommand({
+          db,
+          identity: homeownerIdentity,
+          command: { type: "CancelJob", payload: { jobId, reason: "Cancelled" } },
+          idempotencyKey: cancelKey,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(1);
+
+      const jobSnap = await db.collection("jobs").doc(jobId).get();
+      const finalStatus = jobSnap.data()?.status;
+      expect(["in_progress", "cancelled"]).toContain(finalStatus);
+    }, 30000);
+
+    it("80. Task 5 — Authoritative StartJob persistent idempotency replay", async () => {
+      const emulatorAppName = "task5-real-firestore-start-idemp";
+      const adminApp =
+        admin.apps.find((app) => app?.name === emulatorAppName) ??
+        admin.initializeApp({ projectId: PROJECT_ID }, emulatorAppName);
+      const db = adminApp.firestore();
+
+      const jobId = `job_task5_start_idemp_${Date.now()}`;
+      const traderId = "trader_task5_idemp_dave";
+
+      const traderIdentity: CanonicalIdentity = {
+        uid: traderId,
+        accountType: "service_provider",
+        capabilities: ["tradesperson"],
+        verification: { status: "verified" },
+        subscription: { tierId: "price_pro", status: "active" },
+      };
+
+      await db.collection("jobs").doc(jobId).set({
+        id: jobId,
+        homeownerId: "homeowner_alice",
+        acceptedTradespersonId: traderId,
+        tradespersonId: traderId,
+        title: "Boiler Installation",
+        status: "accepted",
+        createdAt: new Date().toISOString(),
+      });
+
+      const fixedKey = `fixed_start_idemp_key_${Date.now()}`;
+
+      // First execution
+      const res1 = await executeJobLifecycleCommand({
+        db,
+        identity: traderIdentity,
+        command: { type: "StartJob", payload: { jobId } },
+        idempotencyKey: fixedKey,
+      });
+
+      expect(res1.wasReplayed).toBe(false);
+      expect(res1.status).toBe("in_progress");
+
+      // Replay
+      const res2 = await executeJobLifecycleCommand({
+        db,
+        identity: traderIdentity,
+        command: { type: "StartJob", payload: { jobId } },
+        idempotencyKey: fixedKey,
+      });
+
+      expect(res2.wasReplayed).toBe(true);
+      expect(res2.status).toBe("in_progress");
     }, 30000);
   });
 });

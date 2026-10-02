@@ -735,6 +735,7 @@ service cloud.firestore {
         (
           isJobOwner(resource.data) &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'status', 'startedAt', 'completedAt', 'cancelledAt', 'disputedAt',
             'payoutTransferred', 'payoutStatus', 'paymentStatus', 'funded', 'isPaid',
             'escrowStatus', 'escrowBalance', 'amountPaid', 'amount', 'platformFee',
             'assignedTraderId', 'acceptedTradespersonId', 'acceptedTraderId', 'tradespersonId', 'traderId',
@@ -744,11 +745,19 @@ service cloud.firestore {
         ) ||
         (
           isJobTradesperson(resource.data) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'status', 'startedAt', 'completedAt', 'cancelledAt', 'disputedAt',
+            'payoutTransferred', 'payoutStatus', 'paymentStatus', 'funded', 'isPaid',
+            'escrowStatus', 'escrowBalance', 'amountPaid', 'amount', 'platformFee',
+            'assignedTraderId', 'acceptedTradespersonId', 'acceptedTraderId',
+            'ownerId', 'homeownerId', 'userId', 'customerId', 'posterId',
+            'stripeCustomerId', 'stripeAccountId'
+          ]) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status', 'stage', 'timelineNotes', 'updatedAt', 'workStatus',
+            'stage', 'timelineNotes', 'updatedAt', 'workStatus',
             'estimatedCompletion', 'notes', 'traderNotes', 'completionNotes',
-            'photosBefore', 'photosAfter', 'completedAt', 'checkInTime',
-            'isEmergencyResolved'
+            'photosBefore', 'photosAfter', 'checkInTime',
+            'isEmergencyResolved', 'trackingStatus', 'trackingLocation'
           ])
         )
       );

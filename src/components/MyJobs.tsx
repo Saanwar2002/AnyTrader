@@ -9,7 +9,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { cn, getOutwardPostcode, formatJobLocation } from "@/src/lib/utils";
 import { EmergencyTimer } from "./EmergencyTimer";
 import MediaGalleryModal from "./MediaGalleryModal";
-import { createJobViaCommand } from "../services/jobCommandService";
+import { createJobViaCommand, cancelJobViaCommand } from "../services/jobCommandService";
 
 export default function MyJobs() {
   const { user, profile, isAuthReady, loading: authLoading } = useAuth();
@@ -178,10 +178,12 @@ export default function MyJobs() {
   };
 
   const handleCancel = async (jobId: string) => {
+    if (!user) return;
     setIsProcessing(jobId);
     try {
-      await updateDoc(doc(db, "jobs", jobId), {
-        status: "cancelled"
+      await cancelJobViaCommand({
+        user,
+        jobId,
       });
       setActionId(null);
     } catch (error) {

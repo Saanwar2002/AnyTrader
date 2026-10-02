@@ -281,7 +281,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         'Roof repair',
         {},
         true,
-        { documentId: 'job_alpha' }
+        { documentId: 'job_alpha', propertyId: 'prop_manor_101' }
       );
 
       const evBeta = await evidenceRegistry.register(
@@ -292,7 +292,7 @@ describe('Task 18: Authoritative Property ↔ Job Lineage', () => {
         'Gutter replacement',
         {},
         true,
-        { documentId: 'job_beta' }
+        { documentId: 'job_beta', propertyId: 'prop_manor_101' }
       );
 
       const job1: JobIntelligence = {

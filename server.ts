@@ -27,6 +27,7 @@ import { resolveAuthoritativeLineItem, SERVER_PRICING_CATALOG, calculateGothamSa
 import { resolveTrustedCanonicalIdentity } from "./src/server/identity.ts";
 import { executeCreateJobCommand, resolveCreateJobQuota } from "./src/server/createJobCommand.ts";
 import { executeQuoteCommand, executeAcceptQuoteCommand } from "./src/server/quoteCommands.ts";
+import { executeJobLifecycleCommand } from "./src/server/jobLifecycleCommands.ts";
 import { 
   startPublicJobCardsSync, 
   backfillPublicJobCards, 
@@ -4322,6 +4323,59 @@ async function startServer() {
       sendHttpError(res, error, req);
     }
   });
+
+  // Server-Authoritative Canonical Job Lifecycle Routes (Task 5)
+  const handleJobLifecycleRoute = (commandType: "StartJob" | "CompleteJob" | "CancelJob" | "RaiseJobDispute") => {
+    return async (req: express.Request, res: express.Response) => {
+      try {
+        const { jobId } = req.params;
+        if (!db) throw new BadRequestError("Database service is not initialized");
+
+        const identity = await resolveTrustedCanonicalIdentity(req as any, async (uid) => {
+          const profileSnap = await db!.collection("users").doc(uid).get();
+          return profileSnap.exists ? (profileSnap.data() || null) : null;
+        });
+
+        const rawPayload = { ...(req.body || {}) };
+        const idempotencyKey =
+          (req.headers["x-idempotency-key"] as string) ||
+          (req.headers["idempotency-key"] as string) ||
+          rawPayload.idempotencyKey ||
+          "";
+        delete rawPayload.idempotencyKey;
+
+        const result = await executeJobLifecycleCommand({
+          db,
+          identity,
+          command: {
+            type: commandType,
+            payload: {
+              ...rawPayload,
+              jobId,
+            },
+          },
+          idempotencyKey: idempotencyKey || `job_${commandType.toLowerCase()}_${jobId}_${identity.uid}`,
+        });
+
+        res.status(200).json({
+          success: true,
+          commandType: result.commandType,
+          jobId: result.jobId,
+          status: result.status,
+          job: result.job,
+          wasReplayed: result.wasReplayed,
+        });
+      } catch (error: any) {
+        console.error(`Job Lifecycle Command '${commandType}' Error:`, error);
+        sendHttpError(res, error, req);
+      }
+    };
+  };
+
+  app.post("/api/jobs/:jobId/start", requireAuth, handleJobLifecycleRoute("StartJob"));
+  app.post("/api/jobs/:jobId/complete", requireAuth, handleJobLifecycleRoute("CompleteJob"));
+  app.post("/api/jobs/:jobId/cancel", requireAuth, handleJobLifecycleRoute("CancelJob"));
+  app.post("/api/jobs/:jobId/dispute", requireAuth, handleJobLifecycleRoute("RaiseJobDispute"));
 
   // Server-Authoritative Canonical CreateJob Command Route (Task 2)
   app.post("/api/jobs/create", requireAuth, async (req, res) => {

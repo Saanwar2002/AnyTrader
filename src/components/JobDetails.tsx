@@ -49,7 +49,13 @@ import { toast } from "sonner";
 import { GoogleDocsContractModal } from "@/src/components/shared/GoogleDocsContractModal";
 import { BomOneClickOrderingModal } from "./BomOneClickOrderingModal";
 import { extractBillOfMaterials } from "@/src/services/bomMerchantService";
-import { createJobViaCommand } from "@/src/services/jobCommandService";
+import { 
+  createJobViaCommand, 
+  startJobViaCommand, 
+  completeJobViaCommand, 
+  cancelJobViaCommand, 
+  disputeJobViaCommand 
+} from "@/src/services/jobCommandService";
 
 // Helper to generate Google Calendar link
 const generateGoogleCalendarLink = (job: any, quote: any) => {
@@ -1031,12 +1037,13 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const confirmStartJob = async () => {
-    if (!id) return;
+    if (!id || !user) return;
     setLoading(true);
     try {
-      await updateDoc(doc(db, "jobs", id), {
-        status: "in_progress",
-        startedAt: serverTimestamp()
+      await startJobViaCommand({
+        user,
+        jobId: id,
+        verificationPin: enteredPin,
       });
       setJob((prev: any) => ({ ...prev, status: "in_progress", startedAt: { seconds: Math.floor(Date.now() / 1000) } }));
       setShowPinModal(false);
@@ -1123,16 +1130,13 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleCompleteJob = async () => {
-    if (!id) return;
+    if (!id || !user) return;
     setLoading(true);
     try {
       const newPaymentStatus = job.paymentStatus === "handshake_complete" || job.isPaid ? job.paymentStatus : "pending";
-      await updateDoc(doc(db, "jobs", id), {
-        status: "completed",
-        completedAt: serverTimestamp(),
-        hasReview: false,
-        hasTradespersonReview: false,
-        paymentStatus: newPaymentStatus
+      await completeJobViaCommand({
+        user,
+        jobId: id,
       });
       setJob((prev: any) => ({ 
         ...prev, 
@@ -1437,23 +1441,11 @@ const libraries: any[] = ['places', 'geometry'];
 
       const isHandshakeVerified = job.paymentStatus === "handshake_complete";
 
-      // 1. Initial save of the dispute in pending state
-      await updateDoc(doc(db, "jobs", id), {
-        dispute: {
-          raisedBy: user.uid,
-          reason: disputeReason,
-          technicalFaultReport,
-          isHandshakeVerified,
-          mediationStakePaid: false, // will flip when paid
-          isPropertyDamage,
-          pliClaim: isPropertyDamage ? {
-            status: "requested",
-            initiatedAt: serverTimestamp()
-          } : { status: "none" },
-          photos: photoUrls,
-          status: "pending_payment",
-          createdAt: serverTimestamp()
-        }
+      // 1. Initial save of the dispute via authoritative command
+      await disputeJobViaCommand({
+        user: user as any,
+        jobId: id,
+        reason: disputeReason,
       });
 
       // 2. Redirect to Stripe
@@ -1816,11 +1808,12 @@ const libraries: any[] = ['places', 'geometry'];
   };
 
   const handleCancelJob = async () => {
-    if (!id) return;
+    if (!id || !user) return;
     setIsProcessing(true);
     try {
-      await updateDoc(doc(db, "jobs", id), {
-        status: "cancelled"
+      await cancelJobViaCommand({
+        user,
+        jobId: id,
       });
       setJob((prev: any) => ({ ...prev, status: "cancelled" }));
       setShowActions(false);
@@ -3354,7 +3347,9 @@ const libraries: any[] = ['places', 'geometry'];
                   setJob((prev: any) => ({ ...prev, urgency: "asap", expiryAcknowledged: true }));
                 }} className="bg-white text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold">Convert to Standard</button>
                 <button onClick={async () => {
-                  await updateDoc(doc(db, "jobs", id!), { status: "cancelled", expiryAcknowledged: true });
+                  if (user && id) {
+                    await cancelJobViaCommand({ user, jobId: id, reason: "Cancelled via expiry banner" });
+                  }
                   navigate("/my-jobs");
                 }} className="bg-white text-slate-600 border border-black px-4 py-2 rounded-xl text-sm font-bold">Delete Post</button>
               </div>
