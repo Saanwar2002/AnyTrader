@@ -2,7 +2,8 @@
  * Task 5: Canonical Job Lifecycle Test Suite
  *
  * Comprehensive unit, adversarial BOLA/IDOR, mass assignment, formal state machine,
- * verification PIN, persistent idempotency, domain event, and production caller wiring tests across:
+ * verification PIN, persistent idempotency, genuine concurrent race conditions (Promise.allSettled),
+ * domain event deduplication, public projection consistency, and production caller wiring tests across:
  * 1. StartJob
  * 2. CompleteJob
  * 3. CancelJob
@@ -28,8 +29,19 @@ import { domainEvents } from "../../src/server/domainEvents.ts";
 import fs from "fs";
 import path from "path";
 
+/**
+ * Creates a high-fidelity Firestore mock supporting authentic Transaction Isolation,
+ * Optimistic Concurrency Control (OCC), document read-version tracking, staged writes,
+ * and automatic transaction retry on concurrent write conflict.
+ */
 function createMockFirestore(initialData: Record<string, any> = {}) {
-  const store: Record<string, any> = JSON.parse(JSON.stringify(initialData));
+  const store: Record<string, any> = {};
+  for (const [key, val] of Object.entries(initialData)) {
+    store[key] = {
+      ...JSON.parse(JSON.stringify(val)),
+      _version: 1,
+    };
+  }
 
   const db: any = {
     _store: store,
@@ -43,6 +55,7 @@ function createMockFirestore(initialData: Record<string, any> = {}) {
             id: actualDocId,
             path: fullPath,
             async get() {
+              await new Promise((r) => setTimeout(r, 0));
               const data = store[fullPath];
               return {
                 id: actualDocId,
@@ -51,17 +64,33 @@ function createMockFirestore(initialData: Record<string, any> = {}) {
               };
             },
             async set(data: any, options?: { merge?: boolean }) {
-              if (options?.merge && store[fullPath]) {
-                store[fullPath] = { ...store[fullPath], ...JSON.parse(JSON.stringify(data)) };
+              await new Promise((r) => setTimeout(r, 0));
+              const current = store[fullPath];
+              if (options?.merge && current) {
+                store[fullPath] = {
+                  ...current,
+                  ...JSON.parse(JSON.stringify(data)),
+                  _version: (current._version || 1) + 1,
+                };
               } else {
-                store[fullPath] = JSON.parse(JSON.stringify(data));
+                store[fullPath] = {
+                  ...JSON.parse(JSON.stringify(data)),
+                  _version: (current?._version || 0) + 1,
+                };
               }
             },
             async update(data: any) {
-              if (!store[fullPath]) throw new Error(`Document not found: ${fullPath}`);
-              store[fullPath] = { ...store[fullPath], ...JSON.parse(JSON.stringify(data)) };
+              await new Promise((r) => setTimeout(r, 0));
+              const current = store[fullPath];
+              if (!current) throw new Error(`Document not found: ${fullPath}`);
+              store[fullPath] = {
+                ...current,
+                ...JSON.parse(JSON.stringify(data)),
+                _version: (current._version || 1) + 1,
+              };
             },
             async delete() {
+              await new Promise((r) => setTimeout(r, 0));
               delete store[fullPath];
             },
           };
@@ -69,37 +98,117 @@ function createMockFirestore(initialData: Record<string, any> = {}) {
       };
     },
     async runTransaction(updateFunction: (transaction: any) => Promise<any>) {
-      const transaction = {
-        async get(refOrQuery: any) {
-          if (refOrQuery.get) {
-            return refOrQuery.get();
+      const maxAttempts = 15;
+      let attempt = 0;
+
+      while (attempt < maxAttempts) {
+        attempt++;
+        const readVersions = new Map<string, number>();
+        const pendingWrites: Array<() => void> = [];
+
+        const transaction = {
+          async get(refOrQuery: any) {
+            // Introduce micro-delay to simulate async I/O and allow genuine event-loop interleaving for racing promises
+            await new Promise((r) => setTimeout(r, 1));
+            const path = refOrQuery.path;
+            const current = store[path];
+            const currentVersion = current ? current._version : 0;
+            readVersions.set(path, currentVersion);
+
+            return {
+              id: refOrQuery.id,
+              exists: current !== undefined && current !== null,
+              data: () => (current ? JSON.parse(JSON.stringify(current)) : undefined),
+            };
+          },
+          set(docRef: any, data: any, options?: { merge?: boolean }) {
+            const fullPath = docRef.path;
+            pendingWrites.push(() => {
+              const current = store[fullPath];
+              if (options?.merge && current) {
+                store[fullPath] = {
+                  ...current,
+                  ...JSON.parse(JSON.stringify(data)),
+                  _version: (current._version || 1) + 1,
+                };
+              } else {
+                store[fullPath] = {
+                  ...JSON.parse(JSON.stringify(data)),
+                  _version: (current?._version || 0) + 1,
+                };
+              }
+            });
+          },
+          update(docRef: any, data: any) {
+            const fullPath = docRef.path;
+            pendingWrites.push(() => {
+              const current = store[fullPath];
+              if (!current) throw new Error(`Document not found: ${fullPath}`);
+              store[fullPath] = {
+                ...current,
+                ...JSON.parse(JSON.stringify(data)),
+                _version: (current._version || 1) + 1,
+              };
+            });
+          },
+          delete(docRef: any) {
+            const fullPath = docRef.path;
+            pendingWrites.push(() => {
+              delete store[fullPath];
+            });
+          },
+        };
+
+        try {
+          const result = await updateFunction(transaction);
+
+          // Commit Phase: Verify all read documents have not changed version (Optimistic Concurrency Control)
+          let hasConflict = false;
+          for (const [readPath, readVer] of readVersions.entries()) {
+            const current = store[readPath];
+            const currentVer = current ? current._version : 0;
+            if (currentVer !== readVer) {
+              hasConflict = true;
+              break;
+            }
           }
-          const path = refOrQuery.path;
-          const data = store[path];
-          return {
-            id: refOrQuery.id,
-            exists: data !== undefined && data !== null,
-            data: () => (data ? JSON.parse(JSON.stringify(data)) : undefined),
-          };
-        },
-        set(docRef: any, data: any, options?: { merge?: boolean }) {
-          const fullPath = docRef.path;
-          if (options?.merge && store[fullPath]) {
-            store[fullPath] = { ...store[fullPath], ...JSON.parse(JSON.stringify(data)) };
-          } else {
-            store[fullPath] = JSON.parse(JSON.stringify(data));
+
+          if (hasConflict) {
+            // Document modified by a concurrent transaction -> Retry
+            await new Promise((r) => setTimeout(r, Math.random() * 5 + 1));
+            continue;
           }
-        },
-        update(docRef: any, data: any) {
-          const fullPath = docRef.path;
-          if (!store[fullPath]) throw new Error(`Document not found: ${fullPath}`);
-          store[fullPath] = { ...store[fullPath], ...JSON.parse(JSON.stringify(data)) };
-        },
-        delete(docRef: any) {
-          delete store[docRef.path];
-        },
-      };
-      return updateFunction(transaction);
+
+          // No conflict -> Apply all staged writes atomically
+          for (const writeOp of pendingWrites) {
+            writeOp();
+          }
+
+          return result;
+        } catch (err: any) {
+          // If the error occurred inside updateFunction, check if a concurrent write modified the documents in the interim.
+          // If so, retry on the freshly committed state (standard Firestore OCC transaction semantics).
+          let hasConflict = false;
+          for (const [readPath, readVer] of readVersions.entries()) {
+            const current = store[readPath];
+            const currentVer = current ? current._version : 0;
+            if (currentVer !== readVer) {
+              hasConflict = true;
+              break;
+            }
+          }
+
+          if (hasConflict && attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, Math.random() * 5 + 1));
+            continue;
+          }
+
+          // Real business/authorization error on stable snapshot
+          throw err;
+        }
+      }
+
+      throw new Error("Transaction contention: maximum retry limit exceeded.");
     },
   };
 
@@ -165,6 +274,12 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
         verificationPin: "1234",
         createdAt: "2026-10-01T10:00:00.000Z",
       },
+      "public_job_cards/job_accepted_1": {
+        id: "job_accepted_1",
+        title: "Boiler Service",
+        status: "accepted",
+        createdAt: "2026-10-01T10:00:00.000Z",
+      },
       "jobs/job_in_progress_2": {
         id: "job_in_progress_2",
         homeownerId: "homeowner_alice",
@@ -174,6 +289,12 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
         title: "Kitchen Tiling",
         status: "in_progress",
         startedAt: "2026-10-01T11:00:00.000Z",
+        createdAt: "2026-10-01T10:00:00.000Z",
+      },
+      "public_job_cards/job_in_progress_2": {
+        id: "job_in_progress_2",
+        title: "Kitchen Tiling",
+        status: "in_progress",
         createdAt: "2026-10-01T10:00:00.000Z",
       },
       "jobs/job_completed_3": {
@@ -201,6 +322,12 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
         id: "job_open_5",
         homeownerId: "homeowner_alice",
         userId: "homeowner_alice",
+        title: "Garden Clearance",
+        status: "open",
+        createdAt: "2026-10-01T10:00:00.000Z",
+      },
+      "public_job_cards/job_open_5": {
+        id: "job_open_5",
         title: "Garden Clearance",
         status: "open",
         createdAt: "2026-10-01T10:00:00.000Z",
@@ -475,112 +602,80 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
     });
   });
 
-  describe("7. Concurrency & Idempotency Detailed Scenarios", () => {
-    it("20. concurrent StartJob requests with different keys produce exactly one success and one ConflictError", async () => {
+  describe("7. Genuine Concurrency & State Machine Penetration Tests", () => {
+    it("20. Test A — Genuine simultaneous StartJob requests produce exactly one success and one ConflictError", async () => {
       const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
-      const keyA = "concurrent_start_key_a";
-      const keyB = "concurrent_start_key_b";
+      const keyA = `concurrent_start_key_a_${Date.now()}`;
+      const keyB = `concurrent_start_key_b_${Date.now()}`;
 
-      const res1 = await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        idempotencyKey: keyA,
-      });
-
-      expect(res1.success).toBe(true);
-      expect(res1.status).toBe("in_progress");
-
-      await expect(
+      // Start both simultaneously without awaiting either one first
+      const results = await Promise.allSettled([
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: keyA,
+        }),
         executeStartJobCommand({
           db: mockDb,
           identity: traderDaveIdentity,
           jobId: "job_accepted_1",
           verificationPin: "1234",
           idempotencyKey: keyB,
-        })
-      ).rejects.toThrow(ConflictError);
+        }),
+      ]);
 
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Invariant: Exactly one operation succeeds and exactly one fails with ConflictError
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+      expect(rejected[0].reason.message).toContain("already been started");
+
+      // Invariant: Final job state is in_progress
+      expect(mockDb._store["jobs/job_accepted_1"].status).toBe("in_progress");
+      expect(mockDb._store["public_job_cards/job_accepted_1"].status).toBe("in_progress");
+
+      // Invariant: Only one lifecycle domain event was emitted
       expect(dispatchSpy).toHaveBeenCalledTimes(1);
-    });
+      expect(dispatchSpy).toHaveBeenCalledWith("JOB_STARTED", "job_accepted_1", "trader_dave", expect.anything(), expect.anything(), mockDb);
 
-    it("21. same-key StartJob replay returns the stored result cleanly and does not produce duplicate events", async () => {
-      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
-      const keyA = "idemp_start_replay_key_a";
+      // Invariant: Only the winning idempotency key has a completed record
+      const winningKey = fulfilled[0].value.idempotencyKey || (fulfilled[0].value as any).wasReplayed === false ? (mockDb._store[`idempotency_keys/${keyA}`] ? keyA : keyB) : keyA;
+      const losingKey = winningKey === keyA ? keyB : keyA;
+      expect(mockDb._store[`idempotency_keys/${winningKey}`]?.status).toBe("completed");
+      expect(mockDb._store[`idempotency_keys/${losingKey}`]).toBeUndefined();
 
-      const res1 = await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        idempotencyKey: keyA,
-      });
-      expect(res1.success).toBe(true);
-      expect(res1.wasReplayed).toBe(false);
-
-      const res2 = await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        idempotencyKey: keyA,
-      });
-      expect(res2.success).toBe(true);
-      expect(res2.wasReplayed).toBe(true);
-      expect(res2.status).toBe(res1.status);
-
-      const res3 = await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        idempotencyKey: keyA,
-      });
-      expect(res3.success).toBe(true);
-      expect(res3.wasReplayed).toBe(true);
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it("22. different-key StartJob after successful StartJob is rejected", async () => {
-      const keyA = "success_key_a";
-      const keyB = "rejected_key_b";
-
-      await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        idempotencyKey: keyA,
-      });
-
+      // Invariant: The job cannot be started again
       await expect(
         executeStartJobCommand({
           db: mockDb,
           identity: traderDaveIdentity,
           jobId: "job_accepted_1",
           verificationPin: "1234",
-          idempotencyKey: keyB,
+          idempotencyKey: `start_attempt_after_${Date.now()}`,
         })
       ).rejects.toThrow(ConflictError);
     });
 
-    it("23. concurrent StartJob vs CancelJob produces exactly one success and one ConflictError when expectedStatus is passed", async () => {
-      const keyStart = "race_key_start";
-      const keyCancel = "race_key_cancel";
+    it("21. Test B — Genuine simultaneous StartJob and CancelJob race produces valid committed state and zero invalid transitions", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const keyStart = `race_key_start_${Date.now()}`;
+      const keyCancel = `race_key_cancel_${Date.now()}`;
 
-      const resStart = await executeStartJobCommand({
-        db: mockDb,
-        identity: traderDaveIdentity,
-        jobId: "job_accepted_1",
-        verificationPin: "1234",
-        expectedStatus: "accepted",
-        idempotencyKey: keyStart,
-      });
-      expect(resStart.success).toBe(true);
-
-      await expect(
+      // Both requests start simultaneously without awaiting the other
+      const results = await Promise.allSettled([
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          expectedStatus: "accepted",
+          idempotencyKey: keyStart,
+        }),
         executeCancelJobCommand({
           db: mockDb,
           identity: homeownerIdentity,
@@ -588,13 +683,192 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
           reason: "Raced Cancel",
           expectedStatus: "accepted",
           idempotencyKey: keyCancel,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Invariant: Exactly one operation commits and one fails with ConflictError
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+
+      const finalStatus = mockDb._store["jobs/job_accepted_1"].status;
+      expect(["in_progress", "cancelled"]).toContain(finalStatus);
+      expect(mockDb._store["public_job_cards/job_accepted_1"].status).toBe(finalStatus);
+
+      // Invariant: Exactly one domain event was dispatched
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("22. Test C — Genuine simultaneous CompleteJob requests produce exactly one success and one ConflictError", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const keyA = `concurrent_complete_key_a_${Date.now()}`;
+      const keyB = `concurrent_complete_key_b_${Date.now()}`;
+
+      const results = await Promise.allSettled([
+        executeCompleteJobCommand({
+          db: mockDb,
+          identity: homeownerIdentity,
+          jobId: "job_in_progress_2",
+          completionNotes: "All done A",
+          idempotencyKey: keyA,
+        }),
+        executeCompleteJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_in_progress_2",
+          completionNotes: "All done B",
+          idempotencyKey: keyB,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+      expect(rejected[0].reason.message).toContain("already been completed");
+
+      expect(mockDb._store["jobs/job_in_progress_2"].status).toBe("completed");
+      expect(mockDb._store["public_job_cards/job_in_progress_2"].status).toBe("completed");
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(dispatchSpy).toHaveBeenCalledWith("JOB_COMPLETED", "job_in_progress_2", expect.any(String), expect.anything(), expect.anything(), mockDb);
+    });
+
+    it("23. Test D — Genuine simultaneous CancelJob requests produce exactly one success and one ConflictError", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const keyA = `concurrent_cancel_key_a_${Date.now()}`;
+      const keyB = `concurrent_cancel_key_b_${Date.now()}`;
+
+      const results = await Promise.allSettled([
+        executeCancelJobCommand({
+          db: mockDb,
+          identity: homeownerIdentity,
+          jobId: "job_open_5",
+          reason: "Cancellation A",
+          idempotencyKey: keyA,
+        }),
+        executeCancelJobCommand({
+          db: mockDb,
+          identity: homeownerIdentity,
+          jobId: "job_open_5",
+          reason: "Cancellation B",
+          idempotencyKey: keyB,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+      expect(rejected[0].reason.message).toContain("already been cancelled");
+
+      expect(mockDb._store["jobs/job_open_5"].status).toBe("cancelled");
+      expect(mockDb._store["public_job_cards/job_open_5"].status).toBe("cancelled");
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+      expect(dispatchSpy).toHaveBeenCalledWith("JOB_CANCELLED", "job_open_5", "homeowner_alice", expect.anything(), expect.anything(), mockDb);
+    });
+
+    it("24. Test E Scenario 1 — Simultaneous requests with SAME idempotency key return cached result with zero duplicate events", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const sharedKey = `shared_idemp_key_${Date.now()}`;
+
+      // Two simultaneous requests using the exact same idempotency key
+      const results = await Promise.allSettled([
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: sharedKey,
+        }),
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: sharedKey,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Both should succeed (one first-time, one replayed)
+      expect(rejected).toHaveLength(0);
+      expect(fulfilled).toHaveLength(2);
+
+      const replayFlags = fulfilled.map((f) => f.value.wasReplayed).sort();
+      expect(replayFlags).toEqual([false, true]);
+
+      expect(mockDb._store["jobs/job_accepted_1"].status).toBe("in_progress");
+      // Domain event dispatched strictly ONCE
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("25. Test E Scenario 2 — Simultaneous requests with DIFFERENT idempotency keys produce exactly one success and one ConflictError", async () => {
+      const dispatchSpy = vi.spyOn(domainEvents, "dispatch");
+      const key1 = `diff_key_1_${Date.now()}`;
+      const key2 = `diff_key_2_${Date.now()}`;
+
+      const results = await Promise.allSettled([
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: key1,
+        }),
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: key2,
+        }),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(ConflictError);
+      expect(dispatchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("26. Test F — Sequential StartJob followed by second StartJob with different key is rejected with ConflictError", async () => {
+      const keyA = `seq_key_a_${Date.now()}`;
+      const keyB = `seq_key_b_${Date.now()}`;
+
+      const res1 = await executeStartJobCommand({
+        db: mockDb,
+        identity: traderDaveIdentity,
+        jobId: "job_accepted_1",
+        verificationPin: "1234",
+        idempotencyKey: keyA,
+      });
+      expect(res1.success).toBe(true);
+
+      await expect(
+        executeStartJobCommand({
+          db: mockDb,
+          identity: traderDaveIdentity,
+          jobId: "job_accepted_1",
+          verificationPin: "1234",
+          idempotencyKey: keyB,
         })
       ).rejects.toThrow(ConflictError);
     });
 
-    it("24. normal sequential in_progress -> cancelled transition works perfectly", async () => {
-      const keyStart = "normal_key_start";
-      const keyCancel = "normal_key_cancel";
+    it("27. Sequential legal transition: in_progress -> cancelled works cleanly", async () => {
+      const keyStart = `seq_start_${Date.now()}`;
+      const keyCancel = `seq_cancel_${Date.now()}`;
 
       await executeStartJobCommand({
         db: mockDb,
@@ -614,6 +888,7 @@ describe("Task 5: Canonical Job Lifecycle Suite", () => {
 
       expect(resCancel.success).toBe(true);
       expect(resCancel.status).toBe("cancelled");
+      expect(mockDb._store["jobs/job_accepted_1"].status).toBe("cancelled");
     });
   });
 });

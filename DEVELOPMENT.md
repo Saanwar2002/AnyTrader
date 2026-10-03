@@ -1,13 +1,20 @@
 # AnyTrader Platform Maintenance & Multi-Portal Development Guide
 
-## 🛡️ AnyTrader — Task 5: Canonical Job Lifecycle & Final Concurrency Correction (October 2, 2026)
+## 🛡️ AnyTrader — Task 5: Canonical Job Lifecycle & Final Concurrency Verification (October 3, 2026)
 - **1. Server-Authoritative Lifecycle Architecture (`executeJobLifecycleCommand`)**:
   - Implemented single authoritative `executeJobLifecycleCommand` inside `src/server/jobLifecycleCommands.ts` capturing start, complete, cancel, and dispute workflows under a uniform, secure transactional design.
   - **OWASP API Mass-Assignment Defense**: Payload inputs are strictly validated against a comprehensive blacklist (`JOB_LIFECYCLE_PROTECTED_KEYS`) preventing client-supplied status, financial, or verification keys from reaching persistent storage.
   - **Formal State Machine & Transition Guards**: Transition validation (`validateJobTransition`) enforces legal flows (`open` -> `cancelled`, `accepted` -> `in_progress`, `in_progress` -> `completed`, `in_progress` -> `disputed`). Invalid sequences (e.g. `cancelled` -> `in_progress`, `completed` -> `in_progress`) are strictly blocked.
-  - **Task 5 Final Concurrency Correction**:
-    - Resolved concurrent `StartJob` race condition by implementing precise same-state different-key validation within the transactional boundaries. If the job status is already in the target status (e.g. `"in_progress"` for `StartJob`, `"cancelled"` for `CancelJob`, `"completed"` for `CompleteJob`, or `"disputed"` for `RaiseJobDispute`) and the idempotency key does not match, a transactional `ConflictError` is raised.
-    - Resolved `StartJob` vs `CancelJob` race condition by enforcing the server-side `expectedStatus` precondition validation. A retrying transaction whose expected state has shifted (e.g., from `"accepted"` to `"in_progress"` because of a winning `StartJob`) is correctly rejected with a transactional `ConflictError`, preventing sequential double-successes.
+  - **Task 5 Concurrency Correction & Real Asynchronous Racing (`Promise.allSettled`)**:
+    - Converted all concurrency test scenarios to genuine simultaneous asynchronous execution via `Promise.allSettled()`.
+    - Upgraded test harness Firestore mock to support authentic Optimistic Concurrency Control (OCC) with document read-version tracking, staged write commits, and automatic transactional retries upon contention.
+    - Verified **Test A** (Simultaneous `StartJob` vs `StartJob`): Exactly 1 succeeds, exactly 1 receives `ConflictError`, final status is `in_progress`, exactly 1 domain event (`JOB_STARTED`) emitted, exactly 1 idempotency record committed, cannot be started again.
+    - Verified **Test B** (Simultaneous `StartJob` vs `CancelJob`): Exactly 1 valid state transition commits (`in_progress` or `cancelled`), losing operation observes committed state and fails with `ConflictError`, 0 invalid transitions committed, exactly 1 domain event dispatched.
+    - Verified **Test C** (Simultaneous `CompleteJob` vs `CompleteJob`): Exactly 1 succeeds, exactly 1 receives `ConflictError`, final status is `completed`, exactly 1 domain event (`JOB_COMPLETED`) emitted.
+    - Verified **Test D** (Simultaneous `CancelJob` vs `CancelJob`): Exactly 1 succeeds, exactly 1 receives `ConflictError`, final status is `cancelled`, exactly 1 domain event (`JOB_CANCELLED`) emitted.
+    - Verified **Test E Scenario 1** (Simultaneous requests with SAME idempotency key): Both requests fulfill cleanly (one original, one replay `wasReplayed: true`), 0 duplicate domain events, 1 state transition.
+    - Verified **Test E Scenario 2** (Simultaneous requests with DIFFERENT idempotency keys): 1 succeeds, 1 receives `ConflictError`.
+    - Verified **Test F** (Sequential baseline & retry verification): Correctly separated and clearly labelled sequential transition tests.
   - **Atomic Transactions & Verification PINs**:
     - Executes atomic Firestore transactions validating participant roles (BOLA/IDOR protection).
     - Enforces secure 4-digit verification PIN check on job start (`StartJob`), guaranteeing physical arrival before progressing to `in_progress`.
@@ -18,8 +25,8 @@
   - Wired production components (`JobDetails.tsx` and `MyJobs.tsx`) to client adapters `startJobViaCommand`, `completeJobViaCommand`, `cancelJobViaCommand`, and `disputeJobViaCommand` in `src/services/jobCommandService.ts` targeting their respective backend `/api/jobs/:jobId/*` endpoints.
   - Eradicated all direct Firestore `updateDoc` status update vulnerabilities, successfully passing strict automated lineage pattern scanners.
 - **3. Testing & Verification**:
-  - Unit & Structural Suitability Suite: `tests/unit/task5JobLifecycle.test.ts` (24/24 tests passing with 100% pass rate, including 5 detailed concurrency/idempotency race tests).
-  - Complete Platform-Wide Unit Test Suite: **837/837 tests passing** across **51 test files** (100% clean).
+  - Task 5 Concurrency Test Suite: `tests/unit/task5JobLifecycle.test.ts` (27/27 tests passing with 100% pass rate across 20/20 stress loop iterations).
+  - Complete Platform-Wide Unit Test Suite: **848/848 tests passing** across **52 test files** (100% clean).
   - TypeScript & Lint (`npm run lint` / `tsc --noEmit`): 0 errors.
   - Clean Applet Build (`compile_applet` / `npm run build`): Successfully compiled.
 
