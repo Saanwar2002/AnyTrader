@@ -25,10 +25,19 @@
   - Wired production components (`JobDetails.tsx` and `MyJobs.tsx`) to client adapters `startJobViaCommand`, `completeJobViaCommand`, `cancelJobViaCommand`, and `disputeJobViaCommand` in `src/services/jobCommandService.ts` targeting their respective backend `/api/jobs/:jobId/*` endpoints.
   - Eradicated all direct Firestore `updateDoc` status update vulnerabilities, successfully passing strict automated lineage pattern scanners.
 - **3. Testing & Verification**:
-  - Task 5 Concurrency Test Suite: `tests/unit/task5JobLifecycle.test.ts` (27/27 tests passing with 100% pass rate across 20/20 stress loop iterations).
-  - Complete Platform-Wide Unit Test Suite: **848/848 tests passing** across **52 test files** (100% clean).
-  - TypeScript & Lint (`npm run lint` / `tsc --noEmit`): 0 errors.
-  - Clean Applet Build (`compile_applet` / `npm run build`): Successfully compiled.
+  - **Real Firestore Emulator Concurrency Suite (`tests/unit/task5FirestoreConcurrency.test.ts`)**: **7/7 tests passing (100%)** directly against real Firebase/Firestore emulator (`demo-anytrader` on port 8088):
+    - *Real Test #1*: Simultaneous `StartJob` vs `StartJob` (`Promise.allSettled`, 1 succeeds, 1 receives `ConflictError`, final status `in_progress`, 1 domain event in emulator, 1 completed idempotency record).
+    - *Real Test #2*: Simultaneous `StartJob` vs `CancelJob` (`Promise.allSettled`, 1 succeeds, 1 receives `ConflictError`, valid committed state `in_progress` or `cancelled`, zero invalid transitions).
+    - *Real Test #3*: Simultaneous `CompleteJob` vs `CompleteJob` (`Promise.allSettled`, 1 succeeds, 1 receives `ConflictError`, final status `completed`, 1 domain event).
+    - *Real Test #4*: Simultaneous `CancelJob` vs `CancelJob` (`Promise.allSettled`, 1 succeeds, 1 receives `ConflictError`, final status `cancelled`, 1 domain event).
+    - *Real Test #5*: Simultaneous requests with SAME idempotency key (`Promise.allSettled`, both fulfill cleanly, one replay `wasReplayed: true`, 0 duplicate events, 1 state transition).
+    - *Real Test #6*: Simultaneous requests with DIFFERENT idempotency keys (1 succeeds, 1 receives `ConflictError`, correct final state in emulator).
+    - *Real Test #7*: Real Firestore transaction contention and OCC retry verification (observes retry attempt counter and state-machine rejection under concurrent contention).
+  - **Task 5 OCC In-Memory Concurrency Test Suite (`tests/unit/task5JobLifecycle.test.ts`)**: **27/27 tests passing (100%)** across 20/20 stress loop iterations.
+  - **Complete Platform-Wide Unit Test Suite (`npm test`)**: **848/848 tests passing** across **52 test files** (100% clean).
+  - **Portable Local OpenJDK 21 Runtime (`./.jdk21`)**: Embedded permanent Adoptium Temurin OpenJDK 21 runtime directly into workspace root, ensuring seamless and persistent compatibility with `firebase-tools` v13+ emulator execution across environments.
+  - **TypeScript & Lint (`npm run lint` / `tsc --noEmit`)**: 0 errors.
+  - **Clean Applet Build (`compile_applet` / `npm run build`)**: Successfully compiled.
 
 ## 🛡️ AnyTrader — Task 4: Single Authoritative Atomic AcceptQuote (October 2, 2026)
 - **1. Single Canonical Authority & Architecture (`executeAcceptQuoteCommand`)**:

@@ -391,7 +391,7 @@ export async function executeJobLifecycleCommand(
         status: transactionResult.status,
         actorId: identity.uid,
         timestamp: nowIso,
-        reason: transactionResult.job?.cancellationReason || transactionResult.job?.disputeReason,
+        reason: transactionResult.job?.cancellationReason || transactionResult.job?.disputeReason || null,
       },
       rawIdempotencyKey,
       db
